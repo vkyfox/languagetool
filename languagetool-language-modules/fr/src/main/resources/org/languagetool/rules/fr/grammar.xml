@@ -9083,7 +9083,7 @@ though, and has since been slightly modified)-->
               <marker>
                   <token regexp="yes">prés?</token>
               </marker>
-              <token regexp="yes">d[eu''ʾ′ˊˈꞌ'ʿ‵ˋ] </token>
+              <token regexp="yes">d[eu'ʾ′ˊˈꞌʿ‵ˋ] </token>
           </pattern>
           <message>S'il s'agit d'une indication de proximité, utilisez l'adverbe <suggestion>près</suggestion>.</message>
           <example correction="près">Personnes qui travaillent à Montpellier, mais qui habitent <marker>prés</marker> du Castelnau-le-Lez.</example>
@@ -9098,7 +9098,7 @@ though, and has since been slightly modified)-->
                   </token>
               </marker>
           </pattern>
-          <message>Dans cet idiome, <suggestion><match no="2" postag="(.*) [mfe] (sp|[sp])" postag_regexp="yes" postag_replace="$1 m p"/></suggestion> s'accorde toujours avec «faits»</message>
+          <message>Dans cet idiome, <suggestion><match no="2" postag="(.*) [mfe] (sp|[sp])" postag_regexp="yes" postag_replace="$1 m p"/></suggestion> s'accorde toujours avec « faits »</message>
           <example correction="actuels">Problématique et faits <marker>actuelles</marker>.</example>
       </rule>
       <rule id="VOUS_LE_PPA_1ER_GROUPE" name="s manquant à vous le ppa">
@@ -36504,7 +36504,7 @@ though, and has since been slightly modified)-->
           <token>homo</token>
           <token regexp="yes">antecessor|cepranensis|erectus|ergaster|floresiensis|gautengensis|habilis|heidelbergensis|naledi|neanderthalensis|rhodesiensis|rudolfensis|sapiens|sp|spp|tsaichangensis</token>
         </pattern>
-        <message>Nom scientifique : premier mot avec une majuscule et le deuxième en minuscules.</message>
+        <message>Nom scientifique : le premier mot s'écrit avec une majuscule et le deuxième tout en minuscules.</message>
         <suggestion>Homo <match no="2" case_conversion="alllower"/></suggestion>
         <example correction="Homo sapiens">C'est un <marker>homo sapiens</marker>.</example>
         <example correction="Homo habilis">C'est un <marker>Homo Habilis</marker>.</example>
@@ -36520,7 +36520,7 @@ though, and has since been slightly modified)-->
           <token>sapiens</token>
           <token regexp="yes">sapiens|idaltu</token>
         </pattern>
-        <message>Nom scientifique : premier mot avec une majuscule et le reste en minuscules.</message>
+        <message>Nom scientifique : le premier mot s'écrit avec une majuscule et le deuxième tout en minuscules.</message>
         <suggestion>Homo <match no="2" case_conversion="alllower"/> <match no="3" case_conversion="alllower"/></suggestion>
         <example correction="Homo sapiens sapiens">C'est un <marker>homo sapiens Sapiens</marker>.</example>
         <example correction="Homo sapiens idaltu">C'est un <marker>Homo sapiens Idaltu</marker>.</example>
