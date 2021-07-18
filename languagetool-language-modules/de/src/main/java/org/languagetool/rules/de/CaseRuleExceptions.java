@@ -18,40 +18,32 @@
  */
 package org.languagetool.rules.de;
 
+import gnu.trove.THashSet;
+import org.apache.commons.lang3.StringUtils;
 import org.languagetool.JLanguageTool;
+import org.languagetool.rules.patterns.StringMatcher;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * @since 3.0
  */
 final class CaseRuleExceptions {
 
-  private static final Set<String> exceptions = loadExceptions(
-    "/de/case_rule_exceptions.txt"
-  );
-
-  private CaseRuleExceptions() {
-  }
-
-  public static Set<String> getExceptions() {
-    return exceptions;
-  }
-
-  public static Set<Pattern[]> getExceptionPatterns() {
-    HashSet<Pattern[]> exceptionPatterns = new HashSet<>(250);
-    for (String phrase : exceptions) {
-      String[] parts = phrase.split(" ");
-      Pattern[] patterns = new Pattern[parts.length];
+  static Set<StringMatcher[]> getExceptionPatterns() {
+    THashSet<StringMatcher[]> exceptionPatterns = new THashSet<>(250);
+    for (String phrase : loadExceptions("/de/case_rule_exceptions.txt")) {
+      String[] parts = StringUtils.split(phrase, ' ');
+      StringMatcher[] patterns = new StringMatcher[parts.length];
       for (int j = 0; j < parts.length; j++) {
-        patterns[j] = Pattern.compile(parts[j]);
+        patterns[j] = StringMatcher.create(parts[j], true, true);
       }
       exceptionPatterns.add(patterns);
     }
+    exceptionPatterns.trimToSize();
     return Collections.unmodifiableSet(exceptionPatterns);
   }
 
@@ -63,7 +55,7 @@ final class CaseRuleExceptions {
         if (line.isEmpty() || line.startsWith("#")) {
           continue;
         }
-        if (line.matches("^\\s.*") || line.matches(".*\\s$")) {
+        if (Character.isWhitespace(line.charAt(0)) || Character.isWhitespace(line.charAt(line.length()-1))) {
           throw new IllegalArgumentException("Invalid line in " + path + ", starts or ends with whitespace: '" + line + "'");
         }
         result.add(line);

@@ -20,6 +20,7 @@ package org.languagetool.server;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -60,7 +61,8 @@ class ApiV2 {
     this.allowOriginUrl = allowOriginUrl;
   }
 
-  void handleRequest(String path, HttpExchange httpExchange, Map<String, String> parameters, ErrorRequestLimiter errorRequestLimiter, String remoteAddress, HTTPServerConfig config) throws Exception {
+  void handleRequest(String path, HttpExchange httpExchange, Map<String, String> parameters, ErrorRequestLimiter errorRequestLimiter,
+                     String remoteAddress, HTTPServerConfig config) throws Exception {
     if (path.equals("languages")) {
       handleLanguagesRequest(httpExchange);
     } else if (path.equals("maxtextlength")) {
@@ -68,7 +70,7 @@ class ApiV2 {
     } else if (path.equals("configinfo")) {
       handleGetConfigurationInfoRequest(httpExchange, parameters, config);
     } else if (path.equals("info")) {
-      handleSoftwareInfoRequest(httpExchange, parameters, config);
+      handleSoftwareInfoRequest(httpExchange);
     } else if (path.equals("check")) {
       handleCheckRequest(httpExchange, parameters, errorRequestLimiter, remoteAddress);
     } else if (path.equals("words")) {
@@ -77,12 +79,9 @@ class ApiV2 {
       handleWordAddRequest(httpExchange, parameters, config);
     } else if (path.equals("words/delete")) {
       handleWordDeleteRequest(httpExchange, parameters, config);
-    } else if (path.equals("rule/examples")) {
-      // private (i.e. undocumented) API for our own use only
-      handleRuleExamplesRequest(httpExchange, parameters);
-    } else if (path.equals("log")) {
-      // private (i.e. undocumented) API for our own use only
-      handleLogRequest(httpExchange, parameters);
+    //} else if (path.equals("rule/examples")) {
+    //  // private (i.e. undocumented) API for our own use only
+    //  handleRuleExamplesRequest(httpExchange, parameters);
     } else {
       throw new PathNotFoundException("Unsupported action: '" + path + "'. Please see " + API_DOC_URL);
     }
@@ -105,8 +104,11 @@ class ApiV2 {
   }
 
   private void handleGetConfigurationInfoRequest(HttpExchange httpExchange, Map<String, String> parameters, HTTPServerConfig config) throws IOException {
+    if (JLanguageTool.isPremiumVersion()) {
+      throw new BadRequestException("Not supported in premium mode");
+    }
     if (parameters.get("language") == null) {
-      throw new IllegalArgumentException("'language' parameter missing");
+      throw new BadRequestException("'language' parameter missing");
     }
     Language lang = Languages.getLanguageForShortCode(parameters.get("language"));
     String response = getConfigurationInfo(lang, config);
@@ -116,7 +118,7 @@ class ApiV2 {
     ServerMetricsCollector.getInstance().logResponse(HttpURLConnection.HTTP_OK);
   }
 
-  private void handleSoftwareInfoRequest(HttpExchange httpExchange, Map<String, String> parameters, HTTPServerConfig config) throws IOException {
+  private void handleSoftwareInfoRequest(HttpExchange httpExchange) throws IOException {
     String response = getSoftwareInfo();
     ServerTools.setCommonHeaders(httpExchange, JSON_CONTENT_TYPE, allowOriginUrl);
     httpExchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, response.getBytes(ENCODING).length);
@@ -127,23 +129,28 @@ class ApiV2 {
   private void handleCheckRequest(HttpExchange httpExchange, Map<String, String> parameters, ErrorRequestLimiter errorRequestLimiter, String remoteAddress) throws Exception {
     AnnotatedText aText;
     if (parameters.containsKey("text") && parameters.containsKey("data")) {
-      throw new IllegalArgumentException("Set only 'text' or 'data' parameter, not both");
+      throw new BadRequestException("Set only 'text' or 'data' parameter, not both");
     } else if (parameters.containsKey("text")) {
       aText = new AnnotatedTextBuilder().addText(parameters.get("text")).build();
     } else if (parameters.containsKey("data")) {
       ObjectMapper mapper = new ObjectMapper();
-      JsonNode data = mapper.readTree(parameters.get("data"));
+      JsonNode data;
+      try {
+        data = mapper.readTree(parameters.get("data"));
+      } catch (JsonProcessingException e) {
+        throw new BadRequestException("Could not parse JSON from 'data' parameter", e);
+      }
       if (data.get("text") != null && data.get("annotation") != null) {
-        throw new IllegalArgumentException("'data' key in JSON requires either 'text' or 'annotation' key, not both");
+        throw new BadRequestException("'data' key in JSON requires either 'text' or 'annotation' key, not both");
       } else if (data.get("text") != null) {
         aText = getAnnotatedTextFromString(data, data.get("text").asText());
       } else if (data.get("annotation") != null) {
         aText = getAnnotatedTextFromJson(data);
       } else {
-        throw new IllegalArgumentException("'data' key in JSON requires 'text' or 'annotation' key");
+        throw new BadRequestException("'data' key in JSON requires 'text' or 'annotation' key");
       }
     } else {
-      throw new IllegalArgumentException("Missing 'text' or 'data' parameter");
+      throw new BadRequestException("Missing 'text' or 'data' parameter");
     }
     textChecker.checkText(aText, httpExchange, parameters, errorRequestLimiter, remoteAddress);
   }
@@ -177,10 +184,10 @@ class ApiV2 {
   private void handleRuleExamplesRequest(HttpExchange httpExchange, Map<String, String> params) throws Exception {
     ensureGetMethod(httpExchange, "/rule/examples");
     if (params.get("lang") == null) {
-      throw new IllegalArgumentException("'lang' parameter missing");
+      throw new BadRequestException("'lang' parameter missing");
     }
     if (params.get("ruleId") == null) {
-      throw new IllegalArgumentException("'ruleId' parameter missing");
+      throw new BadRequestException("'ruleId' parameter missing");
     }
     Language lang = Languages.getLanguageForShortCode(params.get("lang"));
     JLanguageTool lt = new JLanguageTool(lang);
@@ -232,13 +239,13 @@ class ApiV2 {
 
   private void ensureGetMethod(HttpExchange httpExchange, String url) {
     if (!httpExchange.getRequestMethod().equalsIgnoreCase("get")) {
-      throw new IllegalArgumentException(url + " needs to be called with GET");
+      throw new BadRequestException(url + " needs to be called with GET");
     }
   }
   
   private void ensurePostMethod(HttpExchange httpExchange, String url) {
     if (!httpExchange.getRequestMethod().equalsIgnoreCase("post")) {
-      throw new IllegalArgumentException(url + " needs to be called with POST");
+      throw new BadRequestException(url + " needs to be called with POST");
     }
   }
 
@@ -246,7 +253,7 @@ class ApiV2 {
   private UserLimits getUserLimits(Map<String, String> parameters, HTTPServerConfig config) {
     UserLimits limits = ServerTools.getUserLimits(parameters, config);
     if (limits.getPremiumUid() == null) {
-      throw new IllegalStateException("This end point needs a user id");
+      throw new BadRequestException("This end point needs a user id");
     }
     return limits;
   }
@@ -283,19 +290,6 @@ class ApiV2 {
     ServerMetricsCollector.getInstance().logResponse(HttpURLConnection.HTTP_OK);
   }
 
-  private void handleLogRequest(HttpExchange httpExchange, Map<String, String> parameters) throws IOException {
-    // used so the client (especially the browser add-ons) can report internal issues:
-    String message = parameters.get("message");
-    if (message != null && message.length() > 250) {
-      message = message.substring(0, 250) + "...";
-    }
-    ServerTools.print("Log message from client: " + message + " - User-Agent: " + httpExchange.getRequestHeaders().getFirst("User-Agent"));
-    String response = "OK";
-    httpExchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, response.getBytes(ENCODING).length);
-    httpExchange.getResponseBody().write(response.getBytes(ENCODING));
-    ServerMetricsCollector.getInstance().logResponse(HttpURLConnection.HTTP_OK);
-  }
-
   private AnnotatedText getAnnotatedTextFromString(JsonNode data, String text) {
     AnnotatedTextBuilder textBuilder = new AnnotatedTextBuilder().addText(text);
     if (data.has("metaData")) {
@@ -327,9 +321,9 @@ class ApiV2 {
     //
     for (JsonNode node : data.get("annotation")) {
       if (node.get("text") != null && node.get("markup") != null) {
-        throw new IllegalArgumentException("Only either 'text' or 'markup' are supported in an object in 'annotation' list, not both: " + node);
+        throw new BadRequestException("Only either 'text' or 'markup' are supported in an object in 'annotation' list, not both: " + node);
       } else if (node.get("text") != null && node.get("interpretAs") != null) {
-        throw new IllegalArgumentException("'text' cannot be used with 'interpretAs' (only 'markup' can): " + node);
+        throw new BadRequestException("'text' cannot be used with 'interpretAs' (only 'markup' can): " + node);
       } else if (node.get("text") != null) {
         atb.addText(node.get("text").asText());
       } else if (node.get("markup") != null) {
@@ -339,7 +333,7 @@ class ApiV2 {
           atb.addMarkup(node.get("markup").asText());
         }
       } else {
-        throw new IllegalArgumentException("Only 'text' and 'markup' are supported in 'annotation' list: " + node);
+        throw new BadRequestException("Only 'text' and 'markup' are supported in 'annotation' list: " + node);
       }
     }
     return atb.build();
@@ -408,19 +402,19 @@ class ApiV2 {
         g.writeStartObject();
         g.writeStringField("ruleId", rule.getId());
         g.writeStringField("description", rule.getDescription());
-        if(rule.isDictionaryBasedSpellingRule()) {
+        if (rule.isDictionaryBasedSpellingRule()) {
           g.writeStringField("isDictionaryBasedSpellingRule", "yes");
         }
-        if(rule.isDefaultOff()) {
+        if (rule.isDefaultOff()) {
           g.writeStringField("isDefaultOff", "yes");
         }
-        if(rule.isOfficeDefaultOff()) {
+        if (rule.isOfficeDefaultOff()) {
           g.writeStringField("isOfficeDefaultOff", "yes");
         }
-        if(rule.isOfficeDefaultOn()) {
+        if (rule.isOfficeDefaultOn()) {
           g.writeStringField("isOfficeDefaultOn", "yes");
         }
-        if(rule.hasConfigurableValue()) {
+        if (rule.hasConfigurableValue()) {
           g.writeStringField("hasConfigurableValue", "yes");
           g.writeStringField("configureText", rule.getConfigureText());
           g.writeStringField("maxConfigurableValue", Integer.toString(rule.getMaxConfigurableValue()));
@@ -430,7 +424,7 @@ class ApiV2 {
         g.writeStringField("categoryId", rule.getCategory().getId().toString());
         g.writeStringField("categoryName", rule.getCategory().getName());
         g.writeStringField("locQualityIssueType", rule.getLocQualityIssueType().toString());
-        if(rule instanceof TextLevelRule) {
+        if (rule instanceof TextLevelRule) {
           g.writeStringField("isTextLevelRule", "yes");
           g.writeStringField("minToCheckParagraph", Integer.toString(((TextLevelRule) rule).minToCheckParagraph()));
         }

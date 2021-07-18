@@ -76,6 +76,8 @@ public class HTTPServerConfig {
   protected int requestLimitInBytes;
   protected int timeoutRequestLimit;
   protected int requestLimitPeriodInSeconds;
+  protected List<String> requestLimitWhitelistUsers;
+  protected int requestLimitWhitelistLimit;
   protected int ipFingerprintFactor = 1;
   protected boolean trustXForwardForHeader;
   protected int maxWorkQueueSize;
@@ -89,6 +91,7 @@ public class HTTPServerConfig {
   protected String hiddenMatchesServer;
   protected int hiddenMatchesServerTimeout;
   protected int hiddenMatchesServerFailTimeout;
+  protected int hiddenMatchesServerFall;
   protected List<Language> hiddenMatchesLanguages = new ArrayList<>();
   protected String dbDriver = null;
   protected String dbUrl = null;
@@ -109,18 +112,21 @@ public class HTTPServerConfig {
   protected String abTest = null;
   protected Pattern abTestClients = null;
   protected int abTestRollout = 100; // percentage [0,100]
+  protected File ngramLangIdentData;
 
   private static final List<String> KNOWN_OPTION_KEYS = Arrays.asList("abTest", "abTestClients", "abTestRollout",
     "beolingusFile", "blockedReferrers", "cacheSize", "cacheTTLSeconds",
     "dbDriver", "dbPassword", "dbUrl", "dbUsername", "disabledRuleIds", "fasttextBinary", "fasttextModel", "grammalectePassword",
     "grammalecteServer", "grammalecteUser", "hiddenMatchesLanguages", "hiddenMatchesServer", "hiddenMatchesServerFailTimeout",
-    "hiddenMatchesServerTimeout", "ipFingerprintFactor", "languageModel", "maxCheckThreads", "maxCheckTimeMillis",
+    "hiddenMatchesServerTimeout", "hiddenMatchesServerFall", "ipFingerprintFactor", "languageModel", "maxCheckThreads", "maxCheckTimeMillis",
     "maxCheckTimeWithApiKeyMillis", "maxErrorsPerWordRate", "maxPipelinePoolSize", "maxSpellingSuggestions", "maxTextHardLength",
     "maxTextLength", "maxTextLengthWithApiKey", "maxWorkQueueSize", "neuralNetworkModel", "pipelineCaching",
     "pipelineExpireTimeInSeconds", "pipelinePrewarming", "prometheusMonitoring", "prometheusPort", "remoteRulesFile",
-    "requestLimit", "requestLimitInBytes", "requestLimitPeriodInSeconds", "rulesFile", "secretTokenKey", "serverURL",
+    "requestLimit", "requestLimitInBytes", "requestLimitPeriodInSeconds", "requestLimitWhitelistUsers", "requestLimitWhitelistLimit",
+    "rulesFile", "secretTokenKey", "serverURL",
     "skipLoggingChecks", "skipLoggingRuleMatches", "timeoutRequestLimit", "trustXForwardForHeader", "warmUp", "word2vecModel",
     "keystore", "password", "maxTextLengthPremium", "maxTextLengthAnonymous", "maxTextLengthLoggedIn", "gracefulDatabaseFailure",
+    "ngramLangIdentData",
     "redisPassword", "redisHost", "dbLogging", "premiumOnly");
 
   /**
@@ -218,6 +224,8 @@ public class HTTPServerConfig {
         requestLimit = Integer.parseInt(getOptionalProperty(props, "requestLimit", "0"));
         requestLimitInBytes = Integer.parseInt(getOptionalProperty(props, "requestLimitInBytes", "0"));
         timeoutRequestLimit = Integer.parseInt(getOptionalProperty(props, "timeoutRequestLimit", "0"));
+        requestLimitWhitelistUsers = Arrays.asList(getOptionalProperty(props, "requestLimitWhitelistUsers", "").split(",\\s*"));
+        requestLimitWhitelistLimit = Integer.parseInt(getOptionalProperty(props, "requestLimitWhitelistLimit", "0"));
         pipelineCaching = Boolean.parseBoolean(getOptionalProperty(props, "pipelineCaching", "false").trim());
         pipelinePrewarming = Boolean.parseBoolean(getOptionalProperty(props, "pipelinePrewarming", "false").trim());
         maxPipelinePoolSize = Integer.parseInt(getOptionalProperty(props, "maxPipelinePoolSize", "5"));
@@ -287,6 +295,7 @@ public class HTTPServerConfig {
         hiddenMatchesServer = getOptionalProperty(props, "hiddenMatchesServer", null);
         hiddenMatchesServerTimeout = Integer.parseInt(getOptionalProperty(props, "hiddenMatchesServerTimeout", "1000"));
         hiddenMatchesServerFailTimeout = Integer.parseInt(getOptionalProperty(props, "hiddenMatchesServerFailTimeout", "10000"));
+        hiddenMatchesServerFall = Integer.parseInt(getOptionalProperty(props, "hiddenMatchesServerFall", "1"));
         String langCodes = getOptionalProperty(props, "hiddenMatchesLanguages", "");
         for (String code : langCodes.split(",\\s*")) {
           if (!code.isEmpty()) {
@@ -331,6 +340,14 @@ public class HTTPServerConfig {
         setAbTest(getOptionalProperty(props, "abTest", null));
         setAbTestClients(getOptionalProperty(props, "abTestClients", null));
         setAbTestRollout(Integer.parseInt(getOptionalProperty(props, "abTestRollout", "100")));
+        String ngramLangIdentData = getOptionalProperty(props, "ngramLangIdentData", null);
+        if (ngramLangIdentData != null) {
+          File dir = new File(ngramLangIdentData);
+          if (!dir.exists() || dir.isDirectory()) {
+            throw new IllegalArgumentException("ngramLangIdentData does not exist or is a directory (needs to be a ZIP file): " + ngramLangIdentData);
+          }
+          setNgramLangIdentData(dir);
+        }
       }
     } catch (IOException e) {
       throw new RuntimeException("Could not load properties from '" + file + "'", e);
@@ -485,7 +502,6 @@ public class HTTPServerConfig {
    * Maximum text length for users that can identify themselves with an API key.
    * @since 4.2
    */
-  @Experimental
   int getMaxTextLengthWithApiKey() {
     return maxTextLengthWithApiKey;
   }
@@ -514,9 +530,34 @@ public class HTTPServerConfig {
     this.secretTokenKey = secretTokenKey;
   }
 
+  /**
+    @since 5.3
+    use a higher request limit for a list of users
+   */
+  public List<String> getRequestLimitWhitelistUsers() {
+    return requestLimitWhitelistUsers;
+  }
+
+  public void setRequestLimitWhitelistUsers(List<String> requestLimitWhitelistUsers) {
+    this.requestLimitWhitelistUsers = requestLimitWhitelistUsers;
+  }
+
+  /**
+   @since 5.3
+   use a higher request limit for a list of users
+   */
+  public int getRequestLimitWhitelistLimit() {
+    return requestLimitWhitelistLimit;
+  }
+
+  public void setRequestLimitWhitelistLimit(int requestLimitWhitelistLimit) {
+    this.requestLimitWhitelistLimit = requestLimitWhitelistLimit;
+  }
+
   int getRequestLimit() {
     return requestLimit;
   }
+
 
   /** @since 4.0 */
   int getTimeoutRequestLimit() {
@@ -552,7 +593,6 @@ public class HTTPServerConfig {
   }
 
   /** @since 4.2 */
-  @Experimental
   long getMaxCheckTimeWithApiKeyMillis() {
     return maxCheckTimeWithApiKeyMillis;
   }
@@ -579,6 +619,7 @@ public class HTTPServerConfig {
    * Get base directory for neural network models or {@code null}
    * @since 4.4
    */
+  @Deprecated
   public File getNeuralNetworkModelDir() {
     return neuralNetworkModelDir;
   }
@@ -787,7 +828,6 @@ public class HTTPServerConfig {
    * @since 4.0
    */
   @Nullable
-  @Experimental
   String getHiddenMatchesServer() {
     return hiddenMatchesServer;
   }
@@ -796,7 +836,6 @@ public class HTTPServerConfig {
    * Timeout in milliseconds for querying {@link #getHiddenMatchesServer()}.
    * @since 4.0
    */
-  @Experimental
   int getHiddenMatchesServerTimeout() {
     return hiddenMatchesServerTimeout;
   }
@@ -805,7 +844,6 @@ public class HTTPServerConfig {
    * Period to skip requests to hidden matches server after a timeout (in milliseconds)
    * @since 4.5
    */
-  @Experimental
   int getHiddenMatchesServerFailTimeout() {
     return hiddenMatchesServerFailTimeout;
   }
@@ -814,9 +852,17 @@ public class HTTPServerConfig {
    * Languages for which {@link #getHiddenMatchesServer()} will be queried.
    * @since 4.0
    */
-  @Experimental
   List<Language> getHiddenMatchesLanguages() {
     return hiddenMatchesLanguages;
+  }
+
+  /**
+   * Number of failed/timed out requests after which server gets marked as down
+   * @since 5.1
+   */
+  @Experimental
+  int getHiddenMatchesServerFall() {
+    return hiddenMatchesServerFall;
   }
 
   /**
@@ -842,7 +888,6 @@ public class HTTPServerConfig {
    * @since 4.2
    */
   @Nullable
-  @Experimental
   String getDatabaseDriver() {
     return dbDriver;
   }
@@ -850,7 +895,6 @@ public class HTTPServerConfig {
   /**
    * @since 4.2
    */
-  @Experimental
   void setDatabaseDriver(String dbDriver) {
     this.dbDriver = dbDriver;
   }
@@ -860,7 +904,6 @@ public class HTTPServerConfig {
    * @since 4.2
    */
   @Nullable
-  @Experimental
   String getDatabaseUrl() {
     return dbUrl;
   }
@@ -868,7 +911,6 @@ public class HTTPServerConfig {
   /**
    * @since 4.2
    */
-  @Experimental
   void setDatabaseUrl(String dbUrl) {
     this.dbUrl = dbUrl;
   }
@@ -878,7 +920,6 @@ public class HTTPServerConfig {
    * @since 4.2
    */
   @Nullable
-  @Experimental
   String getDatabaseUsername() {
     return dbUsername;
   }
@@ -886,7 +927,6 @@ public class HTTPServerConfig {
   /**
    * @since 4.2
    */
-  @Experimental
   void setDatabaseUsername(String dbUsername) {
     this.dbUsername = dbUsername;
   }
@@ -896,7 +936,6 @@ public class HTTPServerConfig {
    * @since 4.2
    */
   @Nullable
-  @Experimental
   String getDatabasePassword() {
     return dbPassword;
   }
@@ -904,7 +943,6 @@ public class HTTPServerConfig {
   /**
    * @since 4.2
    */
-  @Experimental
   void setDatabasePassword(String dbPassword) {
     this.dbPassword = dbPassword;
   }
@@ -913,7 +951,6 @@ public class HTTPServerConfig {
    * Whether meta data about each search (like in the logfile) should be logged to the database.
    * @since 4.4
    */
-  @Experimental
   void setDatabaseLogging(boolean logging) {
     this.dbLogging = logging;
   }
@@ -921,7 +958,6 @@ public class HTTPServerConfig {
   /**
    * @since 4.4
    */
-  @Experimental
   boolean getDatabaseLogging() {
     return this.dbLogging;
   }
@@ -945,7 +981,6 @@ public class HTTPServerConfig {
    * @since 4.5
    * @return threshold for rule computation time until a warning gets logged, in milliseconds
    */
-  @Experimental
   public int getSlowRuleLoggingThreshold() {
     return slowRuleLoggingThreshold;
   }
@@ -983,7 +1018,6 @@ public class HTTPServerConfig {
    * @since 4.4
    * See if a specific A/B-Test is to be run
    */
-  @Experimental
   @Nullable
   public String getAbTest() {
     return abTest;
@@ -993,7 +1027,6 @@ public class HTTPServerConfig {
    * @since 4.4
    * Enable a specific A/B-Test to be run (or null to disable all tests)
    */
-  @Experimental
   public void setAbTest(@Nullable String abTest) {
     if (abTest != null && abTest.trim().isEmpty()) {
       this.abTest = null;
@@ -1003,7 +1036,7 @@ public class HTTPServerConfig {
   }
 
   /**
-   * Clients that a A/B test runs on; null -> disabled
+   * Clients that a A/B test runs on; null -&gt; disabled
    * @since 4.9
    */
   @Experimental
@@ -1013,7 +1046,7 @@ public class HTTPServerConfig {
   }
 
   /**
-   * Clients that a A/B test runs on; null -> disabled
+   * Clients that a A/B test runs on; null -&gt; disabled
    * @since 4.9
    */
   @Experimental
@@ -1040,6 +1073,17 @@ public class HTTPServerConfig {
   @Experimental
   public int getAbTestRollout() {
     return abTestRollout;
+  }
+
+  /** @since 5.2 */
+  public void setNgramLangIdentData(File ngramLangIdentData) {
+    this.ngramLangIdentData = ngramLangIdentData;
+  }
+
+  /** @since 5.2 */
+  @Nullable
+  public File getNgramLangIdentData() {
+    return ngramLangIdentData;
   }
 
   /**

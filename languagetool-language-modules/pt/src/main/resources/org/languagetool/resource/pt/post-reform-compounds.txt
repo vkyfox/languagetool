@@ -3,8 +3,8 @@
 
 # Portuguese post-reform compound words that are usually not written as
 # separate words.
-# Copyright © 2016–2018 Tiago F. Santos (tiagofsantos@sapo.pt)
-# Copyright © 2016–2018 Marco A.G.Pinto (www.marcoagpinto.com)
+# Copyright © 2016–2021 Tiago F. Santos (tiagofsantos@sapo.pt)
+# Copyright © 2016–2021 Marco A.G.Pinto (www.marcoagpinto.com)
 # Freely available under the LGPL 2.1 or later.
 # Encoding: UTF-8
 #
@@ -19,7 +19,7 @@
 # hyphenated variants, but will suggest a lower-cased non-hyphenated
 # variant
 #
-# Retrived from Natura Dictionaries (version released 01-10-2016)
+# Retrieved from Natura Dictionaries (version released 01-10-2016)
 # http://natura.di.uminho.pt/wiki/doku.php?id=dicionarios:main
 # http://www.portaldalinguaportuguesa.org/recursos.html?action=novoacordo&act=list&version=all
 #
@@ -38,8 +38,6 @@ UTF-8*
 Á-bê-cê*
 á-bê-cês*
 Á-bê-cês*
-à-toa*
-À-toa*
 # à-vontade*
 # À-vontade*
 # à vontade ocorre como locução adverbial.
@@ -1204,6 +1202,7 @@ Cobra-de-água*
 cobra-rateira*
 Cobra-rateira*
 Coca-Cola*
+código-fonte*
 comandante-chefe*
 Comandante-chefe*
 comboio-correio*
@@ -2205,8 +2204,6 @@ Pai-Nosso*
 Pai-Nossos*
 palavra-chave*
 Palavra-chave*
-palavras-chave*
-Palavras-chave*
 palavras-cruzadas*
 Palavras-cruzadas*
 pan-africana*
@@ -3267,6 +3264,8 @@ redator-secretário*
 Redator-secretário*
 redatora-chefe*
 Redatora-chefe*
+relações-públicas*
+Relações-públicas*
 renda-antiga*
 Renda-antiga*
 rendas-antiga*
@@ -3551,8 +3550,8 @@ T-shirts*
 # Tão-pouco*
 tão-só*
 Tão-só*
-tão-somente*
-Tão-somente*
+# tão-somente*
+# Tão-somente*
 tapa-misérias*
 Tapa-misérias*
 técnico-táctico*

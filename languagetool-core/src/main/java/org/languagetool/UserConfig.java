@@ -32,7 +32,6 @@ import java.util.Objects;
  * User-specific configuration. So far, this contains a list of words and a settings map.
  * @since 4.2
  */
-@Experimental
 public class UserConfig {
 
   // don't do A/B tests in command line / GUI mode / tests, etc.; true when running as a server
@@ -53,7 +52,7 @@ public class UserConfig {
   private final boolean filterDictionaryMatches;
 
   // partially indifferent for comparing UserConfigs (e.g. in PipelinePool)
-  // provided to rules only for A/B tests ->
+  // provided to rules only for A/B tests
   private final Long textSessionId;
   private final String abTest;
 

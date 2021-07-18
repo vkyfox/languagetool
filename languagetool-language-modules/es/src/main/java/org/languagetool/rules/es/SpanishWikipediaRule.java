@@ -26,6 +26,8 @@ import org.languagetool.rules.ITSIssueType;
 import org.languagetool.tools.Tools;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 import java.net.URL;
@@ -46,8 +48,8 @@ public class SpanishWikipediaRule extends AbstractSimpleReplaceRule2 {
   private static final Locale ES_LOCALE = new Locale("es");  // locale used on case-conversion
 
   @Override
-  public final String getFileName() {
-    return FILE_NAME;
+  public final List<String> getFileNames() {
+    return Collections.singletonList(FILE_NAME);
   }
 
   public SpanishWikipediaRule(ResourceBundle messages) throws IOException {
@@ -56,6 +58,7 @@ public class SpanishWikipediaRule extends AbstractSimpleReplaceRule2 {
     setLocQualityIssueType(ITSIssueType.Grammar);
     addExamplePair(Example.wrong("<marker>a basto</marker>"),
                    Example.fixed("<marker>abasto</marker>"));
+    this.setDefaultOff();
   }
 
   @Override
@@ -74,7 +77,7 @@ public class SpanishWikipediaRule extends AbstractSimpleReplaceRule2 {
   }
   
   @Override
-  public String getSuggestion() {
+  public String getMessage() {
     return "'$match' es una expresión errónea. Pruebe a utilizar $suggestions";
   }
 

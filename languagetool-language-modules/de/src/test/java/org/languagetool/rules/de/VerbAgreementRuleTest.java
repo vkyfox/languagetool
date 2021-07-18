@@ -18,6 +18,7 @@
  */
 package org.languagetool.rules.de;
 
+import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.languagetool.JLanguageTool;
@@ -30,8 +31,11 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+import static junit.framework.Assert.fail;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * @author Markus Brenneis
@@ -42,7 +46,7 @@ public class VerbAgreementRuleTest {
   private VerbAgreementRule rule;
   
   @Before
-  public void setUp() throws IOException {
+  public void setUp() {
     lt = new JLanguageTool(Languages.getLanguageForShortCode("de-DE"));
     rule = new VerbAgreementRule(TestTools.getMessages("de"), (German) Languages.getLanguageForShortCode("de-DE"));
   }
@@ -116,6 +120,25 @@ public class VerbAgreementRuleTest {
     assertGood("Für Sie mache ich eine Ausnahme.");
     assertGood("Ohne sie hätte ich das nicht geschafft.");
     assertGood("Ohne Sie hätte ich das nicht geschafft.");
+    assertGood("Ich hoffe du auch.");
+    assertGood("Ich hoffe ihr auch.");
+    assertGood("Wird hoffen du auch.");
+    assertGood("Hab einen schönen Tag!");
+    assertGood("Tom traue ich mehr als Maria.");
+    assertGood("Tom kenne ich nicht besonders gut, dafür aber seine Frau.");
+    assertGood("Tom habe ich heute noch nicht gesehen.");
+    assertGood("Tom bezahle ich gut.");
+    assertGood("Tom werde ich nicht noch mal um Hilfe bitten.");
+    assertGood("Tom konnte ich überzeugen, nicht aber Maria.");
+    assertGood("Mach du mal!");
+    assertGood("Das bekomme ich nicht hin.");
+    assertGood("Dies betreffe insbesondere Nietzsches Aussagen zu Kant und der Evolutionslehre.");
+    assertGood("❌Du fühlst Dich unsicher?");
+    assertGood("Bekommst sogar eine Sicherheitszulage");
+    assertGood("Bringst nicht einmal so etwas Einfaches zustande!");
+    assertGood("Bekommst sogar eine Sicherheitszulage");
+    assertGood("Dallun sagte nur, dass er gleich kommen wird und legte wieder auf.");
+    assertGood("Tinne, Elvis und auch ich werden gerne wiederkommen!");
     // incorrect sentences:
     assertBad("Als Borcarbid weißt es eine hohe Härte auf.");
     assertBad("Das greift auf Vorläuferinstitutionen bist auf die Zeit von 1234 zurück.");
@@ -130,6 +153,12 @@ public class VerbAgreementRuleTest {
     assertBad("Sie sagte zu mir: „Du muss gehen.“");
     assertBad("„Ich müsst alles machen.“");
     assertBad("„Ich könnt mich sowieso nicht verstehen.“");
+    assertBad("Er sagte düster: Ich brauchen mich nicht böse angucken.");
+    assertBad("David sagte düster: Ich brauchen mich nicht böse angucken.");
+    assertBad("Ich setzet mich auf den weichen Teppich und kreuzte die Unterschenkel wie ein Japaner.");
+    assertBad("Ich brauchen einen Karren mit zwei Ochsen.");
+    assertBad("Ich haben meinen Ohrring fallen lassen.");
+    assertBad("Ich stehen Ihnen gerne für Rückfragen zur Verfügung.");
   }
 
   @Test
@@ -242,6 +271,8 @@ public class VerbAgreementRuleTest {
     assertBad("Wünscht du dir mehr Zeit?", "Subjekt (du) und Prädikat (Wünscht)");
     assertBad("Wir lebst noch.", 2);
     assertBad("Wir lebst noch.", 2, "Wir leben", "Wir lebten", "Du lebst");
+    assertBad("Er sagte düster: „Ich brauchen mich nicht schuldig fühlen.“", 1, "Ich brauche", "Ich brauchte", "Ich bräuchte", "Wir brauchen", "Sie brauchen");
+    assertBad("Er sagte: „Ich brauchen mich nicht schuldig fühlen.“", 1, "Ich brauche", "Ich brauchte", "Ich bräuchte", "Wir brauchen", "Sie brauchen");
   }
 
   private void assertGood(String s) throws IOException {
@@ -266,9 +297,9 @@ public class VerbAgreementRuleTest {
             errorMessage.contains(expectedErrorSubstring));
   }
 
-  private void assertBad(String s, int n, String... expectedSuggestions) throws IOException {
-    RuleMatch[] matches = rule.match(lt.analyzeText(s));
-    assertEquals("Did not find " + n + " match(es) in sentence '" + s + "'", n, matches.length);
+  private void assertBad(String input, int expectedMatches, String... expectedSuggestions) throws IOException {
+    RuleMatch[] matches = rule.match(lt.analyzeText(input));
+    assertEquals("Did not find " + expectedMatches + " match(es) in sentence '" + input + "'", expectedMatches, matches.length);
     if (expectedSuggestions.length > 0) {
       RuleMatch match = matches[0];
       // When two errors are reported by the rule (so TODO above), it might happen that the first match does not have the suggestions, but the second one

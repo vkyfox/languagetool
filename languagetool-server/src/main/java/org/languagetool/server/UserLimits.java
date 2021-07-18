@@ -46,6 +46,7 @@ class UserLimits {
   private int maxTextLength;
   private long maxCheckTimeMillis;
   private Long premiumUid;
+  private boolean skipLimits;
 
   private static final LoadingCache<Account, String> cache = CacheBuilder.newBuilder()
           .expireAfterWrite(15, TimeUnit.MINUTES)
@@ -67,7 +68,7 @@ class UserLimits {
     Objects.requireNonNull(jwtToken);
     String secretKey = config.getSecretTokenKey();
     if (secretKey == null) {
-      throw new RuntimeException("You specified a 'token' parameter but this server doesn't accept tokens");
+      throw new RuntimeException("You specified a 'token' parameter but this server is not configured to accept tokens");
     }
     Algorithm algorithm = Algorithm.HMAC256(secretKey);
     DecodedJWT decodedToken;
@@ -82,10 +83,12 @@ class UserLimits {
     boolean hasPremium = !premiumClaim.isNull() && premiumClaim.asBoolean();
     Claim uidClaim = decodedToken.getClaim("uid");
     long uid = uidClaim.isNull() ? -1 : uidClaim.asLong();
-    return new UserLimits(
-            maxTextLengthClaim.isNull() ? config.maxTextLength : maxTextLengthClaim.asInt(),
-            config.maxCheckTimeMillis,
-            hasPremium ? uid : null);
+    UserLimits userLimits = new UserLimits(
+      maxTextLengthClaim.isNull() ? config.maxTextLength : maxTextLengthClaim.asInt(),
+      config.maxCheckTimeMillis,
+      hasPremium ? uid : null);
+    userLimits.skipLimits = decodedToken.getClaim("skipLimits").isNull() ? false : decodedToken.getClaim("skipLimits").asBoolean();
+    return userLimits;
   }
 
   /**
@@ -148,12 +151,23 @@ class UserLimits {
     this.premiumUid = premiumUid;
   }
 
+  /**
+   * Special case for internal use to skip all limits.
+   */
+  UserLimits(boolean skipLimits) {
+    this.skipLimits = skipLimits;
+  }
+
   int getMaxTextLength() {
     return maxTextLength;
   }
 
   long getMaxCheckTimeMillis() {
    return maxCheckTimeMillis;
+  }
+
+  boolean getSkipLimits() {
+    return skipLimits;
   }
 
   @Nullable
@@ -169,8 +183,8 @@ class UserLimits {
 
   static class Account {
 
-    private String username;
-    private String password;
+    private final String username;
+    private final String password;
 
     Account(String username, String password) {
       this.username = Objects.requireNonNull(username);

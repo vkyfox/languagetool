@@ -42,27 +42,8 @@ public class UppercaseSentenceStartRule extends TextLevelRule {
   private static final Pattern WHITESPACE_OR_QUOTE = Pattern.compile("[ \"'„«»‘’“”\\n]"); //only ending quote is necessary?
   private static final Pattern SENTENCE_END1 = Pattern.compile("[.?!…]|");
   private static final Set<String> EXCEPTIONS = new HashSet<>(Arrays.asList(
-          "iPhone",
-          "iPhones",
-          "iOS",
-          "iMovie",
-          "iLife",
-          "iWork",
-          "iMac",
-          "iMacs",
-          "eBay",
-          "fMRI",
-          "iPad",
-          "iPads",
-          "iPod",
-          "iPods",
-          "iCloud",
-          "iRobot",
-          "iRobots",
-          "iTunes",
-          "macOS",
-          "mRNA",
-          "iFood"
+          "x86",
+          "cc" // cc @daniel => "Cc @daniel" is strange
   ));
 
   private final Language language;
@@ -147,8 +128,10 @@ public class UppercaseSentenceStartRule extends TextLevelRule {
       if (!SENTENCE_END1.matcher(lastParagraphString).matches() && !isSentenceEnd(lastToken)) {
         preventError = true;
       }
-
-      lastParagraphString = lastToken;
+      
+      if (!sentence.getText().replace('\u00A0', ' ').trim().isEmpty()) {
+        lastParagraphString = lastToken;
+      }
 
       //allows enumeration with lowercase letters: a), iv., etc.
       if (matchTokenPos+1 < tokens.length
@@ -164,7 +147,7 @@ public class UppercaseSentenceStartRule extends TextLevelRule {
 
       if (checkToken.length() > 0) {
         char firstChar = checkToken.charAt(0);
-        if (!preventError && Character.isLowerCase(firstChar) && !EXCEPTIONS.contains(checkToken)) {
+        if (!preventError && Character.isLowerCase(firstChar) && !EXCEPTIONS.contains(checkToken) && !StringTools.isCamelCase(checkToken)) {
           RuleMatch ruleMatch = new RuleMatch(this, sentence,
                   pos+tokens[matchTokenPos].getStartPos(),
                   pos+tokens[matchTokenPos].getEndPos(),
@@ -173,8 +156,8 @@ public class UppercaseSentenceStartRule extends TextLevelRule {
           ruleMatches.add(ruleMatch);
         }
       }
-      pos += sentence.getText().length();
-      // Plain text lists like this are not properly split into sentences, we 
+      pos += sentence.getCorrectedTextLength();
+      // Plain text lists like this are not properly split into sentences, we
       // work around that here so the items don't create an error when starting lowercase:
       // 1. item one
       // 2. item two
@@ -213,7 +196,7 @@ public class UppercaseSentenceStartRule extends TextLevelRule {
   }
 
   private boolean isQuoteStart(String word) {
-    return StringUtils.equalsAny(word, "\"", "'", "„", "»", "«", "“", "‘");
+    return StringUtils.equalsAny(word, "\"", "'", "„", "»", "«", "“", "‘", "¡", "¿");
   }
 
   @Override

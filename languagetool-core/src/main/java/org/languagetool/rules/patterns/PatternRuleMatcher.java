@@ -18,24 +18,20 @@
  */
 package org.languagetool.rules.patterns;
 
+import com.google.common.primitives.Ints;
 import org.jetbrains.annotations.Nullable;
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.AnalyzedTokenReadings;
-import org.languagetool.Language;
-import org.languagetool.rules.ITSIssueType;
-import org.languagetool.rules.RuleMatch;
-import org.languagetool.rules.RuleMatchFilter;
-import org.languagetool.rules.RuleWithMaxFilter;
+import org.languagetool.*;
+import org.languagetool.rules.*;
 import org.languagetool.tools.StringTools;
-//import org.slf4j.Logger;
-//import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+//import org.slf4j.Logger;
+//import org.slf4j.LoggerFactory;
 
 /**
  * Matches a pattern rule against text.
@@ -50,18 +46,21 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
   private static final String SUGGESTION_START_TAG = "<suggestion>";
   private static final String SUGGESTION_END_TAG = "</suggestion>";
 
+  private static final String allowedChars = "[^<>()]*?";
+  private static final Pattern SUGGESTION_PATTERN_SUPPRESS = Pattern
+      .compile(SUGGESTION_START_TAG + PatternRuleHandler.PLEASE_SPELL_ME 
+          + allowedChars + "(\\(" + allowedChars + "\\)|" + MISTAKE + ")" + allowedChars  
+          + SUGGESTION_END_TAG);
+
   private final boolean useList;
-  private final List<PatternTokenMatcher> patternTokenMatchers;
   //private final Integer slowMatchThreshold;
-  private final boolean monitorRules;
+  private static final boolean monitorRules = System.getProperty("monitorActiveRules") != null;
 
   PatternRuleMatcher(PatternRule rule, boolean useList) {
     super(rule, rule.getLanguage().getUnifier());
     this.useList = useList;
-    this.patternTokenMatchers = createElementMatchers();
     //String slowMatchThresholdStr = System.getProperty("slowMatchThreshold");
     //slowMatchThreshold = slowMatchThresholdStr != null ? Integer.parseInt(slowMatchThresholdStr) : null;
-    this.monitorRules = System.getProperty("monitorActiveRules") != null;
   }
 
   public static Map<String, Integer> getCurrentRules() {
@@ -70,119 +69,47 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
 
   @Override
   public RuleMatch[] match(AnalyzedSentence sentence) throws IOException {
-    long startTime = System.currentTimeMillis();
+//    long startTime = System.currentTimeMillis();
     List<RuleMatch> ruleMatches = new ArrayList<>();
-    String key = rule.getFullId() + ": " + sentence.getText();
-    if (monitorRules) {
+    String key = monitorRules ? rule.getFullId() + ": " + sentence.getText() : null;
+    if (key != null) {
       currentlyActiveRules.compute(key, (k, v) -> v == null ? 1 : v + 1);
     }
     try {
-      boolean isPreDisambigMatch = rule instanceof PatternRule && ((PatternRule)rule).isInterpretPosTagsPreDisambiguation();
-      AnalyzedTokenReadings[] tokens = isPreDisambigMatch ? sentence.getPreDisambigTokensWithoutWhitespace() : sentence.getTokensWithoutWhitespace();
-      List<Integer> tokenPositions = new ArrayList<>(tokens.length + 1);
-      int patternSize = patternTokenMatchers.size();
-      int limit = Math.max(0, tokens.length - patternSize + 1);
-      PatternTokenMatcher pTokenMatcher = null;
-      int i = 0;
-      int minOccurCorrection = getMinOccurrenceCorrection();
-      while (i < limit + minOccurCorrection && !(rule.isSentStart() && i > 0)) {
-        int skipShiftTotal = 0;
-        boolean allElementsMatch = false;
-        int firstMatchToken = -1;
-        int lastMatchToken = -1;
-        int firstMarkerMatchToken = -1;
-        int lastMarkerMatchToken = -1;
-        int prevSkipNext = 0;
-        if (rule.isTestUnification()) {
-          unifier.reset();
+      AnalyzedTokenReadings[] tokens = isInterpretPosTagsPreDisambiguation()
+                                       ? sentence.getPreDisambigTokensWithoutWhitespace()
+                                       : sentence.getTokensWithoutWhitespace();
+      doMatch(sentence, tokens, (tokenPositions, firstMatchToken, lastMatchToken, firstMarkerMatchToken, lastMarkerMatchToken) -> {
+        RuleMatch ruleMatch = createRuleMatch(tokenPositions, tokens, firstMatchToken, lastMatchToken, firstMarkerMatchToken, lastMarkerMatchToken, sentence);
+        if (ruleMatch != null) {
+          ruleMatches.add(ruleMatch);
         }
-        tokenPositions.clear();
-        int minOccurSkip = 0;
-        for (int k = 0; k < patternSize; k++) {
-          PatternTokenMatcher prevTokenMatcher = pTokenMatcher;
-          pTokenMatcher = patternTokenMatchers.get(k);
-          pTokenMatcher.resolveReference(firstMatchToken, tokens, rule.getLanguage());
-          int nextPos = i + k + skipShiftTotal - minOccurSkip;
-          prevMatched = false;
-          if (prevSkipNext + nextPos >= tokens.length || prevSkipNext < 0) { // SENT_END?
-            prevSkipNext = tokens.length - (nextPos + 1);
-          }
-          int maxTok = Math.min(nextPos + prevSkipNext, tokens.length - (patternSize - k) + minOccurCorrection);
-          for (int m = nextPos; m <= maxTok; m++) {
-            allElementsMatch = !tokens[m].isImmunized() && testAllReadings(tokens, pTokenMatcher, prevTokenMatcher, m, firstMatchToken, prevSkipNext);
-
-            if (pTokenMatcher.getPatternToken().getMinOccurrence() == 0) {
-              boolean foundNext = false;
-              for (int k2 = k + 1; k2 < patternSize; k2++) {
-                PatternTokenMatcher nextElement = patternTokenMatchers.get(k2);
-                boolean nextElementMatch = !tokens[m].isImmunized() && testAllReadings(tokens, nextElement, pTokenMatcher, m,
-                  firstMatchToken, prevSkipNext);
-                if (nextElementMatch) {
-                  // this element doesn't match, but it's optional so accept this and continue
-                  allElementsMatch = true;
-                  minOccurSkip++;
-                  tokenPositions.add(0);
-                  foundNext = true;
-                  break;
-                } else if (nextElement.getPatternToken().getMinOccurrence() > 0) {
-                  break;
-                }
-              }
-              if (foundNext) {
-                break;
-              }
-            }
-
-            if (allElementsMatch) {
-              int skipForMax = skipMaxTokens(tokens, pTokenMatcher, firstMatchToken, prevSkipNext,
-                prevTokenMatcher, m, patternSize - k - 1);
-              lastMatchToken = m + skipForMax;
-              int skipShift = lastMatchToken - nextPos;
-              tokenPositions.add(skipShift + 1);
-              prevSkipNext = translateElementNo(pTokenMatcher.getPatternToken().getSkipNext());
-              skipShiftTotal += skipShift;
-              if (firstMatchToken == -1) {
-                firstMatchToken = lastMatchToken - skipForMax;
-              }
-              if (firstMarkerMatchToken == -1 && pTokenMatcher.getPatternToken().isInsideMarker()) {
-                firstMarkerMatchToken = lastMatchToken - skipForMax;
-              }
-              if (pTokenMatcher.getPatternToken().isInsideMarker()) {
-                lastMarkerMatchToken = lastMatchToken;
-              }
-              break;
-            }
-          }
-          if (!allElementsMatch) {
-            break;
-          }
-        }
-        if (allElementsMatch && tokenPositions.size() == patternSize) {
-          RuleMatch ruleMatch = createRuleMatch(tokenPositions,
-            tokens, firstMatchToken, lastMatchToken, firstMarkerMatchToken, lastMarkerMatchToken, sentence);
-          if (ruleMatch != null) {
-            ruleMatches.add(ruleMatch);
-          }
-        }
-        i++;
-      }
+      });
       RuleMatchFilter maxFilter = new RuleWithMaxFilter();
       List<RuleMatch> filteredMatches = maxFilter.filter(ruleMatches);
       /*if (slowMatchThreshold != null) {
-      long runTime = System.currentTimeMillis() - startTime;
-      if (runTime > slowMatchThreshold) {
-        logger.warn("Slow match for rule " + rule.getFullId() + ": " + runTime + "ms, sentence len: " + sentence.getText().length() + " (threshold: " + slowMatchThreshold + "ms)");
-      }
-    }*/return filteredMatches.toArray(new RuleMatch[0]);
+        long runTime = System.currentTimeMillis() - startTime;
+        if (runTime > slowMatchThreshold) {
+          logger.warn("Slow match for rule " + rule.getFullId() + ": " + runTime + "ms, sentence len: " + sentence.getText().length() + " (threshold: " + slowMatchThreshold + "ms)");
+        }
+      }*/
+      return filteredMatches.toArray(RuleMatch.EMPTY_ARRAY);
     } finally {
-      if (monitorRules) {
+      if (key != null) {
         currentlyActiveRules.computeIfPresent(key, (k, v) -> v - 1 > 0 ? v - 1 : null);
       }
     }
   }
 
+  @Override
+  protected boolean testAllReadings(AnalyzedTokenReadings[] tokens, PatternTokenMatcher matcher, PatternTokenMatcher prevElement, int tokenNo, int firstMatchToken, int prevSkipNext) throws IOException {
+    if (tokens[tokenNo].isImmunized()) return false;
+
+    return super.testAllReadings(tokens, matcher, prevElement, tokenNo, firstMatchToken, prevSkipNext);
+  }
+
   @Nullable
-  private RuleMatch createRuleMatch(List<Integer> tokenPositions,
+  private RuleMatch createRuleMatch(int[] tokenPositions,
                                     AnalyzedTokenReadings[] tokens, int firstMatchToken,
                                     int lastMatchToken, int firstMarkerMatchToken, int lastMarkerMatchToken,
                                     AnalyzedSentence sentence) throws IOException {
@@ -195,8 +122,8 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
             firstMatchToken, rule.getSuggestionsOutMsg(), rule.getSuggestionMatchesOutMsg());
     int correctedStPos = 0;
     if (rule.startPositionCorrection > 0) {
-      for (int l = 0; l <= Math.min(rule.startPositionCorrection, tokenPositions.size() - 1); l++) {
-        correctedStPos += tokenPositions.get(l);
+      for (int l = 0; l <= Math.min(rule.startPositionCorrection, tokenPositions.length - 1); l++) {
+        correctedStPos += tokenPositions[l];
       }
       correctedStPos--;
     }
@@ -223,7 +150,8 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
     }
     int fromPos = tokens[firstMarkerMatchToken].getStartPos();
     // FIXME: this is fishy, assumes that comma should always come before whitespace:
-    if (errMessage.contains(SUGGESTION_START_TAG + ",") && firstMarkerMatchToken >= 1) {
+    if (firstMarkerMatchToken >= 1 && (errMessage.contains(SUGGESTION_START_TAG + ",") 
+        || suggestionsOutMsg.contains(SUGGESTION_START_TAG + ","))) {
       fromPos = tokens[firstMarkerMatchToken - 1].getStartPos()
           + tokens[firstMarkerMatchToken - 1].getToken().length();
     }
@@ -233,11 +161,13 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
     AnalyzedTokenReadings token = tokens[Math.min(lastMarkerMatchToken, tokens.length-1)];
     int toPos = token.getEndPos();
     if (fromPos < toPos) { // this can happen with some skip="-1" when the last token is not matched
-      //now do some spell-checking:
-      if (!(errMessage.contains(PatternRuleHandler.PLEASE_SPELL_ME) && errMessage.contains(MISTAKE))) {
+      // if the message is "suppress_misspelled" and there are no suggestions,
+      // then do not create the rule match
+      if (!(errMessage.contains(PatternRuleHandler.PLEASE_SPELL_ME) && !errMessage.contains(SUGGESTION_START_TAG)
+          && !suggestionsOutMsg.contains(SUGGESTION_START_TAG))) {
         String clearMsg = errMessage.replaceAll(PatternRuleHandler.PLEASE_SPELL_ME, "").replaceAll(MISTAKE, "");
-        RuleMatch ruleMatch = new RuleMatch(rule, sentence, fromPos, toPos, clearMsg,
-                shortErrMessage, startsWithUppercase, suggestionsOutMsg);
+        RuleMatch ruleMatch = new RuleMatch(rule, sentence, fromPos, toPos, tokens[firstMatchToken].getStartPos(), tokens[lastMatchToken].getEndPos(),
+                clearMsg, shortErrMessage, startsWithUppercase, suggestionsOutMsg);
         ITSIssueType issueType = ruleMatch.getRule().getLocQualityIssueType();
         if (issueType == ITSIssueType.Style || issueType == ITSIssueType.LocaleViolation || issueType == ITSIssueType.Register) {
           // interpret the issue type - this is what the clients have done so far before there was RuleMatch.Type
@@ -246,7 +176,7 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
         if (rule.getFilter() != null) {
           RuleFilterEvaluator evaluator = new RuleFilterEvaluator(rule.getFilter());
           AnalyzedTokenReadings[] patternTokens = Arrays.copyOfRange(tokens, firstMatchToken, lastMatchToken + 1);
-          return evaluator.runFilter(rule.getFilterArguments(), ruleMatch, patternTokens, firstMatchToken, tokenPositions);
+          return evaluator.runFilter(rule.getFilterArguments(), ruleMatch, patternTokens, firstMatchToken, Ints.asList(tokenPositions));
         } else {
           return ruleMatch; 
         }
@@ -264,6 +194,9 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
     if (suggestionMatches != null && !suggestionMatches.isEmpty()) {
       //PatternRule rule = (PatternRule) this.rule;
       int sugStart = msg.indexOf(SUGGESTION_START_TAG) + SUGGESTION_START_TAG.length();
+      if (msg.contains(PatternRuleHandler.PLEASE_SPELL_ME)) {
+        sugStart += PatternRuleHandler.PLEASE_SPELL_ME.length();
+      }
       for (Match sMatch : suggestionMatches) {
         if (!sMatch.isInMessageOnly() && sMatch.convertsCase()
             && msg.charAt(sugStart) == '\\') {
@@ -280,7 +213,8 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
    * @param i Current element index.
    * @return int Index translated into XML element no.
    */
-  private int translateElementNo(int i) {
+  @Override
+  int translateElementNo(int i) {
     if (!useList || i < 0) {
       return i;
     }
@@ -302,10 +236,11 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
    * @return String Formatted message.
    */
   private String formatMatches(AnalyzedTokenReadings[] tokenReadings,
-      List<Integer> positions, int firstMatchTok, String errorMsg,
+      int[] positions, int firstMatchTok, String errorMsg,
       List<Match> suggestionMatches) throws IOException {
     String errorMessage = errorMsg;
     int matchCounter = 0;
+    //int prevMatchesLength = 0;
     int[] numbersToMatches = new int[errorMsg.length()];
     boolean newWay = false;
     int errLen = errorMessage.length();
@@ -332,11 +267,11 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
             + numLen)) - 1;
         int repTokenPos = 0;
         int nextTokenPos = 0;
-        for (int l = 0; l <= Math.min(j, positions.size() - 1); l++) {
-          repTokenPos += positions.get(l);
+        for (int l = 0; l <= Math.min(j, positions.length - 1); l++) {
+          repTokenPos += positions[l];
         }
-        if (j + 1 < positions.size()) {
-          nextTokenPos = firstMatchTok + repTokenPos + positions.get(j + 1);
+        if (j + 1 < positions.length) {
+          nextTokenPos = firstMatchTok + repTokenPos + positions[j + 1];
         }
 
         if (suggestionMatches != null && suggestionMatches.size() > 0) {
@@ -344,9 +279,9 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
             numbersToMatches[j] = matchCounter;
             // if token is optional remove it from suggestions:
             String[] matches;
-            if (j >= positions.size()) {
+            if (j >= positions.length) {
               matches = concatMatches(matchCounter, j, firstMatchTok + repTokenPos, tokenReadings, nextTokenPos, suggestionMatches);
-            } else if (positions.get(j) != 0) {
+            } else if (positions[j] != 0) {
               matches = concatMatches(matchCounter, j, firstMatchTok + repTokenPos, tokenReadings, nextTokenPos, suggestionMatches);
             } else {
               matches = new String[] { "" };
@@ -355,7 +290,7 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
             String rightSide = errorMessage.substring(backslashPos + numLen);
             if (matches.length == 1) {
               // if we removed optional token from suggestion then remove leading space from the next word
-              if (matches[0].isEmpty() ) {
+              if (matches[0].isEmpty()) {
                 errorMessage = concatWithoutExtraSpace(leftSide, rightSide);
                 errorMessageProcessed = leftSide.length();
               } else {
@@ -366,6 +301,8 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
               // TODO compute/return errorMessageProcessed here as well
               errorMessage = formatMultipleSynthesis(matches, leftSide, rightSide);
             }
+            //TODO keep the previous matches length and handle it appropriately
+            //prevMatchesLength =  matches.length;
             matchCounter++;
             newWay = true;
           } else {
@@ -390,18 +327,29 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
         numberFollows = StringTools.isPositiveNumber(errorMessage.charAt(errMarker + 1));
       }
     }
-    return errorMessage;
+    return removeSuppressMisspelled(errorMessage);
   }
 
   private static String concatWithoutExtraSpace(String leftSide, String rightSide) {
     // can't do \\p{Punct} as it catches \2 placeholder
-    if( leftSide.endsWith(" ") && rightSide.matches("[\\s,:;.!?].*") ) {
+    if (leftSide.endsWith(" ") && rightSide.matches("[\\s,:;.!?].*")) {
       return leftSide.substring(0, leftSide.length()-1) + rightSide;
     }
-    if( leftSide.endsWith("suggestion>") && rightSide.startsWith(" ") ) {
+    if (leftSide.endsWith("suggestion>") && rightSide.startsWith(" ")) {
       return leftSide + rightSide.substring(1);
     }
     return leftSide + rightSide;
+  }
+
+  private static String removeSuppressMisspelled(String s) {
+    String result = s;
+    // remove suggestions not synthesized: <suggestion><pleasespellme/>...(...)...</suggestion>
+    // remove misspelled words: <suggestion><pleasespellme/>...<mistake/>...</suggestion>
+    Matcher matcher = SUGGESTION_PATTERN_SUPPRESS.matcher(result);
+    result = matcher.replaceAll("");
+    // remove the remaining tags <pleasespellme/> in suggestions but not in the message
+    result = result.replaceAll(SUGGESTION_START_TAG + PatternRuleHandler.PLEASE_SPELL_ME, SUGGESTION_START_TAG);
+    return result;
   }
 
   // non-private for tests
@@ -465,12 +413,6 @@ final public class PatternRuleMatcher extends AbstractPatternRulePerformer imple
       int skippedTokens = nextTokenPos - tokenIndex;
       MatchState matchState = suggestionMatches.get(start).createState(language.getSynthesizer(), tokens, tokenIndex - 1, skippedTokens);
       finalMatch = matchState.toFinalString(language);
-      if (suggestionMatches.get(start).checksSpelling()
-          && finalMatch.length == 1
-          && "".equals(finalMatch[0])) {
-        finalMatch = new String[1];
-        finalMatch[0] = MISTAKE;
-      }
     } else {
       List<String[]> matchList = new ArrayList<>();
       for (int i = 0; i < len; i++) {

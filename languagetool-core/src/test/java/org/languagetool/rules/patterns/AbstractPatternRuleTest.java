@@ -19,10 +19,8 @@
 package org.languagetool.rules.patterns;
 
 import org.junit.Test;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
-import org.languagetool.Languages;
-import org.languagetool.databroker.ResourceDataBroker;
+import org.languagetool.*;
+import org.languagetool.broker.ResourceDataBroker;
 
 import java.io.File;
 import java.io.IOException;
@@ -73,7 +71,7 @@ public class AbstractPatternRuleTest {
   }
 
   protected boolean skipCountryVariant(Language lang) {
-    if (Languages.get().get(0).equals(lang)) { // test always the first one
+    if (Languages.get().isEmpty() || Languages.get().get(0).equals(lang)) { // test always the first one
       return false;
     }
     ResourceDataBroker dataBroker = JLanguageTool.getDataBroker();

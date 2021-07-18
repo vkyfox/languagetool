@@ -14,9 +14,13 @@ doch	trotzdem, dennoch
 drei	die Zahl 3
 ehelich	auf die Ehe bezogen
 ehrlich	wahr, nicht gelogen
+fasst	Form von 'fassen' (greifen)
+fast	beinahe
 fielen	zu 'fallen'
 fiele	zu 'fallen'
 fiel	zu 'fallen'
+Fliese	keramische Platte (als Wandverkleidung etc.)
+Fliesen	keramische Platten (als Wandverkleidung etc.)
 frei	unabhängig, nicht gefangen
 Gärten	Plural von 'Garten'
 Gebäck	Speise auf Mehlbasis
@@ -27,7 +31,9 @@ gestellt	zu 'stellen'
 gibt	Form von 'geben'
 Gbit	Gigabit
 #gewichtet	
-#gewuchtet	
+#gewuchtet
+Hafen	Ort, an dem Schiffe anlegen können
+Harfen	Plural von 'Harfe' (Instrument)
 häute	Form des Verbs 'häuten'
 Hefe	Gärprozess einleitendes Mittel
 Hefte	Plural von 'Heft'
@@ -41,7 +47,9 @@ Laib	Laib Brot oder Käse
 #Laie	
 #least	
 Leere	Nichts
-#legen	
+leeren	Form von 'leer' (ohne Inhalt)
+lehren	unterrichten
+#legen
 Lehre	Ausbildung
 Leib	Körper
 #Leihe	
@@ -73,6 +81,8 @@ Nachname	Familienname
 #Patienten	
 Rede	Ansprache
 Reede	Ankerplatz
+reißt	Form von 'reißen' (ruckhaft an etwas ziehen)
+reist	From von 'reisen' (eine Reise unternehmen)
 Reinfall	Flop
 Rezension	Buch-/Film-/Produktkritik
 Rezession	Konjunkturrückgang
@@ -85,8 +95,10 @@ Rute	dünner Zweig
 #scherzhaft	
 #schmerzhaft	
 #sehr	
-#seht	
-#sich	
+#seht
+seid	Verbform: 'seid ihr angekommen?'
+seit	Präposition: 'seit wann?'
+#sich
 Siegel	Stempel
 #sieht	
 Sigel	Zeichen (Fachsprache)
@@ -101,6 +113,8 @@ späht	Form von 'spähen'
 #staatlicher	
 #staatliches	
 Ställe	Plural von 'Stall'
+Städte	Plural von 'Stadt'
+Stätte	ein besonderer Ort
 #Stand	
 #stattlich	
 #stattliche	
@@ -145,7 +159,7 @@ wart	Vergangenheit von 'sein'
 Wasen	Name
 weiht	Form von 'weihen'
 Weise	Art und Weise
-weißt	Form von 'weißen' (weiß streichen)
+weißt	Form von 'wissen' oder 'weißen' (weiß streichen)
 weist	Form von '(hin)weisen'
 weit	breit, lang
 Welle	Wasserwoge

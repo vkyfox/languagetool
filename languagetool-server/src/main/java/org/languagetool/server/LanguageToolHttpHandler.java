@@ -147,10 +147,11 @@ class LanguageToolHttpHandler implements HttpHandler {
       parameters = getRequestQuery(httpExchange, requestedUri);
       if (requestLimiter != null) {
         try {
-          requestLimiter.checkAccess(remoteAddress, parameters, httpExchange.getRequestHeaders());
+          UserLimits userLimits = ServerTools.getUserLimits(parameters, config);
+          requestLimiter.checkAccess(remoteAddress, parameters, httpExchange.getRequestHeaders(), userLimits);
         } catch (TooManyRequestsException e) {
           String errorMessage = "Error: Access from " + remoteAddress + " denied: " + e.getMessage();
-          int code = HttpURLConnection.HTTP_FORBIDDEN;
+          int code = 429; // too many requests
           sendError(httpExchange, code, errorMessage);
           // already logged via DatabaseAccessLimitLogEntry
           logError(errorMessage, code, parameters, httpExchange, false);
@@ -163,7 +164,7 @@ class LanguageToolHttpHandler implements HttpHandler {
                 textSizeMessage +
                 " Allowed maximum timeouts: " + errorRequestLimiter.getRequestLimit() +
                 " per " + errorRequestLimiter.getRequestLimitPeriodInSeconds() + " seconds";
-        int code = HttpURLConnection.HTTP_FORBIDDEN;
+        int code = 429; // too many requests
         sendError(httpExchange, code, errorMessage);
         logError(errorMessage, code, parameters, httpExchange);
         return;
@@ -178,15 +179,15 @@ class LanguageToolHttpHandler implements HttpHandler {
           String pathWithoutVersion = path.substring("/v2/".length());
           apiV2.handleRequest(pathWithoutVersion, httpExchange, parameters, errorRequestLimiter, remoteAddress, config);
         } else if (path.endsWith("/Languages")) {
-          throw new IllegalArgumentException("You're using an old version of our API that's not supported anymore. Please see https://languagetool.org/http-api/migration.php");
+          throw new BadRequestException("You're using an old version of our API that's not supported anymore. Please see https://languagetool.org/http-api/migration.php");
         } else if (path.equals("/")) {
-          throw new IllegalArgumentException("Missing arguments for LanguageTool API. Please see " + API_DOC_URL);
+          throw new BadRequestException("Missing arguments for LanguageTool API. Please see " + API_DOC_URL);
         } else if (path.contains("/v2/")) {
-          throw new IllegalArgumentException("You have '/v2/' in your path, but not at the root. Try an URL like 'http://server/v2/...' ");
+          throw new BadRequestException("You have '/v2/' in your path, but not at the root. Try an URL like 'http://server/v2/...' ");
         } else if (path.equals("/favicon.ico")) {
           sendError(httpExchange, HttpURLConnection.HTTP_NOT_FOUND, "Not found");
         } else {
-          throw new IllegalArgumentException("This is the LanguageTool API. You have not specified any parameters. Please see " + API_DOC_URL);
+          throw new BadRequestException("This is the LanguageTool API. You have not specified any parameters. Please see " + API_DOC_URL);
         }
       } else {
         String errorMessage = "Error: Access from " + StringTools.escapeXML(origAddress) + " denied";
@@ -211,7 +212,7 @@ class LanguageToolHttpHandler implements HttpHandler {
         errorCode = HttpURLConnection.HTTP_FORBIDDEN;
         response = AuthException.class.getName() + ": " + e.getMessage();
         logStacktrace = false;
-      } else if (e instanceof IllegalArgumentException || rootCause instanceof IllegalArgumentException) {
+      } else if (e instanceof BadRequestException || rootCause instanceof BadRequestException) {
         errorCode = HttpURLConnection.HTTP_BAD_REQUEST;
         response = e.getMessage();
       } else if (e instanceof PathNotFoundException || rootCause instanceof PathNotFoundException) {
@@ -307,13 +308,23 @@ class LanguageToolHttpHandler implements HttpHandler {
     if (text != null) {
       message += "text length: " + text.length() + ", ";
     }
-    message += "m: " + ServerTools.getMode(params) + ", ";
+    try {
+      message += "m: " + ServerTools.getMode(params) + ", ";
+    } catch (BadRequestException ex) {
+      message += "m: invalid, ";
+    }
+    try {
+      message += "l: " + ServerTools.getLevel(params) + ", ";
+    } catch (BadRequestException ex) {
+      message += "l: invalid, ";
+    }
     if (params.containsKey("instanceId")) {
       message += "iID: " + params.get("instanceId") + ", ";
     }
     if (logStacktrace) {
       message += "Stacktrace follows:";
-      message += ExceptionUtils.getStackTrace(e);
+      String stackTrace = ExceptionUtils.getStackTrace(e);
+      message += ServerTools.cleanUserTextFromMessage(stackTrace, params);
       logger.error(message);
     } else {
       message += "(no stacktrace logged)";
@@ -393,14 +404,14 @@ class LanguageToolHttpHandler implements HttpHandler {
       if (readBytes <= 0) {
         break;
       }
-      int generousMaxLength = maxTextLength * 3 + 1000;  // one character can be encoded as e.g. "%D8", plus space for other parameters
+      int generousMaxLength = maxTextLength * 10;  // one character can be encoded as e.g. "%D8", plus estimated space for sending data (JSON)
       if (generousMaxLength < 0) {  // might happen as it can overflow
         generousMaxLength = Integer.MAX_VALUE;
       }
       if (sb.length() > 0 && sb.length() > generousMaxLength) {
         // don't stop at maxTextLength as that's the text length, but here also other parameters
         // are included (still we need this check here so we don't OOM if someone posts a few hundred MB)...
-        throw new TextTooLongException("Your text's length exceeds this server's hard limit of " + maxTextLength + " characters.");
+        throw new TextTooLongException("Your text's length exceeds this server's hard limit of " + generousMaxLength + " characters.");
       }
       sb.append(new String(chars, 0, readBytes));
     }
@@ -428,8 +439,8 @@ class LanguageToolHttpHandler implements HttpHandler {
           String value = URLDecoder.decode(pair.substring(delimPos + 1), ENCODING);
           parameters.put(key, value);
         } catch (IllegalArgumentException e) {
-          throw new RuntimeException("Could not decode query. Query length: " + query.length() +
-                                     " Request method: " + httpExchange.getRequestMethod(), e);
+          throw new BadRequestException("Could not decode query. Query length: " + query.length() +
+                                     " Request method: " + httpExchange.getRequestMethod());
         }
       }
     }

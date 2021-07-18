@@ -18,17 +18,15 @@
  */
 package org.languagetool.tagging.br;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import org.languagetool.AnalyzedToken;
 import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.tagging.BaseTagger;
 import org.languagetool.tools.StringTools;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Breton Tagger.
  *
@@ -52,11 +50,6 @@ public class BretonTagger extends BaseTagger {
 
   private final Locale conversionLocale = Locale.getDefault();
 
-  @Override
-  public String getManualAdditionsFileName() {
-    return "/br/added.txt";
-  }
-
   public BretonTagger() {
     super("/br/breton.dict", new Locale("br"));
   }
@@ -77,6 +70,14 @@ public class BretonTagger extends BaseTagger {
     Matcher matcher;
     for (String word : sentenceTokens) {
       String probeWord = word;
+      if (probeWord.length() > 50) {
+        // avoid excessively long computation times for long (probably artificial) tokens:
+        List<AnalyzedToken> l = new ArrayList<>();
+        l.add(new AnalyzedToken(word, null, null));
+        tokenReadings.add(new AnalyzedTokenReadings(l, pos));
+        pos += word.length();
+        continue;
+      }
 
       // This loop happens when we need to retry probing the dictionary
       // which happens rarely when trying to remove suffixes -mañ, -se, etc.

@@ -18,14 +18,18 @@
  */
 package org.languagetool.tagging;
 
+import org.apache.commons.lang3.StringUtils;
+import org.languagetool.synthesis.ManualSynthesizer;
+import org.languagetool.tools.MostlySingularMultiMap;
+import org.languagetool.tools.StringTools;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
-
-import org.languagetool.synthesis.ManualSynthesizer;
-import org.languagetool.tools.StringTools;
+import java.util.function.Function;
 
 /**
  * A tagger that reads the POS information from a plain (UTF-8) text file. This
@@ -38,17 +42,21 @@ import org.languagetool.tools.StringTools;
  * @see ManualSynthesizer
  */
 public class ManualTagger implements WordTagger {
-
-  private final Map<String, List<TaggedWord>> mapping;
+  private final MostlySingularMultiMap<String, TaggedWord> mapping;
 
   public ManualTagger(InputStream inputStream) throws IOException {
-    mapping = loadMapping(inputStream, "utf8");
+    this(inputStream, false);
   }
 
-  private Map<String, List<TaggedWord>> loadMapping(InputStream inputStream, String encoding) throws IOException {
+  public ManualTagger(InputStream inputStream, boolean internTags) throws IOException {
+    mapping = new MostlySingularMultiMap<>(loadMapping(inputStream, internTags));
+  }
+
+  private static Map<String, List<TaggedWord>> loadMapping(InputStream inputStream, boolean internTags) throws IOException {
     Map<String, List<TaggedWord>> map = new HashMap<>();
+    Map<String, String> interned = new HashMap<>();
     try (
-      InputStreamReader reader = new InputStreamReader(inputStream, encoding);
+      InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
       BufferedReader br = new BufferedReader(reader)
     ) {
       String line;
@@ -56,16 +64,23 @@ public class ManualTagger implements WordTagger {
         if (StringTools.isEmpty(line) || line.charAt(0) == '#') {
           continue;
         }
+        if (line.contains("\u00A0")) {
+          throw new RuntimeException("Non-breaking space found in line '" + line + "', please remove it");
+        }
+        line = StringUtils.substringBefore(line, "#").trim();
         String[] parts = line.split("\t");
         if (parts.length != 3) {
           throw new IOException("Unknown line format when loading manual tagger dictionary, expected three tab-separated fields: '" + line + "'");
         }
-        List<TaggedWord> terms = map.get(parts[0]);
-        if (terms == null) {
-          terms = new ArrayList<>();
-        }
-        terms.add(new TaggedWord(parts[1], parts[2].trim()));
-        map.put(parts[0], terms);
+        String form = parts[0];
+
+        String lemma = parts[1];
+        if (lemma.equals(form)) lemma = form;
+        lemma = interned.computeIfAbsent(lemma, Function.identity());
+
+        String tag = parts[2].trim();
+        String internedTag = internTags ? tag.intern() : interned.computeIfAbsent(tag, Function.identity());
+        map.computeIfAbsent(form, __ -> new ArrayList<>()).add(new TaggedWord(lemma, internedTag));
       }
     }
     return map;
@@ -76,7 +91,7 @@ public class ManualTagger implements WordTagger {
    */
   @Override
   public List<TaggedWord> tag(String word) {
-    List<TaggedWord> lookedUpTerms = mapping.get(word);
+    List<TaggedWord> lookedUpTerms = mapping.getList(word);
     if (lookedUpTerms != null) {
       return Collections.unmodifiableList(lookedUpTerms);
     } else {

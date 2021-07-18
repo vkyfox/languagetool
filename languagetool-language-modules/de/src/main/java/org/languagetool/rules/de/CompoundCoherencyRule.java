@@ -65,7 +65,7 @@ public class CompoundCoherencyRule extends TextLevelRule {
           continue;
         }
         // The whole implementation could be simpler, but this way we also catch cases where
-        // the word (and this its lemma) isn't known.
+        // the word (and thus its lemma) isn't known.
         String lemma = lemmaOrNull != null ? lemmaOrNull : token;
         String normToken = lemma.replace("-", "").toLowerCase();
         if (StringUtils.isNumeric(normToken)) {
@@ -92,7 +92,7 @@ public class CompoundCoherencyRule extends TextLevelRule {
           normToTextOccurrences.putIfAbsent(normToken, l);
         }
       }
-      pos += sentence.getText().length();
+      pos += sentence.getCorrectedTextLength();
     }
     return toRuleMatchArray(ruleMatches);
   }
@@ -119,7 +119,7 @@ public class CompoundCoherencyRule extends TextLevelRule {
             lemmaBuilder.append(lemmaChar);
           } else if (token.charAt(tokenPos) == '-') {
             tokenPos++;  // skip hyphen
-            lemmaBuilder.append("-");
+            lemmaBuilder.append('-');
             if (lemmaPos + 1 < token.length() && Character.isUpperCase(token.charAt(tokenPos))) {
               lemmaBuilder.append(Character.toUpperCase(lemmaChar));
             } else {

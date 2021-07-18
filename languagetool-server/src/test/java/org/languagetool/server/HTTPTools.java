@@ -27,6 +27,7 @@ import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.net.ConnectException;
 import java.net.URL;
 import java.net.URLConnection;
@@ -37,7 +38,9 @@ import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 
-final class HTTPTools {
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+public final class HTTPTools {
 
   private HTTPTools() {
   }
@@ -74,7 +77,7 @@ final class HTTPTools {
     HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
   }
 
-  static String checkAtUrl(URL url) throws IOException {
+  public static String checkAtUrl(URL url) throws IOException {
     try {
       InputStream stream = (InputStream)url.getContent();
       return StringTools.streamToString(stream, "UTF-8");
@@ -96,7 +99,7 @@ final class HTTPTools {
         connection.setRequestProperty(entry.getKey(), entry.getValue());
       }
       connection.setDoOutput(true);
-      try (OutputStreamWriter writer = new OutputStreamWriter(connection.getOutputStream())) {
+      try (Writer writer = new OutputStreamWriter(connection.getOutputStream(), UTF_8)) {
         writer.write(postData);
         writer.flush();
         return StringTools.streamToString(connection.getInputStream(), "UTF-8");

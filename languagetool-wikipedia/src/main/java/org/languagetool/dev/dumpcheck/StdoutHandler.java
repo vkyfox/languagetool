@@ -40,6 +40,9 @@ class StdoutHandler extends ResultHandler {
   StdoutHandler(int maxSentences, int maxErrors, int contextSize) {
     super(maxSentences, maxErrors);
     contextTools.setContextSize(contextSize);
+    //contextTools.setContextSize(100);
+    //contextTools.setErrorMarker("**", "**");
+    //contextTools.setEscapeHtml(false);
   }
 
   @Override
@@ -64,7 +67,7 @@ class StdoutHandler extends ResultHandler {
         System.out.println("Message: " + msg);
         List<String> replacements = match.getSuggestedReplacements();
         if (!replacements.isEmpty()) {
-          System.out.println("Suggestion: " + String.join("; ", replacements));
+          System.out.println("Suggestion: " + String.join("; ", replacements.subList(0, Math.min(replacements.size(), 5))));
         }
         if (match.getRule() instanceof AbstractPatternRule) {
           AbstractPatternRule pRule = (AbstractPatternRule) match.getRule();
@@ -73,6 +76,7 @@ class StdoutHandler extends ResultHandler {
           }
         }
         System.out.println(contextTools.getPlainTextContext(match.getFromPos(), match.getToPos(), sentence.getText()));
+        //System.out.println(contextTools.getContext(match.getFromPos(), match.getToPos(), sentence.getText()));
         i++;
         checkMaxErrors(++errorCount);
       }

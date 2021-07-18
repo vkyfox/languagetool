@@ -113,14 +113,45 @@ public class GermanStyleRepeatedWordRule extends AbstractStyleRepeatedWordRule {
     }
     return false;
   }
+  
+  private boolean isFalsePair(String token1, String token2, String equalWord, String containedWord) {
+    token1 = token1.toLowerCase();
+    token2 = token2.toLowerCase();
+    equalWord = equalWord.toLowerCase();
+    containedWord = containedWord.toLowerCase();
+    return ((token1.equals(equalWord) && token2.contains(containedWord)) || (token2.equals(equalWord) && token1.contains(containedWord)));
+  }
 
   @Override
   protected boolean isPartOfWord(String testTokenText, String tokenText) {
-    return ((testTokenText.startsWith(tokenText) || testTokenText.endsWith(tokenText)
-        || tokenText.startsWith(testTokenText) || tokenText.endsWith(testTokenText))
-        && (testTokenText.length() == tokenText.length() || testTokenText.length() < tokenText.length() - 3
-        || testTokenText.length() > tokenText.length() + 3)
-        || testTokenText.equals(tokenText + "s") || tokenText.equals(testTokenText + "s"));
+    return (
+          testTokenText.length() > 2 && tokenText.length() > 2 &&
+          (testTokenText.startsWith(tokenText) || testTokenText.endsWith(tokenText)
+          || tokenText.startsWith(testTokenText) || tokenText.endsWith(testTokenText))
+          && (!isFalsePair(testTokenText, tokenText, "lang", "klang"))
+          && (!isFalsePair(testTokenText, tokenText, "lag", "schlag"))
+          && (!isFalsePair(testTokenText, tokenText, "Art", "Artefakt"))
+          && (!isFalsePair(testTokenText, tokenText, "kommen", "kommentier"))
+          && (!isFalsePair(testTokenText, tokenText, "weit", "weiter"))
+          && (!isFalsePair(testTokenText, tokenText, "weite", "weiter"))
+          && (!isFalsePair(testTokenText, tokenText, "Wand", "Wander"))
+          && (testTokenText.length() == tokenText.length() || testTokenText.length() < tokenText.length() - 3
+          || testTokenText.length() > tokenText.length() + 3)
+          || testTokenText.equals(tokenText + "s") || tokenText.equals(testTokenText + "s")
+        );
+  }
+
+  /* 
+   *  true if is an exception of token pair
+   *  note: method is called after two tokens are tested to share the same lemma
+   */
+  @Override
+  protected boolean isExceptionPair(AnalyzedTokenReadings token1, AnalyzedTokenReadings token2) {
+    if ((token1.hasLemma("nah") && token1.hasLemma("nächst") && !token2.hasLemma("nächst")) || 
+        (token2.hasLemma("nah") && token2.hasLemma("nächst") && !token1.hasLemma("nächst"))) {
+      return true;
+    }
+    return false;
   }
 
   /* 

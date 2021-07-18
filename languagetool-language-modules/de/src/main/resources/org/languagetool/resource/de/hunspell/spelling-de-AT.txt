@@ -521,7 +521,7 @@ Schmolle
 #Fasche
 Binkel #ugs
 Eitrige #ugs
-Absolutorium
+Absolutorium/S
 pumpern
 Erlag/S
 ferten #ugs
@@ -530,8 +530,25 @@ Steckerlfische/N
 ludeln
 Turnusarzt
 Turnusarztes
-Turnusärzte
+Turnusärzte/N
 Turnusärztin
 Turnusärztinnen
 Öffi/S
 Nightjet/S
+Billa/S #name
+Bursektomie/N
+Brömmel/S #name
+Boubacar/S #name
+Carpendale/S #name
+Carbonara/S #name
+Anonymverfügung
+Anonymverfügungen
+Krot
+Kücken/S
+Subfrächter/NS
+Frächter/NS
+Ordinationsöffnung
+Parifizierung
+parifiziert
+parifiziere/N
+Mindestkonsumation

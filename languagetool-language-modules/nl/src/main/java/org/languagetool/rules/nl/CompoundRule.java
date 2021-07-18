@@ -29,7 +29,7 @@ import java.util.ResourceBundle;
  */
 public class CompoundRule extends AbstractCompoundRule {
 
-  private static final CompoundRuleData compoundData = new CompoundRuleData("/nl/compounds.txt");
+  private static volatile CompoundRuleData compoundData;
 
   public CompoundRule(ResourceBundle messages) throws IOException {
     super(messages,
@@ -47,12 +47,22 @@ public class CompoundRule extends AbstractCompoundRule {
 
   @Override
   public String getDescription() {
-    return "Woorden die aaneen geschreven horen, bijvoorbeeld 'zee-egel' i.p.v. 'zee egel'";
+    return "Woorden die aaneengeschreven horen, bijvoorbeeld 'zee-egel' i.p.v. 'zee egel'";
   }
 
   @Override
   protected CompoundRuleData getCompoundRuleData() {
-    return compoundData;
+    CompoundRuleData data = compoundData;
+    if (data == null) {
+      synchronized (CompoundRule.class) {
+        data = compoundData;
+        if (data == null) {
+          compoundData = data = new CompoundRuleData("/nl/compounds.txt");
+        }
+      }
+    }
+
+    return data;
   }
 
 }

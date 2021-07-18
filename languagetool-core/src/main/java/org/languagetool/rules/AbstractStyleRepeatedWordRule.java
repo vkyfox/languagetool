@@ -176,12 +176,35 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
   }
 
   /* 
-   *  set an URL to an synonym dictionary for a token
+   *  true if is an exception of token pair
+   *  note: method is called after two tokens are tested to share the same lemma
+   */
+  protected boolean isExceptionPair(AnalyzedTokenReadings token1, AnalyzedTokenReadings token2) {
+    return false;
+  }
+
+  /* 
+   * Set a URL to a synonym dictionary for a token
    */
   protected URL setURL(AnalyzedTokenReadings token ) throws MalformedURLException {
     return null;
   }
   
+  /**
+   * get synonyms for a word
+   */
+  public List<String> getSynonymsForWord(String word) {
+    List<String> synonyms = new ArrayList<String>();
+    List<String> rawSynonyms = linguServices.getSynonyms(word, lang);
+    for (String synonym : rawSynonyms) {
+      synonym = synonym.replaceAll("\\(.*\\)", "").trim();
+      if (!synonym.isEmpty() && !synonyms.contains(synonym)) {
+        synonyms.add(synonym);
+      }
+    }
+    return synonyms;
+  }
+
   /**
    * get synonyms for a repeated word
    */
@@ -194,23 +217,11 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
     for (AnalyzedToken reading : readings) {
       String lemma = reading.getLemma();
       if (lemma != null) {
-        List<String> rawSynonyms = linguServices.getSynonyms(lemma, lang);
-        for (String synonym : rawSynonyms) {
-          synonym = synonym.replaceAll("\\(.*\\)", "").trim();
-          if (!synonym.isEmpty() && !synonyms.contains(synonym)) {
-            synonyms.add(synonym);
-          }
-        }
+        synonyms = getSynonymsForWord(lemma);
       }
     }
     if(synonyms.isEmpty()) {
-      List<String> rawSynonyms = linguServices.getSynonyms(token.getToken(), lang);
-      for (String synonym : rawSynonyms) {
-        synonym = synonym.replaceAll("\\(.*\\)", "").trim();
-        if (!synonym.isEmpty() && !synonyms.contains(synonym)) {
-          synonyms.add(synonym);
-        }
-      }
+      synonyms = getSynonymsForWord(token.getToken());
     }
     return synonyms;
   }
@@ -231,7 +242,7 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
     }
     for (int i = 0; i < tokens.length; i++) {
       if (i != notCheck && isTokenToCheck(tokens[i])) {
-        if ((!lemmas.isEmpty() && tokens[i].hasAnyLemma(lemmas.toArray(new String[0]))) 
+        if ((!lemmas.isEmpty() && tokens[i].hasAnyLemma(lemmas.toArray(new String[0])) && !isExceptionPair(testToken, tokens[i])) 
             || isPartOfWord(testToken.getToken(), tokens[i].getToken())) {
           if (notCheck >= 0) {
             if (notCheck == i - 2) {
@@ -314,7 +325,7 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
           } 
         }
       }
-      pos += sentences.get(n).getText().length();
+      pos += sentences.get(n).getCorrectedTextLength();
     }
     return toRuleMatchArray(ruleMatches);
   }

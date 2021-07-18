@@ -36,6 +36,7 @@ import org.languagetool.tools.Tools;
 import java.io.IOException;
 import java.net.URL;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static org.languagetool.rules.patterns.PatternRuleBuilderHelper.*;
@@ -71,6 +72,62 @@ public class SubjectVerbAgreementRule extends Rule {
   private final Set<String> plural = new HashSet<>();
 
   private static final List<List<PatternToken>> ANTI_PATTERNS = Arrays.asList(
+    Arrays.asList(
+      // "Zwei Schülern war aufgefallen, dass man im Fernsehen..."
+      pos("ZAL"),
+      posRegex("SUB:DAT:PLU:.*"),
+      csRegex("war|ist"),
+      new PatternTokenBuilder().posRegex("NEG|PA2:.+").build()
+    ),
+    Arrays.asList(
+      // "Glaubt wirklich jemand, dass gute Fotos keine Arbeit sind?"
+      posRegex("SUB:.*:PLU:.*"),
+      regex("keine|wenig|kaum|viel"),
+      posRegex("SUB:.*:SIN:.*"),
+      token("sind")
+    ),
+    Arrays.asList(
+      // "Auch die Zehn Gebote sind Ausdruck davon."
+      token("Zehn"),
+      token("Gebote"),
+      token("sind")
+    ),
+    Arrays.asList(
+      // "All diesen Stadtteilen ist die Nähe zum Hamburger Hafen..."
+      token("all"),
+      tokenRegex("den|diesen"),
+      posRegex("SUB:.*PLU.*"),
+      token("ist"),
+      posRegex("ART:.*"),
+      posRegex("SUB:.*SIN.*")
+    ),
+    Arrays.asList(
+      // "Personen ist der Zugriff auf diese Daten verboten."
+      pos(JLanguageTool.SENTENCE_START_TAGNAME),
+      new PatternTokenBuilder().token("Solchen").min(0).build(),
+      posRegex("SUB:.*PLU.*"),
+      token("ist"),
+      posRegex("ART:.*"),
+      posRegex("SUB:.*SIN.*")
+    ),
+    Arrays.asList(
+      // "Auch die Reste eines sehr großen Insektenfressers sind unter den Fossilien." - Chunker zu fixen wäre die bessere Lösung...
+      tokenRegex("Reste|Überreste"),
+      tokenRegex("eines|des"),
+      posRegex("ADV:.*"),
+      posRegex("ADJ:.*"),
+      posRegex("SUB:.*SIN.*"),
+      tokenRegex("sind")
+    ),
+    Arrays.asList(
+      // "Die eiförmigen und oben abgerundeten Blätter sind grün." - Chunker zu fixen wäre die bessere Lösung...
+      posRegex("ADJ:.*"),
+      tokenRegex("und|sowie"),
+      posRegex("ADV:.*"),
+      posRegex("PA2:.*"),
+      posRegex("SUB:.*PLU.*"),
+      tokenRegex("sind")
+    ),
     Arrays.asList(
       tokenRegex("ist|war"),
       token("gemeinsam")
@@ -112,18 +169,29 @@ public class SubjectVerbAgreementRule extends Rule {
       tokenRegex("d(as|er)|eine?")
     ),
     Arrays.asList(
-      token("zu"),
-      csToken("Fuß"),
+      posRegex("SUB:NOM:PLU:.+"),
+      csToken("vor"),
+      csToken("Ort"),
       tokenRegex("sind|waren")
+    ),
+    Arrays.asList(
+      token("zu"),
+      csRegex("Fuß|Hause"),
+      tokenRegex("sind|waren")
+    ),
+    Arrays.asList( //Eltern ist der bisherige Kita-Öffnungsplan zu unkonkret
+      pos(JLanguageTool.SENTENCE_START_TAGNAME),
+      pos("SUB:DAT:PLU:NOG"),
+      tokenRegex("ist|war"),
+      posRegex(".+:NOM:.+")
     )
   );
 
   private final GermanTagger tagger;
-  private final German language;
+  private final Supplier<List<DisambiguationPatternRule>> antiPatterns;
 
   public SubjectVerbAgreementRule(ResourceBundle messages, German language) {
     super.setCategory(Categories.GRAMMAR.getCategory(messages));
-    this.language = language;
     tagger = (GermanTagger) language.getTagger();
     for (SingularPluralPair pair : PAIRS) {
       singular.add(pair.singular);
@@ -131,6 +199,7 @@ public class SubjectVerbAgreementRule extends Rule {
     }
     addExamplePair(Example.wrong("Die Autos <marker>ist</marker> schnell."),
                    Example.fixed("Die Autos <marker>sind</marker> schnell."));
+    antiPatterns = cacheAntiPatterns(language, ANTI_PATTERNS);
   }
 
   @Override
@@ -150,12 +219,12 @@ public class SubjectVerbAgreementRule extends Rule {
 
   @Override
   public List<DisambiguationPatternRule> getAntiPatterns() {
-    return makeAntiPatterns(ANTI_PATTERNS, language);
+    return antiPatterns.get();
   }
 
   @Override
   public URL getUrl() {
-    return Tools.getUrl("http://www.canoonet.eu/services/OnlineGrammar/Wort/Verb/Numerus-Person/ProblemNum.html");
+    return Tools.getUrl("https://dict.leo.org/grammatik/deutsch/Wort/Verb/Kategorien/Numerus-Person/ProblemNum.html");
   }
 
   @Override

@@ -142,7 +142,7 @@ public class StringToolsTest {
     assertEquals("bla\nöäü", str);
     StringBuilder longStr = new StringBuilder();
     for (int i = 0; i < 4000; i++) {
-      longStr.append("x");
+      longStr.append('x');
     }
     longStr.append("1234567");
     assertEquals(4007, longStr.length());
@@ -237,6 +237,18 @@ public class StringToolsTest {
   public void testAsString() {
     assertNull(StringTools.asString(null));
     assertEquals("foo!", "foo!");
+  }
+
+  @Test
+  public void testIsCamelCase() {
+    assertFalse(StringTools.isCamelCase("abc"));
+    assertFalse(StringTools.isCamelCase("ABC"));
+    assertTrue(StringTools.isCamelCase("iSomething"));
+    assertTrue(StringTools.isCamelCase("iSomeThing"));
+    assertTrue(StringTools.isCamelCase("mRNA"));
+    assertTrue(StringTools.isCamelCase("microRNA"));
+    assertTrue(StringTools.isCamelCase("microSomething"));
+    assertTrue(StringTools.isCamelCase("iSomeTHING"));
   }
 
 }

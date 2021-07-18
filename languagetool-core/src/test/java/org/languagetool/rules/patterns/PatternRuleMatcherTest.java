@@ -28,7 +28,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import org.intellij.lang.annotations.Language;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -42,11 +41,11 @@ import org.languagetool.rules.patterns.Match.IncludeRange;
 @SuppressWarnings("MagicNumber")
 public class PatternRuleMatcherTest {
 
-  private static JLanguageTool langTool;
+  private static JLanguageTool lt;
 
   @BeforeClass
   public static void setup() {
-    langTool = new JLanguageTool(new Demo());
+    lt = new JLanguageTool(new Demo());
   }
 
   @Test
@@ -469,7 +468,7 @@ public class PatternRuleMatcherTest {
   @Test
   public void testEquals() throws Exception {
     PatternRule patternRule1 = new PatternRule("id1", Languages.getLanguageForShortCode("xx"),
-            Collections.<PatternToken>emptyList(), "desc1", "msg1", "short1");
+            Collections.emptyList(), "desc1", "msg1", "short1");
     RuleMatch ruleMatch1 = new RuleMatch(patternRule1, null, 0, 1, "message");
     RuleMatch ruleMatch2 = new RuleMatch(patternRule1, null, 0, 1, "message");
     assertTrue(ruleMatch1.equals(ruleMatch2));
@@ -479,7 +478,7 @@ public class PatternRuleMatcherTest {
   }
 
   private RuleMatch[] getMatches(String input, PatternRuleMatcher matcher) throws IOException {
-    return matcher.match(langTool.getAnalyzedSentence(input));
+    return matcher.match(lt.getAnalyzedSentence(input));
   }
 
   private PatternRuleMatcher getMatcher(PatternToken... patternPatternTokens) {

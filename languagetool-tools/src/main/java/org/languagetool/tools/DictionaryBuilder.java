@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
@@ -58,7 +59,7 @@ class DictionaryBuilder {
   private static final SerializationFormat serializationFormat = SerializationFormat.CFSA2;
 
   private final Map<String, Integer> freqList = new HashMap<>();
-  private final Pattern pFreqEntry = Pattern.compile(".*<w f=\"(\\d+)\" flags=\"(.*)\">(.+)</w>.*");
+  private final Pattern pFreqEntry = Pattern.compile(".*<w f=\"(\\d+)\"(?: flags=\"(.*?)\")?>(.+)</w>.*");
   // Valid for tagger dictionaries (wordform_TAB_lemma_TAB_postag) or spelling dictionaries (wordform)
   private final Pattern pTaggerEntry = Pattern.compile("^([^\t]+).*$");
   private String outputFilename;
@@ -126,7 +127,7 @@ class DictionaryBuilder {
   protected void readFreqList(File freqListFile) {
     try (
       FileInputStream fis = new FileInputStream(freqListFile.getAbsoluteFile());
-      InputStreamReader reader = new InputStreamReader(fis, "utf-8");
+      InputStreamReader reader = new InputStreamReader(fis, StandardCharsets.UTF_8);
       BufferedReader br = new BufferedReader(reader)
     ) {
       String line;
@@ -150,8 +151,10 @@ class DictionaryBuilder {
       throw new IOException("A separator character (fsa.dict.separator) must be defined in the dictionary info file.");
     }
     File tempFile = File.createTempFile(DictionaryBuilder.class.getSimpleName(), "WithFrequencies.txt");
+    tempFile.deleteOnExit();
     String encoding = getOption("fsa.dict.encoding");
     int freqValuesApplied = 0;
+
     try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(tempFile.getAbsoluteFile()), encoding));
          BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(dictFile.getAbsoluteFile()), encoding))) {
       String line;
@@ -188,13 +191,14 @@ class DictionaryBuilder {
     } catch (IOException e) {
       throw new RuntimeException("Cannot read file: " + dictFile.getAbsolutePath());
     }
-    tempFile.deleteOnExit();
     return tempFile;
   }
   
   protected File convertTabToSeparator(File inputFile) throws RuntimeException, IOException {
     File outputFile = File.createTempFile(
         DictionaryBuilder.class.getSimpleName() + "_separator", ".txt");
+    outputFile.deleteOnExit();
+
     String separator = getOption("fsa.dict.separator");
     if (separator == null || separator.trim().isEmpty()) {
       throw new IOException(
@@ -208,14 +212,13 @@ class DictionaryBuilder {
         String[] parts = line.split("\t");
         if (parts.length == 3) {
           out.write(parts[1] + separator + parts[0] + separator + parts[2]);
-          out.write("\n");
+          out.write('\n');
         } else {
           System.err
               .println("Invalid input, expected three tab-separated columns in "
                   + inputFile + ": " + line + " => ignoring");
         }
       }
-      scanner.close();
     }
     return outputFile;
   }
