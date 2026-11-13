@@ -25,14 +25,14 @@ import org.languagetool.rules.Example;
 import org.languagetool.rules.ITSIssueType;
 import org.languagetool.tools.Tools;
 
-import java.io.IOException;
+import java.net.URL;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
-import java.net.URL;
-
 /**
- * A rule that matches words which are complex and suggests easier to understand alternatives. 
+ * A rule that matches words which require specific diacritics (e.g, {@code a la} instead of {@code à la}).
  *
  * @author Tiago F. Santos 
  * @since 4.7
@@ -45,27 +45,28 @@ public class PortugueseDiacriticsRule extends AbstractSimpleReplaceRule2 {
   private static final Locale PT_LOCALE = new Locale("pt");  // locale used on case-conversion
 
   @Override
-  public final String getFileName() {
-    return FILE_NAME;
+  public List<String> getFileNames() {
+    return Collections.singletonList(FILE_NAME);
   }
 
-  public PortugueseDiacriticsRule(ResourceBundle messages) throws IOException {
-    super(messages, new Portuguese());
+  public PortugueseDiacriticsRule(ResourceBundle messages) {
+    super(messages, Portuguese.getInstance());
     setDefaultOff();
-    super.setCategory(Categories.TYPOS.getCategory(messages));
+    setCategory(Categories.TYPOS.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Misspelling);
+    useSubRuleSpecificIds();
     addExamplePair(Example.wrong("<marker>coupe</marker>"),
                    Example.fixed("<marker>coupé</marker>"));
   }
 
   @Override
-  public final String getId() {
+  public String getId() {
     return PT_DIACRITICS_REPLACE;
   }
 
   @Override
   public String getDescription() {
-    return "Palavras estrangeiras com diacríticos";
+    return "Palavras estrangeiras com diacríticos: $match";
   }
 
   @Override
@@ -74,7 +75,7 @@ public class PortugueseDiacriticsRule extends AbstractSimpleReplaceRule2 {
   }
 
   @Override
-  public String getSuggestion() {
+  public String getMessage() {
     return "'$match' é uma expressão estrangeira importada cuja grafia tem diacríticos. É preferível escrever $suggestions";
   }
 

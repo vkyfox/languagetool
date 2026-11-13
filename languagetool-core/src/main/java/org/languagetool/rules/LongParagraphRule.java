@@ -20,57 +20,53 @@ package org.languagetool.rules;
 
 import java.io.IOException;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ResourceBundle;
+import java.util.*;
 
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.AnalyzedTokenReadings;
-import org.languagetool.Language;
-import org.languagetool.UserConfig;
-import org.languagetool.rules.Category.Location;
+import org.languagetool.*;
 import org.languagetool.tools.Tools;
 
 /**
- * A rule that warns on long paragraphs. Note that this rule is off by default.
+ * A rule that warns on long paragraphs.
  * @since 4.2
  */
 public class LongParagraphRule extends TextLevelRule {
 
   public static final String RULE_ID = "TOO_LONG_PARAGRAPH";
-  
-  private static final int DEFAULT_MAX_WORDS = 80;
-  private static final boolean DEFAULT_ACTIVATION = false;
 
-  protected int maxWords = DEFAULT_MAX_WORDS;
+  private static final boolean DEFAULT_ACTIVATION = false;
+  private static final int DEFAULT_MAX_WORDS = 220;
+  private static final int LIMIT_MAX_WORDS = 300;
+
   private final Language lang;
+
+  private int maxWords = DEFAULT_MAX_WORDS;
 
   public LongParagraphRule(ResourceBundle messages, Language lang, UserConfig userConfig, int defaultWords, boolean defaultActive) {
     super(messages);
-    super.setCategory(new Category(new CategoryId("CREATIVE_WRITING"), 
-        messages.getString("category_creative_writing"), Location.INTERNAL, false));
+    super.setCategory(Categories.STYLE.getCategory(messages));
     this.lang = lang;
-    if (!defaultActive) {
-      setDefaultOff();
-    }
+    setDefaultOff();
+    setOfficeDefaultOn();  // Default for LO/OO is always On
     if (defaultWords > 0) {
       this.maxWords = defaultWords;
     }
     if (userConfig != null) {
-      int confWords = userConfig.getConfigValueByID(getId());
-      if (confWords > 0) {
-        this.maxWords = confWords;
+      Object[] cf = userConfig.getConfigValueByID(getId());
+      if (cf != null) {
+        this.maxWords = (int) cf[0];
       }
     }
     setLocQualityIssueType(ITSIssueType.Style);
+    setTags(Arrays.asList(Tag.picky));
   }
 
+  /** Note: will be off by default. */
   public LongParagraphRule(ResourceBundle messages, Language lang, UserConfig userConfig, int defaultWords) {
     this(messages, lang, userConfig, defaultWords, DEFAULT_ACTIVATION);
   }
 
   public LongParagraphRule(ResourceBundle messages, Language lang, UserConfig userConfig) {
-    this(messages, lang, userConfig, -1, DEFAULT_ACTIVATION);
+    this(messages, lang, userConfig, -1, true);
   }
 
   @Override
@@ -83,28 +79,14 @@ public class LongParagraphRule extends TextLevelRule {
     return RULE_ID;
   }
 
+  /**
+   *  give the user the possibility to configure the function
+   */
   @Override
-  public int getDefaultValue() {
-    return maxWords;
-  }
-
-  @Override
-  public boolean hasConfigurableValue() {
-    return true;
-  }
-
-  @Override
-  public int getMinConfigurableValue() {
-    return 5;
-  }
-
-  @Override
-  public int getMaxConfigurableValue() {
-    return 200;
-  }
-
-  public String getConfigureText() {
-    return messages.getString("guiLongParagraphsText");
+  public RuleOption[] getRuleOptions() {
+    RuleOption[] ruleOptions = { new RuleOption(maxWords, MessageFormat.format(
+        messages.getString("guiLongParagraphsText"), LIMIT_MAX_WORDS), 5, LIMIT_MAX_WORDS) };
+    return ruleOptions;
   }
 
   public String getMessage() {
@@ -114,35 +96,41 @@ public class LongParagraphRule extends TextLevelRule {
   @Override
   public RuleMatch[] match(List<AnalyzedSentence> sentences) throws IOException {
     List<RuleMatch> ruleMatches = new ArrayList<>();
-    String msg = getMessage();
     int pos = 0;
     int startPos = 0;
     int endPos = 0;
     int wordCount = 0;
-    for(int n = 0; n < sentences.size(); n++) {
+    boolean paraHasLinebreaks = false;
+    for (int n = 0; n < sentences.size(); n++) {
       AnalyzedSentence sentence = sentences.get(n);
+      boolean paragraphEnd = Tools.isParagraphEnd(sentences, n, lang);
+      if (!paragraphEnd && sentence.getText().replaceFirst("^\n+", "").contains("\n")) {
+        // e.g. text with manually added line breaks (e.g. issues on github with "- [ ]" syntax)
+        paraHasLinebreaks = true;
+      }
       AnalyzedTokenReadings[] tokens = sentence.getTokensWithoutWhitespace();
-      for(AnalyzedTokenReadings token : tokens) {
-        if(!token.isWhitespace() && !token.isSentenceStart() && !token.isNonWord()) {
+      for (AnalyzedTokenReadings token : tokens) {
+        if (!token.isWhitespace() && !token.isSentenceStart() && !token.isNonWord()) {
           wordCount++;
-          if(wordCount == 1) {
-            startPos = token.getStartPos() + pos;
-          } else if(wordCount == maxWords) {
+          if (wordCount == maxWords) {
             endPos = token.getEndPos() + pos;
+          } else if (wordCount == maxWords - 1) {
+            startPos = token.getStartPos() + pos;
           }
         }
       }
-      if (Tools.isParagraphEnd(sentences, n, lang)) {
-        if (wordCount > maxWords) {
-          RuleMatch ruleMatch = new RuleMatch(this, sentence, startPos, endPos, msg);
+      if (paragraphEnd) {
+        if (wordCount > maxWords + 5 && !paraHasLinebreaks) {  // + 5: don't show match almost at end of paragraph
+          RuleMatch ruleMatch = new RuleMatch(this, sentence, startPos, endPos, getMessage());
           ruleMatches.add(ruleMatch);
         }
         wordCount = 0;
+        paraHasLinebreaks = false;
       }
-      pos += sentence.getText().length();
+      pos += sentence.getCorrectedTextLength();
     }
     if (wordCount > maxWords) {
-      RuleMatch ruleMatch = new RuleMatch(this, startPos, endPos, msg);
+      RuleMatch ruleMatch = new RuleMatch(this, startPos, endPos, getMessage());
       ruleMatches.add(ruleMatch);
     }
     return toRuleMatchArray(ruleMatches);

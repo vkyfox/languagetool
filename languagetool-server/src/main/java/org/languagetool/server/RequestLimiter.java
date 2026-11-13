@@ -35,30 +35,39 @@ class RequestLimiter {
   final List<RequestEvent> requestEvents = new CopyOnWriteArrayList<>();
   
   private final int ipFingerprintFactor;
+  private final List<String> whitelistUsers;
+  private final int whitelistLimit;
   private final int requestLimit;
+  private final int ipRequestLimit;
   private final int requestLimitInBytes;
+  private final int ipRequestLimitInBytes;
   private final int requestLimitPeriodInSeconds;
-  private final Long server;
-  private DatabaseLogger logger;
 
   /**
-   * @param requestLimit the maximum number of request per <tt>requestLimitPeriodInSeconds</tt>
+   * @param requestLimit the maximum number of request per <code>requestLimitPeriodInSeconds</code>
    * @param requestLimitPeriodInSeconds the time period over which requests are considered, in seconds
    * @param ipFingerprintFactor allow limits x times larger per ip when fingerprints differ
    *                            (i.e. assume there may be a maximum of x users behind the same ip)
    */
-  RequestLimiter(int requestLimit, int requestLimitInBytes, int requestLimitPeriodInSeconds, int ipFingerprintFactor) {
+  RequestLimiter(int requestLimit, int requestLimitInBytes, int requestLimitPeriodInSeconds, int ipFingerprintFactor,
+                 List<String> whitelistUsers, int whitelistLimit) {
     this.requestLimit = requestLimit;
     this.requestLimitInBytes = requestLimitInBytes;
     this.requestLimitPeriodInSeconds = requestLimitPeriodInSeconds;
     this.ipFingerprintFactor = ipFingerprintFactor;
-    this.logger = DatabaseLogger.getInstance();
-    if (this.logger.isLogging()) {
-      DatabaseAccess db = DatabaseAccess.getInstance();
-      this.server = db.getOrCreateServerId();
+    this.whitelistUsers = whitelistUsers != null ? whitelistUsers : Collections.emptyList();
+    this.whitelistLimit = whitelistLimit;
+    if (ipFingerprintFactor > 0) {
+      this.ipRequestLimit = requestLimit * ipFingerprintFactor;
+      this.ipRequestLimitInBytes = requestLimitInBytes * ipFingerprintFactor;
     } else {
-      this.server = null;
+      this.ipRequestLimit = requestLimit;
+      this.ipRequestLimitInBytes = requestLimitInBytes;
     }
+  }
+
+  RequestLimiter(int requestLimit, int requestLimitInBytes, int requestLimitPeriodInSeconds, int ipFingerprintFactor) {
+    this(requestLimit, requestLimitInBytes, requestLimitPeriodInSeconds, ipFingerprintFactor, null, 0);
   }
 
   RequestLimiter(int requestLimit, int requestLimitInBytes, int requestLimitPeriodInSeconds) {
@@ -102,7 +111,11 @@ class RequestLimiter {
    * @param ipAddress the client's IP address
    * @throws TooManyRequestsException if access is not allowed because the request limit is reached
    */
-  void checkAccess(String ipAddress, Map<String, String> params, Map<String, List<String>> httpHeader) {
+  void checkAccess(String ipAddress, Map<String, String> params, Map<String, List<String>> httpHeader, UserLimits userLimits) {
+    if (userLimits.getSkipLimits()) {
+      // internal special case for e.g. nightly tests
+      return;
+    }
     int reqSize = getRequestSize(params);
     while (requestEvents.size() > REQUEST_QUEUE_SIZE) {
       requestEvents.remove(0);
@@ -125,7 +138,7 @@ class RequestLimiter {
   }
 
   private Long getClientId(Map<String, String> parameters) {
-    if (logger.isLogging()) {
+    if (DatabaseLogger.getInstance().isLogging()) {
       DatabaseAccess db = DatabaseAccess.getInstance();
       String paramValue = parameters.get("useragent");
       if (paramValue == null) {
@@ -153,6 +166,22 @@ class RequestLimiter {
     return values.get(0);
   }
 
+  static void checkUserLimit(String referer, String userAgent, UserLimits user) {
+    Long maxRequests = user.getRequestsPerDay();
+    if (user.getPremiumUid() != null
+      && maxRequests != null
+      && user.getLimitEnforcementMode() != LimitEnforcementMode.DISABLED) {
+      if (user.getLimitEnforcementMode() == LimitEnforcementMode.PER_DAY) {
+        Long requestCount = DatabaseAccess.getInstance().getUserRequestCount(user.getPremiumUid());
+        //System.out.printf("requests for %d: %d / %d%n", user.getPremiumUid(), requestCount, maxRequests);
+        if (requestCount > maxRequests) {
+          String message = "limit: " + maxRequests + ", requests: " + requestCount + ", enforcement: " + user.getLimitEnforcementMode().name();
+          throw new TooManyRequestsException("User request limit of " + maxRequests + " per day exceeded. Try again after midnight UTC.");
+        }
+      }
+    }
+  }
+
   void checkLimit(String ipAddress, Map<String, String> parameters, Map<String, List<String>> httpHeader) {
     int requestsByIp = 0;
     int requestSizeByIp = 0;
@@ -164,51 +193,56 @@ class RequestLimiter {
     String referer = getReferer(httpHeader);
     String userAgent = getUserAgent(httpHeader);
     Long clientId = getClientId(parameters);
+    String user = parameters.get("username");
+    boolean whitelistedUser = user != null && whitelistUsers.contains(user);
     for (RequestEvent event : requestEvents) {
       if (event.ip.equals(ipAddress) && event.date.after(thresholdDate)) {
         // text level rules cause much less load, so count them accordingly
         float modeFactor = event.mode == JLanguageTool.Mode.TEXTLEVEL_ONLY ? 0.1f : 1f;
         requestsByIp++;
         requestSizeByIp += event.getSizeInBytes() * modeFactor;
+        if (whitelistedUser) {
+          if (whitelistLimit <= 0 || requestsByIp < whitelistLimit) {
+            continue;
+          } else {
+            String msg = "limit: " + ipRequestLimit + " / " + requestLimitPeriodInSeconds + ", requests: "  + requestsByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
+            throw new TooManyRequestsException("Whitelist request limit of " + whitelistLimit + " requests per " +
+              requestLimitPeriodInSeconds + " seconds exceeded");
+          }
+        }
         if (event.fingerprint.equals(fingerprint)) {
           requestsByFingerprint++;
           requestSizeByFingerprint += event.getSizeInBytes() * modeFactor;
         }
-        if (requestLimit > 0 && requestsByFingerprint > requestLimit) {
+        if (ipFingerprintFactor > 0 && requestLimit > 0 && requestsByFingerprint > requestLimit) {
           String msg = "limit: " + requestLimit + " / " + requestLimitPeriodInSeconds + ", requests: "  + requestsByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
-          logger.log(new DatabaseAccessLimitLogEntry("MaxRequestPerPeriodFingerprint", server, clientId, null, msg, referer, userAgent));
           throw new TooManyRequestsException("Client request limit of " + requestLimit + " requests per " +
             requestLimitPeriodInSeconds + " seconds exceeded"); }
-        if (requestLimit > 0 && requestsByIp > requestLimit * ipFingerprintFactor) {
-          String msg = "limit: " + requestLimit * ipFingerprintFactor + " / " + requestLimitPeriodInSeconds + ", requests: "  + requestsByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
-          logger.log(new DatabaseAccessLimitLogEntry("MaxRequestPerPeriodIp", server, clientId, null, msg, referer, userAgent));
-          throw new TooManyRequestsException("IP request limit of " + requestLimit * ipFingerprintFactor + " requests per " +
+        if (requestLimit > 0 && requestsByIp > ipRequestLimit) {
+          String msg = "limit: " + ipRequestLimit + " / " + requestLimitPeriodInSeconds + ", requests: "  + requestsByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
+          throw new TooManyRequestsException("IP request limit of " + ipRequestLimit + " requests per " +
             requestLimitPeriodInSeconds + " seconds exceeded");
         }
         if (event.mode == JLanguageTool.Mode.TEXTLEVEL_ONLY) {
-          if (requestLimitInBytes > 0 && requestSizeByFingerprint > requestLimitInBytes) {
+          if (ipFingerprintFactor > 0 && requestLimitInBytes > 0 && requestSizeByFingerprint > requestLimitInBytes) {
             String msg = "limit in Mode.TEXTLEVEL_ONLY: " + requestLimitInBytes + " / " + requestLimitPeriodInSeconds + ", request size: "  + requestSizeByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
-            logger.log(new DatabaseAccessLimitLogEntry("MaxRequestSizePerPeriodFingerprint", server, clientId, null, msg, referer, userAgent));
             throw new TooManyRequestsException("Client request size limit of " + requestLimitInBytes + " bytes per " +
               requestLimitPeriodInSeconds + " seconds exceeded in text-level checks");
           }
-          if (requestLimitInBytes > 0 && requestSizeByIp > requestLimitInBytes * ipFingerprintFactor) {
-            String msg = "limit in Mode.TEXTLEVEL_ONLY: " + requestLimitInBytes * ipFingerprintFactor + " / " + requestLimitPeriodInSeconds + ", request size: "  + requestSizeByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
-            logger.log(new DatabaseAccessLimitLogEntry("MaxRequestSizePerPeriodIp", server, clientId, null, msg, referer, userAgent));
-            throw new TooManyRequestsException("IP request size limit of " + requestLimitInBytes * ipFingerprintFactor + " bytes per " +
+          if (requestLimitInBytes > 0 && requestSizeByIp > ipRequestLimitInBytes) {
+            String msg = "limit in Mode.TEXTLEVEL_ONLY: " + ipRequestLimitInBytes + " / " + requestLimitPeriodInSeconds + ", request size: "  + requestSizeByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
+            throw new TooManyRequestsException("IP request size limit of " + ipRequestLimitInBytes + " bytes per " +
               requestLimitPeriodInSeconds + " seconds exceeded in text-level checks");
           }
         } else {
-          if (requestLimitInBytes > 0 && requestSizeByFingerprint > requestLimitInBytes) {
+          if (ipFingerprintFactor > 0 && requestLimitInBytes > 0 && requestSizeByFingerprint > requestLimitInBytes) {
             String msg = "limit: " + requestLimitInBytes + " / " + requestLimitPeriodInSeconds + ", request size: "  + requestSizeByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
-            logger.log(new DatabaseAccessLimitLogEntry("MaxRequestSizePerPeriodFingerprint", server, clientId, null, msg, referer, userAgent));
             throw new TooManyRequestsException("Client request size limit of " + requestLimitInBytes + " bytes per " +
               requestLimitPeriodInSeconds + " seconds exceeded");
           }
-          if (requestLimitInBytes > 0 && requestSizeByIp > requestLimitInBytes * ipFingerprintFactor) {
-            String msg = "limit: " + requestLimitInBytes * ipFingerprintFactor + " / " + requestLimitPeriodInSeconds + ", request size: "  + requestSizeByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
-            logger.log(new DatabaseAccessLimitLogEntry("MaxRequestSizePerPeriodIp", server, clientId, null, msg, referer, userAgent));
-            throw new TooManyRequestsException("IP request size limit of " + requestLimitInBytes * ipFingerprintFactor + " bytes per " +
+          if (requestLimitInBytes > 0 && requestSizeByIp > ipRequestLimitInBytes) {
+            String msg = "limit: " + ipRequestLimitInBytes + " / " + requestLimitPeriodInSeconds + ", request size: "  + requestSizeByIp + ", ip: " + ipAddress + ", fingerprint: " + fingerprint;
+            throw new TooManyRequestsException("IP request size limit of " + ipRequestLimitInBytes + " bytes per " +
               requestLimitPeriodInSeconds + " seconds exceeded");
           }
         }

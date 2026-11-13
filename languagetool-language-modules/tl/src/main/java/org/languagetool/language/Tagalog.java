@@ -19,21 +19,20 @@
 
 package org.languagetool.language;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.languagetool.Language;
 import org.languagetool.UserConfig;
 import org.languagetool.language.tl.MorfologikTagalogSpellerRule;
 import org.languagetool.language.tokenizers.TagalogWordTokenizer;
 import org.languagetool.rules.*;
+import org.languagetool.rules.spelling.SpellingCheckRule;
 import org.languagetool.tagging.Tagger;
 import org.languagetool.tagging.tl.TagalogTagger;
-import org.languagetool.tokenizers.SRXSentenceTokenizer;
-import org.languagetool.tokenizers.SentenceTokenizer;
-import org.languagetool.tokenizers.WordTokenizer;
+import org.languagetool.tokenizers.*;
+
+import java.io.IOException;
+import java.util.*;
 
 /** 
  * @author Nathaniel Oco
@@ -41,10 +40,6 @@ import org.languagetool.tokenizers.WordTokenizer;
  */
 @Deprecated
 public class Tagalog extends Language {
-
-  private SentenceTokenizer sentenceTokenizer;
-  private WordTokenizer wordTokenizer;
-  private Tagger tagger;
 
   @Override
   public String getName() {
@@ -62,27 +57,19 @@ public class Tagalog extends Language {
   }
 
   @Override
-  public SentenceTokenizer getSentenceTokenizer() {
-    if (sentenceTokenizer == null) {
-      sentenceTokenizer = new SRXSentenceTokenizer(this);
-    }
-    return sentenceTokenizer;
+  public SentenceTokenizer createDefaultSentenceTokenizer() {
+    return new SRXSentenceTokenizer(this);
   }
 
   @Override
-  public WordTokenizer getWordTokenizer() {
-    if (wordTokenizer == null) {
-      wordTokenizer = new TagalogWordTokenizer();
-    }
-    return wordTokenizer;
+  public Tokenizer createDefaultWordTokenizer() {
+    return new TagalogWordTokenizer();
   }
 
+  @NotNull
   @Override
-  public Tagger getTagger() {
-    if (tagger == null) {
-      tagger = new TagalogTagger();
-    }
-    return tagger;
+  public Tagger createDefaultTagger() {
+    return new TagalogTagger();
   }
 
   @Override
@@ -106,4 +93,9 @@ public class Tagalog extends Language {
     );
   }
 
+  @Nullable
+  @Override
+  protected SpellingCheckRule createDefaultSpellingRule(ResourceBundle messages) throws IOException {
+    return new MorfologikTagalogSpellerRule(messages, this, null, null);
+  }
 }

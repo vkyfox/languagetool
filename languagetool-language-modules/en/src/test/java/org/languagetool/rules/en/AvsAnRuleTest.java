@@ -32,18 +32,26 @@ import static org.languagetool.rules.en.AvsAnRule.Determiner;
 public class AvsAnRuleTest {
 
   private AvsAnRule rule;
-  private JLanguageTool langTool;
+  private JLanguageTool lt;
 
   @Before
   public void setUp() throws IOException {
     rule = new AvsAnRule(TestTools.getEnglishMessages());
-    langTool = new JLanguageTool(Languages.getLanguageForShortCode("en"));
+    lt = new JLanguageTool(Languages.getLanguageForShortCode("en"));
   }
 
   @Test
   public void testRule() throws IOException {
 
     // correct sentences:
+    assertCorrect("It must be an xml name.");
+    assertCorrect("analyze an hprof file");
+    assertCorrect("This is an sbt project.");
+    assertCorrect("Import an Xcode project.");
+    assertCorrect("This is a oncer.");
+    assertCorrect("She was a Oaxacan chef.");
+    assertCorrect("The doctor requested a urinalysis.");
+    assertCorrect("She brought a Ouija board.");
     assertCorrect("This is a test sentence.");
     assertCorrect("It was an hour ago.");
     assertCorrect("A university is ...");
@@ -63,6 +71,20 @@ public class AvsAnRuleTest {
     assertCorrect("See an:Grammatica");
     assertCorrect("See http://www.an.com");
     assertCorrect("Station A equals station B.");
+    assertCorrect("e.g., the case endings -a -i -u and mood endings -u -a");
+    assertCorrect("A'ight, y'all.");
+    assertCorrect("He also wrote the comic strips Abbie an' Slats.");
+    assertCorrect("Do an ngram tokenization fix.");
+    assertCorrect("A car with a unibody construction.");
+    assertCorrect("Given a Userset, create and return a matching PrincipalModel.");
+    assertCorrect("An uninterpreted dream is like an unopened letter.");
+    assertCorrect("Here ζ refers to the Riemann zeta function, the identity relating the product over primes to ζ(2) is an example of an Euler product, and the evaluation of ζ(2) as π2/6 is the Basel problem, solved by Leonhard Euler in 1735.");
+    assertCorrect("In more technical terms, a navigation is in part made of a series of channels nearly parallel to the valley gradient and stream bed of an unimproved river, and which always shares the drainage basin of the river.");
+    assertCorrect("This approach both allows the trial court to perform its gatekeeping function at the summary judgment stage of the proceedings and avoids placing an onerous burden upon the nonmoving party,\" the court said.");
+    assertCorrect("The Queen travelled through the tunnel to Calais on a Eurostar train, which stopped nose to nose with the train that carried President Mitterrand from Paris.");
+    assertCorrect("He has been a utilities lawyer for over 30 years.");
+    assertCorrect("He has a unibrow.");
+    assertCorrect("When compensated for temperature, the forward voltage drop of a transistor's base-emitter junction can provide a usably accurate logarithmic or exponential function.");
 
     // errors:
     assertIncorrect("It was a hour ago.");
@@ -72,7 +94,9 @@ public class AvsAnRuleTest {
     assertIncorrect("A unintersting ...");
     assertIncorrect("A hour's work ...");
     assertIncorrect("Going to a \"industry party\".");
-    RuleMatch[] matches = rule.match(langTool.getAnalyzedSentence("It was a uninteresting talk with an long sentence."));
+    assertIncorrect("It was a unidentifiable object.");
+    assertIncorrect(" I'll set you up with an userid and password so you can pick the...");
+    RuleMatch[] matches = rule.match(lt.getAnalyzedSentence("It was a uninteresting talk with an long sentence."));
     assertEquals(2, matches.length);
 
     // With uppercase letters:
@@ -87,6 +111,9 @@ public class AvsAnRuleTest {
 
     //Test on acronyms/initials:
     assertCorrect("A. R.J. Turgot");
+
+    // list items
+    assertCorrect("Make sure that 3.a as well as 3.b are correct.");
 
     //mixed case as dictionary-based exception
     assertCorrect("Anyone for an MSc?");
@@ -104,12 +131,12 @@ public class AvsAnRuleTest {
   }
 
   private void assertCorrect(String sentence) throws IOException {
-    RuleMatch[] matches = rule.match(langTool.getAnalyzedSentence(sentence));
+    RuleMatch[] matches = rule.match(lt.getAnalyzedSentence(sentence));
     assertEquals(0, matches.length);
   }
 
   private void assertIncorrect(String sentence) throws IOException {
-    RuleMatch[] matches = rule.match(langTool.getAnalyzedSentence(sentence));
+    RuleMatch[] matches = rule.match(lt.getAnalyzedSentence(sentence));
     assertEquals(1, matches.length);
   }
 
@@ -154,34 +181,42 @@ public class AvsAnRuleTest {
   @Test
   public void testPositions() throws IOException {
     RuleMatch[] matches;
-    JLanguageTool langTool = new JLanguageTool(Languages.getLanguageForShortCode("en"));
+    JLanguageTool lt = new JLanguageTool(Languages.getLanguageForShortCode("en"));
     // no quotes etc.:
-    matches = rule.match(langTool.getAnalyzedSentence("a industry standard."));
+    matches = rule.match(lt.getAnalyzedSentence("a industry standard."));
     assertEquals(0, matches[0].getFromPos());
     assertEquals(1, matches[0].getToPos());
 
     // quotes..
-    matches = rule.match(langTool.getAnalyzedSentence("a \"industry standard\"."));
+    matches = rule.match(lt.getAnalyzedSentence("a \"industry standard\"."));
     assertEquals(0, matches[0].getFromPos());
     assertEquals(1, matches[0].getToPos());
 
-    matches = rule.match(langTool.getAnalyzedSentence("a - industry standard\"."));
+    matches = rule.match(lt.getAnalyzedSentence("a “industry standard”."));
     assertEquals(0, matches[0].getFromPos());
     assertEquals(1, matches[0].getToPos());
 
-    matches = rule.match(langTool.getAnalyzedSentence("This is a \"industry standard\"."));
+    matches = rule.match(lt.getAnalyzedSentence("a ‘industry standard’."));
+    assertEquals(0, matches[0].getFromPos());
+    assertEquals(1, matches[0].getToPos());
+
+    matches = rule.match(lt.getAnalyzedSentence("a - industry standard\"."));
+    assertEquals(0, matches[0].getFromPos());
+    assertEquals(1, matches[0].getToPos());
+
+    matches = rule.match(lt.getAnalyzedSentence("This is a \"industry standard\"."));
     assertEquals(8, matches[0].getFromPos());
     assertEquals(9, matches[0].getToPos());
 
-    matches = rule.match(langTool.getAnalyzedSentence("\"a industry standard\"."));
+    matches = rule.match(lt.getAnalyzedSentence("\"a industry standard\"."));
     assertEquals(1, matches[0].getFromPos());
     assertEquals(2, matches[0].getToPos());
 
-    matches = rule.match(langTool.getAnalyzedSentence("\"Many say this is a industry standard\"."));
+    matches = rule.match(lt.getAnalyzedSentence("\"Many say this is a industry standard\"."));
     assertEquals(18, matches[0].getFromPos());
     assertEquals(19, matches[0].getToPos());
 
-    matches = rule.match(langTool.getAnalyzedSentence("Like many \"an desperado\" before him, Bart headed south into Mexico."));
+    matches = rule.match(lt.getAnalyzedSentence("Like many \"an desperado\" before him, Bart headed south into Mexico."));
     assertEquals(11, matches[0].getFromPos());
     assertEquals(13, matches[0].getToPos());
   }

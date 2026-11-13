@@ -1,6 +1,6 @@
-/* LanguageTool, a natural language style checker 
+/* LanguageTool, a natural language style checker
  * Copyright (C) 2018 Daniel Naber (http://www.danielnaber.de)
- * 
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -18,24 +18,24 @@
  */
 package org.languagetool.rules.de;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.hankcs.algorithm.AhoCorasickDoubleArrayTrie;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.AnalyzedTokenReadings;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
-import org.languagetool.LinguServices;
-import org.languagetool.UserConfig;
-import org.languagetool.databroker.ResourceDataBroker;
+import org.languagetool.*;
+import org.languagetool.broker.ResourceDataBroker;
 import org.languagetool.language.GermanyGerman;
 import org.languagetool.languagemodel.BaseLanguageModel;
 import org.languagetool.languagemodel.LanguageModel;
 import org.languagetool.rules.*;
-import org.languagetool.tools.StringTools;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.languagetool.tools.StringTools.*;
 
@@ -45,20 +45,92 @@ import static org.languagetool.tools.StringTools.*;
  */
 public class ProhibitedCompoundRule extends Rule {
 
-  /** @since 4.3 */
+  /**
+   * @since 4.3
+   * @deprecated each pair has its own id since LT 5.1
+   */
   public static final String RULE_ID = "DE_PROHIBITED_COMPOUNDS";
   // have objects static for better performance (rule gets initialized for every check)
   private static final List<Pair> lowercasePairs = Arrays.asList(
-          // NOTE: words here must be all-lowercase
-          // NOTE: no need to add words from confusion_sets.txt, they will be used automatically (if starting with uppercase char)
-          new Pair("beeren", "Früchte", "bären", "Raubtiere"),
-          new Pair("laus", "Insekt", "lauf", "Bewegungsart"),
+          // NOTES:
+          // * words here must be all-lowercase
+          // * no need to add words from confusion_sets.txt, they will be used automatically (if starting with uppercase char)
+          // * please test using ProhibitedCompoundRuleTest.testListOfWords() before pushing a change with a new pair
+          new Pair("knoten", "Verschlingung von Fäden", "konten", "Plural von 'Konto'"),
+          new Pair("schaf", "Tier", "schaft", "'-schaft' (Element zur Wortbildung, z. B. 'Freundschaft')"),
+          new Pair("schafen", "Dativ Plural von 'Schaf'", "schaften", "'-schaften' (Element zur Wortbildung, z. B. 'Freundschaften')"),
+          new Pair("alpen", "Hochgebirge in Mittel- und Südeuropa", "alben", "Plural von 'Album'"),
+          new Pair("pillen", "Tabletten", "pullen", "Plural von 'Pulle' (Flasche)"),
+          new Pair("tauben", "Vogelart", "trauben", "Obstsorte"),
+          new Pair("panel", "ausgewählte Personengruppe", "paneel", "Platte für Wand- und Deckenverkleidungen"),
+          new Pair("nabe", "Mittelteil eines Rades", "narbe", "verheilende Wunde"),
+          new Pair("first", "höchste Kante an einem geneigten Dach", "frist", "spätester Zeitpunkt"),
+          //new Pair("kisten", "Behälter", "kosten", "Ausgaben"),
+          new Pair("koma", "Zustand tiefer Bewusstlosigkeit", "komma", "Satzzeichen"),
+          new Pair("korn", "Getreide sowie dessen Frucht", "kron", "Vorsilbe z.B. in 'Kronkorken'"),
+          new Pair("bauten", "Form von 'Bau' (Bauwerk, Haus, ...)", "beuten", "Form von 'Beute'"),
+          new Pair("file", "engl. 'Datei'", "filet", "ein Stück Fleisch oder Fisch"),
+          new Pair("zecke", "blutsaugender Parasit", "zwecke", "Dativ von 'Zweck' (Ziel)"),
+          new Pair("frucht", "Teil einer Pflanze; Obst", "furcht", "Angst"),
+          new Pair("rate", "Verhältnis zwischen zwei Größen", "ratte", "Nagetier"),
+          new Pair("posten", "Arbeitsplatz, Wachposten", "posen", "Pose: betonte Körperhaltung"),
+          new Pair("himmel", "Bereich über der Erde", "hummel", "Insekt"),
+          new Pair("server", "Computer", "servier", "zu 'servieren'"),
+          new Pair("ziege", "Tier", "ziegel", "Ziegelstein"),
+          new Pair("robe", "Kleidungsstück", "probe", "Test, Kontrolle"),
+          new Pair("mode", "Kleidung", "monde", "Begleiter eines Planeten"),
+          new Pair("eigen", "'selbst', z.B. 'Eigenzitat'", "eingen", "Möglicher Tippfehler"),
+          new Pair("stümpfe", "Rest eines Körpergliedes", "strümpfe", "Bekleidungsstück für den Fuß"),
+          new Pair("gelände", "Gebiet", "geländer", "Konstruktion zum Festhalten entlang von Treppen"),
+          new Pair("tropen", "feuchtwarme Gebiete am Äquator", "tropfen", "kleine Menge Flüssigkeit"),
+          new Pair("enge", "Mangel an Platz", "menge", "Anzahl an Einheiten"),
+          new Pair("ritt", "Reiten", "tritt", "Aufsetzen eines Fußes"),
+          new Pair("beine", "Körperteil", "biene", "Insekt"),
+          new Pair("rebe", "Weinrebe", "reibe", "Küchenreibe"),
+          //new Pair("lande", null, "landes", null),
+          new Pair("ass", "Spielkarte", "pass", "Reisepass; Übergang durch ein Gebirge"),
+          new Pair("türmer", "Turmwächter", "türme", "Plural von 'Turm' (Bauwerk)"),
+          new Pair("soge", "ziehende Strömungen", "sorge", "bedrückendes Gefühl"),
+          new Pair("panne", "technischer Defekt", "spanne", "Zeitraum"),
+          new Pair("elfer", "Elfmeter", "helfer", "Person, die hilft"),
+          //new Pair("bau", "Bauwerk, Baustelle", "baum", "Pflanze"),
+          new Pair("gase", "Plural von 'Gas' (Aggregatzustand)", "gasse", "kleine Straße"),
+          new Pair("ekel", "Abscheu", "enkel", "Kind eines eigenen Kindes"),
+          new Pair("reis", "Nahrungsmittel", "reise", "Ausflug/Fahrt"),
+          //new Pair("speichel", "Körperflüssigkeit", "speicher", "Lager, Depot, Ablage"),
+          new Pair("hüte", "Kopfbedeckungen", "häute", "Plural von 'Haut'"),
+          //new Pair("bach", "kleiner Fluss", "bauch", "Teil des menschlichen Körpers"),
+          new Pair("werbereich", null, "erbereich", null),
+          new Pair("lage", "Position", "alge", "im Wasser lebende Organismen"),
+          new Pair("sphäre", "Kugel", "spähreh", null),
+          new Pair("schenke", "Gastwirtschaft (auch: Schänke)", "schenkel", "Ober- und Unterschenkel"),
+          //new Pair("rune", "Schriftzeichen der Germanen", "runde", "Rundstrecke"),
+          new Pair("mai", "Monat nach April", "mail", "E-Mail"),
+          new Pair("pump", "'auf Pump': umgangssprachlich für 'auf Kredit'", "pumpe", "Gerät zur Beförderung von Flüssigkeiten"),
+          new Pair("mitte", "zentral", "mittel", "Methode, um etwas zu erreichen"),
+          new Pair("fein", "feinkörnig, genau, gut", "feind", "Gegner"),
+          new Pair("traum", "Erleben während des Schlafes", "trauma", "Verletzung"),
+          new Pair("name", "Bezeichnung (z.B. 'Vorname')", "nahme", "zu 'nehmen' (z.B. 'Teilnahme')"),
+          new Pair("bart", "Haarbewuchs im Gesicht", "dart", "Wurfpfeil"),
+          new Pair("hart", "fest", "dart", "Wurfpfeil"),
+          new Pair("speiche", "Verbindung zwischen Nabe und Felge beim Rad", "speicher", "Lagerraum"),
+          //new Pair("speichen", "Verbindung zwischen Nabe und Felge beim Rad", "speicher", "Lagerraum"),
+          new Pair("kart", "Gokart (Fahrzeug)", "karte", "Fahrkarte, Postkarte, Landkarte, ..."),
+          new Pair("karts", "Kart = Gokart (Fahrzeug)", "karte", "Fahrkarte, Postkarte, Landkarte, ..."),
+          //new Pair("kurz", "Gegenteil von 'lang'", "kur", "medizinische Vorsorge und Rehabilitation"),
+          new Pair("kiefer", "knöcherner Teil des Schädels", "kiefern", "Kieferngewächse (Baum)"),
+          new Pair("gel", "dickflüssige Masse", "geld", "Zahlungsmittel"),
+          //new Pair("flucht", "Entkommen, Fliehen", "frucht", "Ummantelung des Samens einer Pflanze"),
+          new Pair("kamp", "Flurname für ein Stück Land", "kampf", "Auseinandersetzung"),
+          //new Pair("obst", "Frucht", "ost", "Himmelsrichtung"),
+          //new Pair("beeren", "Früchte", "bären", "Raubtiere"),
+          //new Pair("laus", "Insekt", "lauf", "Bewegungsart"),
           new Pair("läuse", "Insekt", "läufe", "Bewegungsart"),
           new Pair("läusen", "Insekt", "läufen", "Bewegungsart"),
           new Pair("ruck", "plötzliche Bewegung", "druck", "Belastung"),
           new Pair("brüste", "Plural von Brust", "bürste", "Gerät mit Borsten, z.B. zum Reinigen"),
           new Pair("attraktion", "Sehenswürdigkeit", "akttaktion", "vermutlicher Tippfehler"),
-          new Pair("nah", "zu 'nah' (wenig entfernt)", "näh", "zu 'nähen' (mit einem Faden verbinden)"),
+          //new Pair("nah", "zu 'nah' (wenig entfernt)", "näh", "zu 'nähen' (mit einem Faden verbinden)"),
           new Pair("turn", "zu 'turnen'", "turm", "hohes Bauwerk"),
           new Pair("mit", "Präposition", "miet", "zu 'Miete' (Überlassung gegen Bezahlung)"),
           new Pair("bart", "Behaarung im Gesicht", "brat", "zu 'braten', z.B. 'Bratkartoffel'"),
@@ -68,89 +140,59 @@ public class ProhibitedCompoundRule extends Rule {
           new Pair("wieder", "erneut, wiederholt, nochmal (Wiederholung, Wiedervorlage, ...)", "wider", "gegen, entgegen (Widerwille, Widerstand, Widerspruch, ...)"),
           new Pair("leer", "ohne Inhalt", "lehr", "bezogen auf Ausbildung und Wissen"),
           new Pair("gewerbe", "wirtschaftliche Tätigkeit", "gewebe", "gewebter Stoff; Verbund ähnlicher Zellen"),
-          new Pair("schuh", "Fußbekleidung", "schul", "auf die Schule bezogen"),
+          //new Pair("schuh", "Fußbekleidung", "schul", "auf die Schule bezogen"),  // tends to have false alarms
           new Pair("klima", "langfristige Wetterzustände", "lima", "Hauptstadt von Peru"),
           new Pair("modell", "vereinfachtes Abbild der Wirklichkeit", "model", "Fotomodell"),
-          new Pair("treppen", "Folge von Stufen (Mehrzahl)", "truppen", "Armee oder Teil einer Armee (Mehrzahl)"),
+          //new Pair("treppen", "Folge von Stufen (Mehrzahl)", "truppen", "Armee oder Teil einer Armee (Mehrzahl)"),
           new Pair("häufigkeit", "Anzahl von Ereignissen", "häutigkeit", "z.B. in Dunkelhäutigkeit"),
           new Pair("hin", "in Richtung", "hirn", "Gehirn, Denkapparat"),
           new Pair("verklärung", "Beschönigung, Darstellung in einem besseren Licht", "erklärung", "Darstellung, Erläuterung"),
-          new Pair("spitze", "spitzes Ende eines Gegenstandes", "spritze", "medizinisches Instrument zur Injektion"),
+          //new Pair("spitze", "spitzes Ende eines Gegenstandes", "spritze", "medizinisches Instrument zur Injektion"),
           new Pair("punk", "Jugendkultur", "punkt", "Satzzeichen"),
-          new Pair("reis", "Nahrungsmittel", "eis", "gefrorenes Wasser"),
-          new Pair("balkan", "Region in Südosteuropa", "balkon", "Plattform, die aus einem Gebäude herausragt"),
-          new Pair("haft", "Freiheitsentzug", "schaft", "-schaft (Element zur Wortbildung)")
+          //new Pair("reis", "Nahrungsmittel", "eis", "gefrorenes Wasser"),
+          //new Pair("balkan", "Region in Südosteuropa", "balkon", "Plattform, die aus einem Gebäude herausragt"),
+          new Pair("haft", "Freiheitsentzug", "schaft", "-schaft (Element zur Wortbildung)"),
+          new Pair("stande", "zu 'Stand'", "stange", "länglicher Gegenstand")
   );
-  public static final GermanyGerman german = new GermanyGerman();
-  private static GermanSpellerRule spellerRule;
-  private static LinguServices linguServices;
+  private static final Pattern HERRN_FRAU = Pattern.compile("Herrn?|Frau|Dr|Prof|Mag|Hr|Fr|Mr|Mrs|Ms|Fräulein");
   private static final List<String> ignoreWords = Arrays.asList("Die", "De");
-  private static final Set<String> blacklist = new HashSet<>(Arrays.asList(
-          "Gründertag",
-          "Korrekturlösung",
-          "Regelschreiber",
-          "Glasreinigern",
-          "Holzstele",
-          "Brandschutz",
-          "Testbahn",
-          "Testbahnen",
-          "Reiszwecke",
-          "Reiszwecken",
-          "Startglocke",
-          "Startglocken",
-          "Ladepunkte",
-          "Kinderpreise",
-          "Kinderpreisen",
-          "Belegungsoptionen",
-          "Brandgebiete",
-          "Brandgebieten",
-          "Innenfell",
-          "Innenfelle",
-          "Batteriepreis",
-          "Alltagsschuhe",
-          "Alltagsschuhen",
-          "Arbeiterschuhe",
-          "Arbeiterschuhen",
-          "Bartvogel",
-          "Abschiedsmail",
-          "Abschiedsmails",
-          "Wohnindex",
-          "Entwicklungsstudio",
-          "Ermittlungsgesetz",
-          "Lindeverfahren",
-          "Stromspender",
-          "Turmvverlag",  // eigtl. Turm-Verlag, muss hier als Ausnahme aber so stehen
-          "Bäckerlunge",
-          "Reisbeutel",
-          "Reisbeuteln",
-          "Reisbeutels",
-          "Fellnase",
-          "Fellnasen",
-          "Kletterwald",
-          "Kletterwalds",
-          "Lusthöhle",
-          "Lusthöhlen",
-          "Abschlagswert",
-          "Schuhfach",
-          "Schuhfächer",
-          "Spülkanüle",
-          "Spülkanülen",
-          "Tankkosten",
-          "Hangout",
-          "Hangouts",
-          "Kassenloser",
-          "kassenloser",
-          "Reisnadel",
-          "Reisnadeln",
-          "stielloses",
-          "stielloser",
-          "stiellosen",
-          "Beiratsregelung",
-          "Beiratsregelungen",
-          "Kreiskongress",
-          "Lagekosten",
-          "hineinfeiern"
-  ));
+  private static final List<String> blacklistRegex = Arrays.asList(
+    "Lande(basis|basen|region|gebiets?|gebieten?|regionen|betriebs?|betrieben?|offizieren?|bereichs?|bereichen?|einrichtung|einrichtungen|massen?|plans?|versuchs?|versuchen?)",  // vs. Landes
+    "Model(vertrags?|verträgen?|erfahrung|erfahrungen|szene|welt)",
+    "(Raum|Surf|Jazz|Herbst|Gymnastik|Normal)schuhen?",
+    "preis",  // Getränkepreis etc.
+    "reisähnlich(e|e[nmrs])?",
+    "neugestartet(e|e[nmrs])?",
+    "reisender",  // Ägyptenreisender etc.
+    "[a-zöäüß]+sender",  // wg. sende/sender, z.B. bremsender, abzulassender
+    "gra(ph|f)ische?",  // kosmografisch etc.
+    "gra(ph|f)ische[rsnm]",  // kosmografischen etc.
+    "gra(ph|f)s?$",  // Elektrokardiograph
+    "gra(ph|f)en",  // Elektrokardiographen
+    "gra(ph|f)in",  // Demographin/Demografin
+    "gra(ph|f)ik",  // Kunstgrafik
+    "gra(ph|f)ie",  // Geographie
+    "Gra(ph|f)its?",   // Grafit/Graphit
+    ".+gra(ph|f)its?"   // ...grafit/graphit
+  );
+  private static LinguServices linguServices;
+
+  private static final LoadingCache<String, Set<String>> cache = CacheBuilder.newBuilder()
+    .expireAfterAccess(30, TimeUnit.MINUTES)
+    .build(new CacheLoader<String, Set<String>>() {
+      @NotNull
+      @Override
+      public Set<String> load(@NotNull String path) {
+        HashSet<String> words = new HashSet<>();
+        List<String> lines = JLanguageTool.getDataBroker().getFromResourceDirAsLines(path);
+        for (String line : lines) {
+          if (!line.startsWith("#")) {
+            words.add(line.replaceFirst("#.*", "").trim());
+          }
+        }
+        return words;
+      }
+    });
 
   // have per-class static list of these and reference that in instance
   // -> avoid loading word list for every instance, but allow variations in subclasses
@@ -169,7 +211,6 @@ public class ProhibitedCompoundRule extends Rule {
     prohibitedCompoundRulePairMap = pairMap;
   }
 
-
   private static void addAllCaseVariants(List<Pair> candidatePairs, Pair lcPair) {
     candidatePairs.add(new Pair(lcPair.part1, lcPair.part1Desc, lcPair.part2, lcPair.part2Desc));
     String ucPart1 = uppercaseFirstChar(lcPair.part1);
@@ -181,10 +222,10 @@ public class ProhibitedCompoundRule extends Rule {
 
   private static void addUpperCaseVariants(List<Pair> pairs) {
     for (Pair lcPair : lowercasePairs) {
-      if (StringTools.startsWithUppercase(lcPair.part1)) {
+      if (startsWithUppercase(lcPair.part1)) {
         throw new IllegalArgumentException("Use all-lowercase word in " + ProhibitedCompoundRule.class + ": " + lcPair.part1);
       }
-      if (StringTools.startsWithUppercase(lcPair.part2)) {
+      if (startsWithUppercase(lcPair.part2)) {
         throw new IllegalArgumentException("Use all-lowercase word in " + ProhibitedCompoundRule.class + ": " + lcPair.part2);
       }
       addAllCaseVariants(pairs, lcPair);
@@ -195,7 +236,7 @@ public class ProhibitedCompoundRule extends Rule {
     try {
       ResourceDataBroker dataBroker = JLanguageTool.getDataBroker();
       try (InputStream confusionSetStream = dataBroker.getFromResourceDirAsStream(confusionSetsFile)) {
-        ConfusionSetLoader loader = new ConfusionSetLoader(german);
+        ConfusionSetLoader loader = new ConfusionSetLoader(GermanyGerman.getInstance());
         Map<String, List<ConfusionPair>> confusionPairs = loader.loadConfusionPairs(confusionSetStream);
         for (Map.Entry<String, List<ConfusionPair>> entry : confusionPairs.entrySet()) {
           for (ConfusionPair pair : entry.getValue()) {
@@ -228,7 +269,6 @@ public class ProhibitedCompoundRule extends Rule {
     for (Pair pair : pairs) {
       map.put(pair.part1, pair.part1);
       map.put(pair.part2, pair.part2);
-
       pairMap.putIfAbsent(pair.part1, new LinkedList<>());
       pairMap.putIfAbsent(pair.part2, new LinkedList<>());
       pairMap.get(pair.part1).add(pair);
@@ -241,15 +281,19 @@ public class ProhibitedCompoundRule extends Rule {
   }
 
   private final BaseLanguageModel lm;
+  private final Language language;
   private Pair confusionPair = null; // specify single pair for evaluation
 
-  public ProhibitedCompoundRule(ResourceBundle messages, LanguageModel lm, UserConfig userConfig) {
+  public ProhibitedCompoundRule(ResourceBundle messages, LanguageModel lm, UserConfig userConfig, Language language) {
+    super(messages);
     this.lm = (BaseLanguageModel) Objects.requireNonNull(lm);
     super.setCategory(Categories.TYPOS.getCategory(messages));
     this.ahoCorasickDoubleArrayTrie = prohibitedCompoundRuleSearcher;
     this.pairMap = prohibitedCompoundRulePairMap;
+    this.language = language;
     linguServices = userConfig != null ? userConfig.getLinguServices() : null;
-    spellerRule = linguServices == null ? new GermanSpellerRule(JLanguageTool.getMessageBundle(), german, null, null) : null;
+    addExamplePair(Example.wrong("Da steht eine <marker>Lehrzeile</marker> zu viel."),
+                   Example.fixed("Da steht eine <marker>Leerzeile</marker> zu viel."));
   }
 
   @Override
@@ -262,12 +306,21 @@ public class ProhibitedCompoundRule extends Rule {
     return "Markiert wahrscheinlich falsche Komposita wie 'Lehrzeile', wenn 'Leerzeile' häufiger vorkommt.";
   }
 
-
   @Override
   public RuleMatch[] match(AnalyzedSentence sentence) throws IOException {
     List<RuleMatch> ruleMatches = new ArrayList<>();
+    AnalyzedTokenReadings prevReadings = null;
     for (AnalyzedTokenReadings readings : sentence.getTokensWithoutWhitespace()) {
       String tmpWord = readings.getToken();
+      if (prevReadings != null && prevReadings.hasAnyPartialPosTag("EIG:") && startsWithUppercase(tmpWord) &&
+        (readings.hasAnyPartialPosTag("EIG:") || readings.isPosTagUnknown())) {
+        // assume name, e.g. "Bianca Baalhorn" (avoid: Baalhorn => Ballhorn)
+        continue;
+      }
+      if (prevReadings != null && HERRN_FRAU.matcher(prevReadings.getToken()).matches()) {
+        // assume name, e.g. "Herr Eiswert" (avoid: Eiswert -> Eiswelt)
+        continue;
+      }
       List<String> wordsParts = new ArrayList<>(Arrays.asList(tmpWord.split("-")));
       int partsStartPos = 0;
       for (String wordPart : wordsParts) {
@@ -277,20 +330,24 @@ public class ProhibitedCompoundRule extends Rule {
       if (noHyphens != null) {
         getMatches(sentence, ruleMatches, readings, 0, noHyphens, tmpWord.length()-noHyphens.length());
       }
+      prevReadings = readings;
     }
     return toRuleMatchArray(ruleMatches);
   }
 
-  private boolean isMisspelled (String word) {
-    return (linguServices == null ? spellerRule.isMisspelled(word) : !linguServices.isCorrectSpell(word, german));
+  private static boolean isMisspelled(String word) {
+    if (linguServices == null) {
+      return GermanyGerman.getInstance().getDefaultSpellingRule().isMisspelled(word);
+    }
+    return !linguServices.isCorrectSpell(word, GermanyGerman.getInstance());
   }
-  
+
   private int getMatches(AnalyzedSentence sentence, List<RuleMatch> ruleMatches, AnalyzedTokenReadings readings, int partsStartPos, String wordPart, int toPosCorrection) {
     /* optimizations:
      only nouns can be compounds
      all parts are at least 3 characters long -> words must have at least 6 characters
     */
-    if ((readings.isTagged() && !readings.hasPartialPosTag("SUB")) || wordPart.length() <= 6) {
+    if ((readings.isTagged() && !readings.hasPartialPosTag("SUB")) && !readings.hasPosTagStartingWith("EIG:") || wordPart.length() <= 6) {  // EIG: e.g. "Obstdeutschland" -> "Ostdeutschland"
       partsStartPos += wordPart.length() + 1;
       return partsStartPos;
     }
@@ -310,6 +367,7 @@ public class ProhibitedCompoundRule extends Rule {
       addAllCaseVariants(candidatePairs, confusionPair);
     }
 
+    List<WeightedRuleMatch> weightedMatches = new ArrayList<>();
     for (Pair pair : candidatePairs) {
       String variant = null;
       if (wordPart.contains(pair.part1)) {
@@ -325,8 +383,11 @@ public class ProhibitedCompoundRule extends Rule {
       long wordCount = lm.getCount(wordPart);
       long variantCount = lm.getCount(variant);
       //float factor = variantCount / (float)Math.max(wordCount, 1);
-      //System.out.println("word: " + word + " (" + wordCount + "), variant: " + variant + " (" + variantCount + "), factor: " + factor + ", pair: " + pair);
-      if (variantCount > 0 && wordCount == 0 && !blacklist.contains(wordPart) && !isMisspelled(variant)) {
+      //System.out.println("word: " + wordPart + " (" + wordCount + "), variant: " + variant + " (" + variantCount + "), factor: " + factor + ", pair: " + pair);
+
+      Set<String> blacklist = cache.getUnchecked("/de/compound_exceptions.txt");
+      if (variantCount > getThreshold() && wordCount == 0 && !blacklist.contains(wordPart) && !isMisspelled(variant) &&
+          blacklistRegex.stream().noneMatch(k -> wordPart.matches(".*" + k + ".*"))) {
         String msg;
         if (pair.part1Desc != null && pair.part2Desc != null) {
           msg = "Möglicher Tippfehler. " + uppercaseFirstChar(pair.part1) + ": " + pair.part1Desc + ", " + uppercaseFirstChar(pair.part2) + ": " + pair.part2Desc;
@@ -335,14 +396,25 @@ public class ProhibitedCompoundRule extends Rule {
         }
         int fromPos = readings.getStartPos() + partsStartPos;
         int toPos = fromPos + wordPart.length() + toPosCorrection;
-        RuleMatch match = new RuleMatch(this, sentence, fromPos, toPos, msg);
+        String id = toId(getId() + "_" + pair.part1 + "_" + pair.part2, language);
+        String desc = "Markiert wahrscheinlich falsche Komposita mit Teilwort '" +
+          uppercaseFirstChar(pair.part1) + "' statt '" + uppercaseFirstChar(pair.part2) + "' und umgekehrt";
+        SpecificIdRule idRule = new SpecificIdRule(id, desc, isPremium(), getCategory(), getLocQualityIssueType(), getTags());
+        RuleMatch match = new RuleMatch(idRule, sentence, fromPos, toPos, msg);
         match.setSuggestedReplacement(variant);
-        ruleMatches.add(match);
-        break;
+        weightedMatches.add(new WeightedRuleMatch(variantCount, match));
       }
+    }
+    if (weightedMatches.size() > 0) {
+      Collections.sort(weightedMatches);  // sort by most popular alternative
+      ruleMatches.add(weightedMatches.get(0).match);
     }
     partsStartPos += wordPart.length() + 1;
     return partsStartPos;
+  }
+
+  int getThreshold() {
+    return 0;
   }
 
   /**
@@ -361,12 +433,29 @@ public class ProhibitedCompoundRule extends Rule {
       StringBuilder sb = new StringBuilder();
       int i = 0;
       for (String part : parts) {
-        sb.append(i == 0 ? part : StringTools.lowercaseFirstChar(part));
+        if (part.length() <= 1) {
+          // don't: S-Bahn -> Sbahn
+          return null;
+        }
+        sb.append(i == 0 ? part : lowercaseFirstChar(part));
         i++;
       }
       return sb.toString();
     }
     return null;
+  }
+
+  static class WeightedRuleMatch implements Comparable<WeightedRuleMatch> {
+    long weight;
+    RuleMatch match;
+    WeightedRuleMatch(long weight, RuleMatch match) {
+      this.weight = weight;
+      this.match = match;
+    }
+    @Override
+    public int compareTo(@NotNull WeightedRuleMatch other) {
+      return Long.compare(other.weight, weight);
+    }
   }
 
   public static class Pair {
@@ -385,5 +474,5 @@ public class ProhibitedCompoundRule extends Rule {
       return part1 + "/" + part2;
     }
   }
-  
+
 }

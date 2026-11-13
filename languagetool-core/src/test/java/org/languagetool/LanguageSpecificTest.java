@@ -23,35 +23,155 @@ import org.languagetool.rules.*;
 import org.languagetool.rules.ngrams.FakeLanguageModel;
 import org.languagetool.rules.patterns.AbstractPatternRule;
 import org.languagetool.rules.patterns.PatternRuleLoader;
+import org.languagetool.rules.spelling.SpellingCheckRule;
 import org.languagetool.synthesis.Synthesizer;
 import org.languagetool.tagging.disambiguation.rules.DisambiguationRuleTest;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static junit.framework.Assert.fail;
 import static org.junit.Assert.*;
 import static org.junit.Assert.assertEquals;
+import static org.languagetool.rules.Categories.*;
 
 public class LanguageSpecificTest {
 
   protected void runTests(Language lang) throws IOException {
-    runTests(lang, null);
+    runTests(lang, null, "");
   }
 
   protected void runTests(Language lang, String onlyRunCode) throws IOException {
-    new WordListValidatorTest().testWordListValidity(lang);
+    runTests(lang, onlyRunCode, "");
+  }
+
+  protected void runTests(Language lang, String onlyRunCode, String additionalValidationChars) throws IOException {
+    runTests(lang, lang, onlyRunCode, additionalValidationChars);
+  }
+
+  protected void runTests(Language lang, Language langVariantForReplaceTests, String onlyRunCode, String additionalValidationChars) throws IOException {
+    new WordListValidatorTest(additionalValidationChars).testWordListValidity(lang);
+    testNoLineBreaksEtcInMessage(lang);
     testNoQuotesAroundSuggestion(lang);
     testJavaRules(onlyRunCode);
     //testExampleAvailable(onlyRunCode);
     testConfusionSetLoading();
     countTempOffRules(lang);
     testCoherencyBaseformIsOtherForm(lang);
+    testReplaceRuleReplacements(langVariantForReplaceTests);
     try {
       new DisambiguationRuleTest().testDisambiguationRulesFromXML();
     } catch (Exception e) {
       throw new RuntimeException(e);
+    }
+  }
+
+
+  protected void testReplaceRuleReplacements(Language lang) throws IOException {
+    JLanguageTool lt = new JLanguageTool(lang);
+    SpellingCheckRule spellRule = lang.getDefaultSpellingRule();
+    if (lang.getShortCode().matches("nl|km")) {
+      // too many alarms, should be cleaned up first
+      System.out.println("Skipping " + lang + " for replace.txt check");
+      return;
+    }
+    if (spellRule != null) {
+      for (Rule rule : lt.getAllActiveRules()) {
+        if (rule instanceof AbstractSimpleReplaceRule2) {
+          AbstractSimpleReplaceRule2 replRule = (AbstractSimpleReplaceRule2) rule;
+          boolean checkingCase = rule instanceof AbstractCheckCaseRule;
+          List<Map<String, SuggestionWithMessage>> wrongWords = replRule.getWrongWords();
+          for (Map<String, SuggestionWithMessage> entry : wrongWords) {
+            for (String s : entry.keySet()) {
+              String repl = entry.get(s).getSuggestion();
+              RuleMatch[] matches = spellRule.match(lt.getAnalyzedSentence(repl));
+              if (matches.length > 0) {
+                System.err.println("*** WARNING: replacement '" + repl + "' for '" + s + "' from one of " + replRule.getFileNames() +
+                  " isn't known to spell checker of " + lang + ": " + Arrays.toString(matches));
+              }
+              if (replRule.checkKeyWordsAreKnownToSpeller()) {
+                RuleMatch[] matches2 = spellRule.match(lt.getAnalyzedSentence(s));
+                if (matches2.length > 0) {
+                  System.err.println("*** WARNING: key word '" + s + "' from one of " + replRule.getFileNames() +
+                    " isn't known to spell checker of " + lang + ": " + Arrays.toString(matches2));
+                }
+              }
+              if (replRule.checkKeyWordsAreUnknownToSpeller()) {
+                RuleMatch[] matches2 = spellRule.match(lt.getAnalyzedSentence(s));
+                if (matches2.length == 0) {
+                  System.err.println("*** WARNING: key word '" + s + "' from one of " + replRule.getFileNames() +
+                    " is known to spell checker of " + lang + ": " + Arrays.toString(matches2));
+                }
+              }
+              if (replRule.separateKeyWordsBySpeller()) {
+                RuleMatch[] matches2 = spellRule.match(lt.getAnalyzedSentence(s));
+                if (matches2.length > 0) {
+                  System.err.println("SPELLER_WRONG: " + s + "=" + repl);
+                } else {
+                  System.err.println("SPELLER_OK: " + s + "=" + repl);
+                }
+              }
+            }
+          }
+        }
+        if (rule instanceof AbstractSimpleReplaceRule) {
+          if (lang.getShortCode().equals("ca")) {
+            if (rule.getId().equals("CA_SIMPLE_REPLACE_DNV_SECONDARY")) {
+              spellRule = Languages.getLanguageForShortCode("ca-ES-valencia").getDefaultSpellingRule();
+            } else {
+              spellRule = lang.getDefaultSpellingRule();
+            }
+          }
+          if (lang.getShortCode().equals("de") && rule.getId().equals("DE_DUPLICATED_CHAR")) {
+            // too many warnings and DE_DUPLICATED_CHAR has low impact, so ignore for now (even
+            // though the warnings are correct):
+            continue;
+          }
+          AbstractSimpleReplaceRule replRule = (AbstractSimpleReplaceRule) rule;
+          Map<String, List<String>> wrongWords = replRule.getWrongWords();
+          for (String key : wrongWords.keySet()) {
+            String repl = wrongWords.get(key).toString();
+            RuleMatch[] matches = spellRule.match(lt.getAnalyzedSentence(repl));
+            if (matches.length > 0) {
+              System.err.println("*** WARNING: replacement '" + repl + "' for '" + key + "' from rule " + rule.getId() + ", files: [\"replace.txt\", \"replace_custom.txt\"]" +
+                " isn't known to spell checker of " + lang + ": " + Arrays.toString(matches));
+            }
+          }
+        }
+      }
+    } else {
+      System.out.println("No speller found for " + lang);
+    }
+  }
+
+  private void testNoLineBreaksEtcInMessage(Language lang) {
+    if (lang.getMaintainedState() == LanguageMaintainedState.LookingForNewMaintainer) {
+      // avoid printing too many warnings that nobody takes care of
+      System.err.println("Skipping message tests for unmaintained language " + lang);
+      return;
+    }
+    System.out.println("Testing messages for line breaks...");
+    JLanguageTool lt = new JLanguageTool(lang);
+    for (Rule rule : lt.getAllRules()) {
+      if (rule instanceof AbstractPatternRule) {
+        AbstractPatternRule pRule = (AbstractPatternRule) rule;
+        String message = pRule.getMessage();
+        String prefix = "*** WARNING: " + lang.getShortCode() + ": " + rule.getFullId() + " from " + pRule.getSourceFile();
+        if (message.contains("\n") || message.contains("\r")) {
+          System.err.println(prefix + " contains line break (\\n or \\r): " + message.replace("\n", "\\n").replace("\r", "\\r"));
+        }
+        if (message.contains("\t")) {
+          System.err.println(prefix + " contains tab (\\t): " + message.replace("\t", "\\t"));
+        }
+        if (message.contains("  ")) {
+          System.err.println(prefix + " contains two consecutive spaces in message: " + message);
+        }
+        if (rule.getDescription().contains("  ")) {
+          System.err.println(prefix + " contains two consecutive spaces in description: " + rule.getDescription());
+        }
+      }
     }
   }
 
@@ -68,6 +188,7 @@ public class LanguageSpecificTest {
       System.out.println("File not found (okay for many languages): "+ path);
       return;
     }
+    System.out.println("Testing coherency.txt...");
     System.out.println("Checking " + path + "...");
     Map<String, Set<String>> map = loader.loadWords(path);
     Set<String> invalid = new HashSet<>();
@@ -91,24 +212,38 @@ public class LanguageSpecificTest {
   
   private final static Map<String, Integer> idToExpectedMatches = new HashMap<>();
   static {
+    idToExpectedMatches.put("EN_CONSISTENT_APOS", 2);
     idToExpectedMatches.put("STYLE_REPEATED_WORD_RULE_DE", 2);
+    idToExpectedMatches.put("STYLE_REPEATED_SHORT_SENTENCES", 3);
+    idToExpectedMatches.put("STYLE_REPEATED_SENTENCE_BEGINNING", 3);
   }
   private void testJavaRules(String onlyRunCode) throws IOException {
     Map<String,String> idsToClassName = new HashMap<>();
     Set<Class> ruleClasses = new HashSet<>();
+    float printLimitSeconds = 0.2f;
     for (Language language : Languages.getWithDemoLanguage()) {
       if (onlyRunCode != null && !language.getShortCodeWithCountryAndVariant().equals(onlyRunCode)) {
         System.out.println("Skipping " + language);   // speed up for languages that are sub classes (e.g. simple German)
         continue;
       }
+      System.out.println("Running for " + language + ", printing only tests that take > " + printLimitSeconds + " seconds:");
       JLanguageTool lt = new JLanguageTool(language);
       List<Rule> allRules = lt.getAllRules();
       for (Rule rule : allRules) {
+        assertIdAndDescriptionValidity(language, rule);
         if (!(rule instanceof AbstractPatternRule)) {
+          long startTime = System.currentTimeMillis();
           assertIdUniqueness(idsToClassName, ruleClasses, language, rule);
           assertIdValidity(language, rule);
           assertTrue(rule.supportsLanguage(language));
+          rule.setTags(rule.getTags().stream().filter(k -> !k.equals(Tag.picky)).collect(Collectors.toList()));  // make sure "picky" rules also run
           testExamples(rule, lt);
+          long endTime = System.currentTimeMillis();
+          float runTimeSeconds = (endTime-startTime)/1000f;
+          if (runTimeSeconds > printLimitSeconds) {
+            System.out.print("Tested Java rule " + rule.getFullId());
+            System.out.printf(Locale.ENGLISH, " ... %.2fs\n", runTimeSeconds);
+          }
         }
       }
     }
@@ -140,7 +275,7 @@ public class LanguageSpecificTest {
       JLanguageTool lt = new JLanguageTool(language);
       List<Rule> allRules = lt.getAllRules();
       for (Rule rule : allRules) {
-        if (rule.getIncorrectExamples().size() == 0) {
+        if (rule.getIncorrectExamples().isEmpty()) {
           System.err.println("*** WARNING: " + language.getShortCodeWithCountryAndVariant() + " rule " + rule.getId() + " has no incorrect examples");
         }
       }
@@ -154,13 +289,13 @@ public class LanguageSpecificTest {
       System.out.println("Skipping testNoQuotesAroundSuggestion for " + lang.getName());
       return;
     }
-    String dirBase = JLanguageTool.getDataBroker().getRulesDir() + "/" + lang.getShortCode() + "/";
+    System.out.println("Testing that there are no quotes around <suggestion>s...");
     for (String ruleFileName : lang.getRuleFileNames()) {
       if (ruleFileName.contains("-test-")) {
         continue;
       }
       InputStream is = this.getClass().getResourceAsStream(ruleFileName);
-      List<AbstractPatternRule> rules = new PatternRuleLoader().getRules(is, dirBase + "/" + ruleFileName);
+      List<AbstractPatternRule> rules = new PatternRuleLoader().getRules(is, ruleFileName, lang);
       for (AbstractPatternRule rule : rules) {
         String message = rule.getMessage();
         if (message.matches(".*['\"«»“”’]<suggestion.*") && message.matches(".*</suggestion>['\"«»“”’].*")) {
@@ -176,7 +311,8 @@ public class LanguageSpecificTest {
     int i = 0;
     List<String> actualRuleIds = new ArrayList<>();
     for (RuleMatch match : matches) {
-      actualRuleIds.add(match.getRule().getId());
+      //actualRuleIds.add(match.getRule().getId());
+      actualRuleIds.add(match.getSpecificRuleId());
     }
     if (expectedMatchIds.size() != actualRuleIds.size()) {
       failTest(lang, text, expectedMatchIds, actualRuleIds);
@@ -187,6 +323,20 @@ public class LanguageSpecificTest {
       }
       i++;
     }
+  }
+
+  protected static Set<String> getAllRuleIds(Language... langs) {
+    Set<String> ids = new HashSet<>();
+    for (Language lang : langs) {
+      JLanguageTool lt = new JLanguageTool(lang);
+      for (Rule rule : lt.getAllRules()) {
+        ids.add(rule.getId());
+      }
+    }
+    for (Categories cat : ALL) {
+      ids.add(cat.getId().toString());
+    }
+    return ids;
   }
 
   private void failTest(Language lang, String text, List<String> expectedMatchIds, List<String> actualRuleIds) {
@@ -204,11 +354,24 @@ public class LanguageSpecificTest {
     ruleClasses.add(rule.getClass());
   }
 
-  private void assertIdValidity(Language language, Rule rule) {
+  private void assertIdValidity(Language lang, Rule rule) {
     String ruleId = rule.getId();
     if (!ruleId.matches("^[A-Z_][A-Z0-9_]+$")) {
       throw new RuntimeException("Invalid character in rule id: '" + ruleId + "', language: "
-              + language + ", only [A-Z0-9_] are allowed and the first character must be in [A-Z_]");
+              + lang + ", only [A-Z0-9_] are allowed and the first character must be in [A-Z_]");
+    }
+  }
+
+  private void assertIdAndDescriptionValidity(Language lang, Rule rule) {
+    String ruleId = rule.getId();
+    if (rule.getId().equals(rule.getDescription())) {
+      System.err.println("*** WARNING: " + lang.getShortCodeWithCountryAndVariant() + ": " + rule.getFullId() + ": 'id' and 'name' are identical for this rule");
+    }
+    if (rule.getId().trim().isEmpty()) {
+      throw new RuntimeException("Empty rule id: '" + ruleId + "', language: " + lang.getShortCodeWithCountryAndVariant());
+    }
+    if (rule.getDescription().trim().isEmpty()) {
+      throw new RuntimeException("Empty rule description for rule: '" + ruleId + "', language: " + lang.getShortCodeWithCountryAndVariant());
     }
   }
 
@@ -220,7 +383,7 @@ public class LanguageSpecificTest {
   private void testCorrectExamples(Rule rule, JLanguageTool lt) throws IOException {
     List<CorrectExample> correctExamples = rule.getCorrectExamples();
     for (CorrectExample correctExample : correctExamples) {
-      String input = cleanMarkers(correctExample.getExample());
+      String input = ExampleSentence.cleanMarkersInExample(correctExample.getExample());
       enableOnlyOneRule(lt, rule);
       List<RuleMatch> ruleMatches = lt.check(input);
       assertEquals("Got unexpected rule match for correct example sentence:\n"
@@ -233,7 +396,7 @@ public class LanguageSpecificTest {
   private void testIncorrectExamples(Rule rule, JLanguageTool lt) throws IOException {
     List<IncorrectExample> incorrectExamples = rule.getIncorrectExamples();
     for (IncorrectExample incorrectExample : incorrectExamples) {
-      String input = cleanMarkers(incorrectExample.getExample());
+      String input = ExampleSentence.cleanMarkersInExample(incorrectExample.getExample());
       enableOnlyOneRule(lt, rule);
       List<RuleMatch> ruleMatches = lt.check(input);
       assertEquals("Did not get the expected rule match for the incorrect example sentence:\n"
@@ -250,25 +413,30 @@ public class LanguageSpecificTest {
     lt.enableRule(ruleToActivate.getId());
   }
 
-  private String cleanMarkers(String example) {
-    return example.replace("<marker>", "").replace("</marker>", "");
-  }
-
   private void countTempOffRules(Language lang) {
     JLanguageTool lt = new JLanguageTool(lang);
     int count = 0;
+    Map<String,Integer> fileToCount = new TreeMap<>();
     for (Rule rule : lt.getAllRules()) {
       if (rule.isDefaultTempOff()) {
         count++;
+        if (rule instanceof AbstractPatternRule) {
+          String sourceFile = ((AbstractPatternRule) rule).getSourceFile();
+          fileToCount.put(sourceFile, fileToCount.getOrDefault(sourceFile, 0) + 1);
+        }
       }
     }
     System.out.println("Number of default='temp_off' rules for " + lang + ": " + count);
-    int limit = 10;
+    int limit = 20;
     if (count > limit) {
       System.err.println("################################################################################################");
       System.err.println("WARNING: " + count + " default='temp_off' rules for " + lang + ", please make sure to turn on these");
       System.err.println("WARNING: rules after they have been tested (or use default='off' to turn them off permanently)");
       System.err.println("WARNING: (this warning appears if there are more than " + limit + " default='temp_off' rules)");
+      System.err.println("WARNING: temp_off rules by file:");
+      for (Map.Entry<String, Integer> entry : fileToCount.entrySet()) {
+        System.err.println("WARNING: " + entry.getValue() + " in " + entry.getKey());
+      }
       System.err.println("################################################################################################");
     }
   }

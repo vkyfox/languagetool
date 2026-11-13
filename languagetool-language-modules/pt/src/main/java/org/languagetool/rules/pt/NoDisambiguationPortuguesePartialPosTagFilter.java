@@ -34,13 +34,13 @@ import java.util.List;
  */
 public class NoDisambiguationPortuguesePartialPosTagFilter extends PartialPosTagFilter {
 
-  private final Tagger tagger = new Portuguese().getTagger();
+  private final Tagger tagger = Portuguese.getInstance().getTagger();
 
   @Override
   protected List<AnalyzedTokenReadings> tag(String token) {
     try {
       List<AnalyzedTokenReadings> tags = tagger.tag(Collections.singletonList(token));
-      AnalyzedTokenReadings[] atr = tags.toArray(new AnalyzedTokenReadings[tags.size()]);
+      AnalyzedTokenReadings[] atr = tags.toArray(new AnalyzedTokenReadings[0]);
       return Arrays.asList(atr);
     } catch (IOException e) {
       throw new RuntimeException("Could not tag and disambiguate '" + token + "'", e);

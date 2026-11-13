@@ -36,40 +36,59 @@ import static org.junit.Assert.assertEquals;
 public class SimpleReplaceRuleTest {
 
   private SimpleReplaceRule rule;
-  private JLanguageTool langTool;
+  private JLanguageTool lt;
 
   @Before
   public void setUp() throws Exception {
-    rule = new SimpleReplaceRule(TestTools.getMessages("ca"));
-    langTool = new JLanguageTool(new Catalan());
+    lt = new JLanguageTool(Catalan.getInstance());
+    rule = new SimpleReplaceRule(TestTools.getMessages("ca"), lt.getLanguage());
   }
 
   @Test
   public void testRule() throws IOException {
 
     // correct sentences:
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Això està força bé.")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Joan Navarro no és de Navarra ni de Jerez.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Això està força bé.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Joan Navarro no és de Navarra ni de Jerez.")).length);
 
     // incorrect sentences:
-    RuleMatch[] matches = rule.match(langTool.getAnalyzedSentence("El recader fa huelga."));
+    RuleMatch[] matches = rule.match(lt.getAnalyzedSentence("El recader fa huelga."));
     assertEquals(2, matches.length);
-    assertEquals("ordinari", matches[0].getSuggestedReplacements().get(0));
-    assertEquals("transportista", matches[0].getSuggestedReplacements().get(1));
+    assertEquals("L'ordinari", matches[0].getSuggestedReplacements().get(0));
+    assertEquals("El transportista", matches[0].getSuggestedReplacements().get(1));
     assertEquals("vaga", matches[1].getSuggestedReplacements().get(0));
     
-    matches = rule.match(langTool.getAnalyzedSentence("EEUU"));
-    assertEquals(1, matches.length);
-    assertEquals("EUA", matches[0].getSuggestedReplacements().get(0));
-    
-    matches = rule.match(langTool.getAnalyzedSentence("Aconteixements"));
+    matches = rule.match(lt.getAnalyzedSentence("Aconteixements"));
     assertEquals(1, matches.length);
     assertEquals("Esdeveniments", matches[0].getSuggestedReplacements().get(0));
-    
-    matches = rule.match(langTool.getAnalyzedSentence("Vila-Real"));
+
+    matches = rule.match(lt.getAnalyzedSentence("Els desencontres."));
     assertEquals(1, matches.length);
-    assertEquals("Vila-real", matches[0].getSuggestedReplacements().get(0));
-    
+    assertEquals("[Les desavinences, Els desacords, Les topades, La manca d'acord, La manca de coincidència]",
+      matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("La seguent solució."));
+    assertEquals(1, matches.length);
+    assertEquals("[La següent, El seient]", matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("Un caminet poc ciclable baixa uns metres."));
+    assertEquals("[poc pedalable, poc ciclista]", matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("La seva escola transformada pq les seves filles encaixen molt bé."));
+    assertEquals("[perquè]", matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("Aquesta àbside."));
+    assertEquals(1, matches.length);
+    assertEquals("[Aquest absis, Aquesta àbsida]", matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("Un àbside."));
+    assertEquals(1, matches.length);
+    assertEquals("[Un absis, Una àbsida]", matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("Sumats als kms d'anar i tornar."));
+    assertEquals(1, matches.length);
+    assertEquals("[als km]", matches[0].getSuggestedReplacements().toString());
+
   }
 
 }

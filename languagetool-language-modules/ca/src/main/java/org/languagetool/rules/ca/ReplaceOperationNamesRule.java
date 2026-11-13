@@ -34,6 +34,7 @@ import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.Language;
 import org.languagetool.rules.*;
 import org.languagetool.synthesis.ca.CatalanSynthesizer;
+import org.languagetool.tools.StringTools;
 
 /**
  * A rule that suggests better names for technical operation names
@@ -48,7 +49,7 @@ public class ReplaceOperationNamesRule extends AbstractSimpleReplaceRule {
   private static final Locale CA_LOCALE = new Locale("CA");
 
   @Override
-  protected Map<String, List<String>> getWrongWords() {
+  public Map<String, List<String>> getWrongWords() {
     return wrongWords;
   }
   
@@ -60,13 +61,15 @@ public class ReplaceOperationNamesRule extends AbstractSimpleReplaceRule {
   
   private static final Pattern PUNTUACIO = Pattern.compile("PUNCT.*|SENT_START");
   private static final Pattern DETERMINANT = Pattern.compile("D[^R].M.*");
+  private static final Map<String, String> argumentsMap = Map.of("lemmaSelect", "[NA].*");
   
 
   public ReplaceOperationNamesRule(final ResourceBundle messages, Language language) throws IOException {
-    super(messages);
+    super(messages, language);
     super.setLocQualityIssueType(ITSIssueType.Style);
     super.setCategory(new Category(new CategoryId("FORMES_SECUNDARIES"), "C8) Formes secundàries")); 
     synth = (CatalanSynthesizer) language.getSynthesizer();
+    super.useSubRuleSpecificIds();
   }  
 
   @Override
@@ -76,7 +79,7 @@ public class ReplaceOperationNamesRule extends AbstractSimpleReplaceRule {
 
  @Override
   public String getDescription() {
-    return "Noms d'operació tècnica: buidat/buidatge";
+    return "S'ha d'evitar com a nom d'operació tècnica: $match";
   }
 
   @Override
@@ -92,6 +95,11 @@ public class ReplaceOperationNamesRule extends AbstractSimpleReplaceRule {
   @Override
   public Locale getLocale() {
     return CA_LOCALE;
+  }
+
+  @Override
+  public boolean isCaseSensitive() {
+    return false;
   }
   
   @Override
@@ -116,6 +124,11 @@ public class ReplaceOperationNamesRule extends AbstractSimpleReplaceRule {
       
       // exceptions
       if (token.equals("duplicat") && tokens[i-1].getToken().equalsIgnoreCase("per")) {
+        continue loop;
+      }
+      // el polit Potos
+      if (i + 1 < tokens.length && token.equalsIgnoreCase("polit") 
+          && StringTools.isCapitalizedWord(tokens[i+1].getToken())) {
         continue loop;
       }
       // Assecat el braç del riu
@@ -167,12 +180,34 @@ public class ReplaceOperationNamesRule extends AbstractSimpleReplaceRule {
           }
         }
         if (possibleReplacements.size() > 0) {
-            RuleMatch potentialRuleMatch = createRuleMatch(tokens[i],possibleReplacements, sentence);
+            RuleMatch potentialRuleMatch = createRuleMatch(tokens[i],possibleReplacements, sentence, token);
             ruleMatches.add(potentialRuleMatch);
         }
       }
     }
-    return toRuleMatchArray(ruleMatches);
+
+    List<RuleMatch> filteredRuleMatches = new ArrayList<>();
+    ConvertToGenderAndNumberFilter filter = new ConvertToGenderAndNumberFilter();
+    filter.setLanguage(getLanguage());
+    // Adjust determinants and adjectives
+    for (RuleMatch potentialRuleMatch : ruleMatches) {
+      // For multi-word expressions, skip the filter: it cannot adjust gender/number
+      // reliably across tokens and causes incorrect position adjustments.
+      if (!potentialRuleMatch.isUnderlinedErrorSingleToken()) {
+        filteredRuleMatches.add(potentialRuleMatch);
+        continue;
+      }
+      RuleMatch finalMatch = null;
+      try {
+        finalMatch = filter.acceptRuleMatch(potentialRuleMatch, argumentsMap, 0, null, null);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      if (finalMatch != null) {
+        filteredRuleMatches.add(finalMatch);
+      }
+    }
+    return toRuleMatchArray(filteredRuleMatches);
   }
   
   /**

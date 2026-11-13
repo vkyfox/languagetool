@@ -43,6 +43,8 @@ public class PortugueseWordRepeatRule extends WordRepeatRule {
 
   private static final Pattern PRONOUNS = Pattern.compile("mas|n?[ao]s?|se");
 
+  private static final Pattern REDUPLICATED_ADVERBS = Pattern.compile("já|logo|fácil", Pattern.CASE_INSENSITIVE);
+
   public PortugueseWordRepeatRule(ResourceBundle messages, Language language) {
     super(messages, language);
     super.setCategory(Categories.REPETITIONS.getCategory(messages));
@@ -64,9 +66,6 @@ public class PortugueseWordRepeatRule extends WordRepeatRule {
     if (wordRepetitionOf("se", tokens, position)) {
       return true;   // "se se"
     }
-    if (wordRepetitionOf("Duran", tokens, position)) {
-      return true;   // "Duran Duran"
-    }
     if (wordRepetitionOf("sapiens", tokens, position)) {
       return true;   // "Homo sapiens sapiens"
     }
@@ -76,17 +75,16 @@ public class PortugueseWordRepeatRule extends WordRepeatRule {
     if (isGenus(tokens[position - 1]) && isSpecies(tokens[position])) {
       return true;   // e.g. Vulpes vulpes
     }
-    if (isHiphenated(tokens, position) && isPronoun(tokens[position])) {
+    if (isHyphenated(tokens, position) && isPronoun(tokens[position])) {
       return true;   // e.g. "Coloquem-na na sala."
     }
-    return false;
+    if (isReduplicatedAdverb(tokens[position])) {
+      return true; // e.g. "Logo logo" => we need another rule to suggest a comma.
+    }
+    return super.ignore(tokens, position);
   }
 
-  private boolean wordRepetitionOf(String word, AnalyzedTokenReadings[] tokens, int position) {
-    return position > 0 && tokens[position - 1].getToken().equals(word) && tokens[position].getToken().equals(word);
-  }
-
-  private boolean isHiphenated(AnalyzedTokenReadings[] tokens, int position) {
+  private boolean isHyphenated(AnalyzedTokenReadings[] tokens, int position) {
     return tokens[position - 2].getToken().equals("-") && !(tokens[position - 1].isWhitespaceBefore());
   }
 
@@ -100,5 +98,9 @@ public class PortugueseWordRepeatRule extends WordRepeatRule {
 
   private boolean isSpecies(AnalyzedTokenReadings token) {
     return TAUTONYMS_SPECIES.matcher(token.getToken()).matches();
+  }
+
+  private boolean isReduplicatedAdverb(AnalyzedTokenReadings token) {
+    return REDUPLICATED_ADVERBS.matcher(token.getToken()).matches();
   }
 }

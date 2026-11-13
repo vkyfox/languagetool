@@ -19,34 +19,91 @@
 package org.languagetool.tokenizers.es;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.StringTokenizer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.languagetool.tagging.es.SpanishTagger;
 import org.languagetool.tokenizers.WordTokenizer;
 
 /**
- * Tokenizes a sentence into words. Punctuation and whitespace gets its own token.
+ * Tokenizes a sentence into words. Punctuation and whitespace gets its own
+ * token.
  *
  * @author Juan Martorell
  */
 public class SpanishWordTokenizer extends WordTokenizer {
 
+  private static final String wordCharacters = "§©@€£\\$_\\p{L}\\d·\\-\u0300-\u036F\u00A8\u2070-\u209F°%‰‱&\uFFFD\u00AD\u00AC";
+  private static final Pattern tokenizerPattern = Pattern.compile("[" + wordCharacters + "]+|[^" + wordCharacters + "]");
+  //decimal point between digits
+  private static final Pattern DECIMAL_POINT= Pattern.compile("([\\d])\\.([\\d])",Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE);
+  // decimal comma between digits
+  private static final Pattern DECIMAL_COMMA= Pattern.compile("([\\d]),([\\d])",Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE);
+  // ordinals
+  private static final Pattern ORDINAL_POINT= Pattern.compile("\\b([\\d]+)\\.(º|ª|o|a|er|os|as)\\b",
+    Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE|Pattern.UNICODE_CHARACTER_CLASS);
+  private static final Pattern PATTERN_1 = Pattern.compile("xxES_DECIMAL_POINTxx", Pattern.LITERAL);
+  private static final Pattern PATTERN_2 = Pattern.compile("xxES_DECIMAL_COMMAxx", Pattern.LITERAL);
+  private static final Pattern PATTERN_3 = Pattern.compile("xxES_ORDINAL_POINTxx", Pattern.LITERAL);
+  private static final Pattern SOFT_HYPHEN = Pattern.compile("\u00AD", Pattern.LITERAL);
+
   @Override
-  public List<String> tokenize(String text) {
-    List<String> tokenList = new ArrayList<>();
-    StringTokenizer st = new StringTokenizer(text,
-            "\u0020\u00A0\u115f\u1160\u1680"
-                    + "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007"
-                    + "\u2008\u2009\u200A\u200B\u200c\u200d\u200e\u200f"
-                    + "\u2013\u2014\u2015"
-                    + "\u2028\u2029\u202a\u202b\u202c\u202d\u202e\u202f"
-                    + "\u205F\u2060\u2061\u2062\u2063\u206A\u206b\u206c\u206d"
-                    + "\u206E\u206F\u3000\u3164\ufeff\uffa0\ufff9\ufffa\ufffb"
-                    + "-,.;()[]{}<>!?:=*#∗×·+÷/\\\"'«»„”“‘`’…¿¡\t\n\r", true);
-    while (st.hasMoreElements()) {
-      tokenList.add(st.nextToken());
+  public List<String> tokenize(final String text) {
+    final List<String> l = new ArrayList<>();
+    // replace hyphen, non-break hyphen -> hyphen-minus
+    String auxText = text.replace('\u2010', '\u002d');
+    auxText = auxText.replace('\u2011', '\u002d');
+    Matcher matcher = DECIMAL_POINT.matcher(auxText);
+    auxText = matcher.replaceAll("$1xxES_DECIMAL_POINTxx$2");
+    matcher = DECIMAL_COMMA.matcher(auxText);
+    auxText = matcher.replaceAll("$1xxES_DECIMAL_COMMAxx$2");
+    matcher = ORDINAL_POINT.matcher(auxText);
+    auxText = matcher.replaceAll("$1xxES_ORDINAL_POINTxx$2");
+
+    Matcher tokenizerMatcher = tokenizerPattern.matcher(auxText);
+    while (tokenizerMatcher.find()) {
+      String s = tokenizerMatcher.group();
+      if (l.size() > 0 && s.length() == 1 && s.codePointAt(0)>=0xFE00 && s.codePointAt(0)<=0xFE0F) {
+        l.set(l.size() - 1, l.get(l.size() - 1) + s);
+        continue;
+      }
+      s = PATTERN_1.matcher(s).replaceAll(".");
+      s = PATTERN_2.matcher(s).replaceAll(",");
+      s = PATTERN_3.matcher(s).replaceAll(".");
+      l.addAll(wordsToAdd(s));   
     }
-    return joinEMailsAndUrls(tokenList);
+    return joinEMailsAndUrls(l);
+  }
+
+  /* Splits a word containing hyphen(-) if it doesn't exist in the dictionary. */
+  private List<String> wordsToAdd(String s) {
+    final List<String> l = new ArrayList<>();
+    if (!s.isEmpty()) {
+      if (!s.contains("-")) {
+        l.add(s);
+      } else {
+        // words containing hyphen (-) are looked up in the dictionary
+        if (SpanishTagger.INSTANCE.tag(Arrays.asList(SOFT_HYPHEN.matcher(s).replaceAll("").replace('’', '\''))).get(0).isTagged()) {
+          l.add(s);
+        }
+        // some camel-case words containing hyphen (is there any better fix?)
+        else if (s.equalsIgnoreCase("mers-cov") || s.equalsIgnoreCase("mcgraw-hill")
+            || s.equalsIgnoreCase("sars-cov-2") || s.equalsIgnoreCase("sars-cov") || s.equalsIgnoreCase("ph-metre")
+            || s.equalsIgnoreCase("ph-metres")) {
+          l.add(s);
+        } else {
+          // if not found, the word is split
+          final StringTokenizer st2 = new StringTokenizer(s, "-", true);
+          while (st2.hasMoreElements()) {
+            l.add(st2.nextToken());
+          }
+        }
+      }
+    }
+    return l;
   }
 
 }

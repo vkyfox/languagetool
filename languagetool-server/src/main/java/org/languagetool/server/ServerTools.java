@@ -18,22 +18,28 @@
  */
 package org.languagetool.server;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.languagetool.JLanguageTool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.PrintStream;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static org.languagetool.JLanguageTool.*;
 
 /**
  * @since 3.4
  */
 final class ServerTools {
+
+  private final static Pattern sentContentPattern = Pattern.compile("<sentcontent>.*</sentcontent>", Pattern.DOTALL);
+  private static final Logger logger = LoggerFactory.getLogger(ServerTools.class);
 
   private ServerTools() {
   }
@@ -42,7 +48,7 @@ final class ServerTools {
   static String getLoggingInfo(String remoteAddress, Exception e, int errorCode, HttpExchange httpExchange, Map<String, String> params, long runtimeMillis, RequestCounter reqCounter) {
     String message = "";
     if (e != null) {
-      message += "An error has occurred: '" +  e.getMessage() + "', sending HTTP code " + errorCode + ". ";
+      message += "An error has occurred: '" + ServerTools.cleanUserTextFromMessage(e.getMessage(), params) + "', sending HTTP code " + errorCode + ". ";
     }
     message += "Access from " + remoteAddress + ", ";
     message += "HTTP user agent: " + getHttpUserAgent(httpExchange) + ", ";
@@ -130,49 +136,133 @@ final class ServerTools {
   }
 
   static UserLimits getUserLimits(Map<String, String> params, HTTPServerConfig config) {
-    if (params.get("token") != null) {
-      return UserLimits.getLimitsFromToken(config, params.get("token"));
-    } else if (params.get("username") != null) {
+    return getUserLimits(params, config, null);
+  }
+
+  static UserLimits getUserLimits(Map<String, String> params, HTTPServerConfig config, String authHeader) {
+    if (params.get("username") != null) {
       if (params.get("apiKey") != null && params.get("password") != null) {
-        // TODO: throw exception (but first log to see how often this happens)
-        print("WARN: apiKey AND password was set: " + params.get("apiKey"), System.err);
+        throw new BadRequestException("apiKey AND password was set, set only apiKey");
       }
       if (params.get("apiKey") != null) {
         return UserLimits.getLimitsByApiKey(config, params.get("username"), params.get("apiKey"));
       } else if (params.get("password") != null) {
         return UserLimits.getLimitsFromUserAccount(config, params.get("username"), params.get("password"));
+      } else if (params.get("tokenV2") != null) {
+        if (authHeader != null) {
+          return UserLimits.getLimitsWithJwtToken(config, authHeader, params.get("username"), params.get("tokenV2"));
+        }
+        return UserLimits.getLimitsByAddonToken(config, params.get("username"), params.get("tokenV2"));
       } else {
-        throw new IllegalArgumentException("With 'username' set, you also need to specify either 'apiKey' (recommended) or 'password'");
+        throw new BadRequestException("With 'username' set, you also need to specify 'apiKey'");
       }
     } else {
       if (params.get("apiKey") != null) {
-        throw new IllegalArgumentException("apiKey was set, but username was not: " + params.get("apiKey"));
+        throw new BadRequestException("apiKey was set, but username was not: " + params.get("apiKey"));
       }
       if (params.get("password") != null) {
-        throw new IllegalArgumentException("password was set, but username was not");
+        throw new BadRequestException("password was set, but username was not");
+      }
+      if (authHeader != null) {
+        return UserLimits.getLimitsWithJwtToken(config, authHeader, params.get("username"), params.get("tokenV2"));
       }
       return UserLimits.getDefaultLimits(config);
     }
   }
 
   @NotNull
-  static JLanguageTool.Mode getMode(Map<String, String> params) {
-    JLanguageTool.Mode mode;
+  static Mode getMode(Map<String, String> params) {
+    Mode mode;
     if (params.get("mode") != null) {
       String modeParam = params.get("mode");
       if ("textLevelOnly".equals(modeParam)) {
-        mode = JLanguageTool.Mode.TEXTLEVEL_ONLY;
+        mode = Mode.TEXTLEVEL_ONLY;
       } else if ("allButTextLevelOnly".equals(modeParam)) {
-        mode = JLanguageTool.Mode.ALL_BUT_TEXTLEVEL_ONLY;
+        mode = Mode.ALL_BUT_TEXTLEVEL_ONLY;
       } else if ("all".equals(modeParam)) {
-        mode = JLanguageTool.Mode.ALL;
+        mode = Mode.ALL;
+      } else if ("batch".equals(modeParam)) {
+        // used in undocumented API for /words/add, /words/delete; ignore
+        mode = Mode.ALL;
       } else {
-        throw new IllegalArgumentException("Mode must be one of 'textLevelOnly', 'allButTextLevelOnly', or 'all' but was: '" + modeParam + "'");
+        throw new BadRequestException("Mode must be one of 'textLevelOnly', 'allButTextLevelOnly', or 'all' but was: '" + modeParam + "'");
       }
     } else {
-      mode = JLanguageTool.Mode.ALL;
+      mode = Mode.ALL;
     }
     return mode;
   }
 
+  @NotNull
+  static String getModeForLog(Mode mode) {
+    switch (mode) {
+      case TEXTLEVEL_ONLY: return "tlo";
+      case ALL_BUT_TEXTLEVEL_ONLY: return "!tlo";
+      case ALL: return "all";
+      default: return "?";
+    }
+  }
+
+  @NotNull
+  static Level getLevel(Map<String, String> params) {
+    Level level;
+    if (params.get("level") != null) {
+      String param = params.get("level");
+      if ("default".equals(param)) {
+        level = Level.DEFAULT;
+      } else if ("picky".equals(param)) {
+        level = Level.PICKY;
+      } else if ("academic".equals(param)) {
+        level = Level.ACADEMIC;
+      } else if ("clarity".equals(param)) {
+        level = Level.CLARITY;
+      } else if ("professional".equals(param)) {
+        level = Level.PROFESSIONAL;
+      } else if ("creative".equals(param)) {
+        level = Level.CREATIVE;
+      } else if ("customer".equals(param)) {
+        level = Level.CUSTOMER;
+      } else if ("jobapp".equals(param)) {
+        level = Level.JOBAPP;
+      } else if ("objective".equals(param)) {
+        level = Level.OBJECTIVE;
+      } else if ("elegant".equals(param)) {
+        level = Level.ELEGANT;
+      } else {
+        throw new BadRequestException("Unknown value '" + param + "' for parameter 'level'. Valid values: " +
+          Arrays.stream(Level.values()).map(k -> k.toString().toLowerCase()).collect(Collectors.joining(", ")));
+      }
+    } else {
+      level = Level.DEFAULT;
+    }
+    return level;
+  }
+
+  /**
+   * Remove user-content from message in case parameters require increased privacy.
+   * @since 5.0
+   */
+  public static String cleanUserTextFromMessage(String s, Map<String, String> params) {
+    if (params.getOrDefault("inputLogging", "").equals("no")) {
+      return sentContentPattern.matcher(s).replaceAll("<< content removed >>");
+    }
+    return s;
+  }
+
+  static boolean siteMatches(String referrer, String blockedRef) {
+    return referrer.startsWith(blockedRef) ||
+      referrer.startsWith("http://" + blockedRef) || referrer.startsWith("https://" + blockedRef) ||
+      referrer.startsWith("http://www." + blockedRef) || referrer.startsWith("https://www." + blockedRef);
+  }
+
+  public static String getAuthHeader(Headers headers) {
+    String authHeader = null;
+    if (headers != null) {
+      authHeader = headers.getFirst("Authorization");
+      if (authHeader != null && authHeader.isBlank()) {
+        authHeader = null;
+      }
+    }
+    return authHeader;
+  }
 }

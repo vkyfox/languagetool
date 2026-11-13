@@ -32,14 +32,23 @@ import java.util.List;
 class StdoutHandler extends ResultHandler {
 
   private final ContextTools contextTools = new ContextTools();
+  private final boolean verbose;
 
   StdoutHandler(int maxSentences, int maxErrors) {
     this(maxSentences, maxErrors, CONTEXT_SIZE);
   }
 
   StdoutHandler(int maxSentences, int maxErrors, int contextSize) {
+    this(maxSentences, maxErrors, contextSize, false);
+  }
+
+  StdoutHandler(int maxSentences, int maxErrors, int contextSize, boolean verbose) {
     super(maxSentences, maxErrors);
     contextTools.setContextSize(contextSize);
+    this.verbose = verbose;
+    //contextTools.setContextSize(100);
+    //contextTools.setErrorMarker("**", "**");
+    //contextTools.setEscapeHtml(false);
   }
 
   @Override
@@ -49,7 +58,7 @@ class StdoutHandler extends ResultHandler {
       System.out.println("\nTitle: " + sentence.getTitle());
       for (RuleMatch match : ruleMatches) {
         String output = i + ".) Line " + (match.getLine() + 1) + ", column "
-                + match.getColumn() + ", Rule ID: " + match.getRule().getId();
+                + match.getColumn() + ", Rule ID: " + match.getSpecificRuleId(); //match.getRule().getId();
         if (match.getRule() instanceof AbstractPatternRule) {
           AbstractPatternRule pRule = (AbstractPatternRule) match.getRule();
           output += "[" + pRule.getSubId() + "]";
@@ -57,14 +66,18 @@ class StdoutHandler extends ResultHandler {
         if (match.getRule().isDefaultTempOff()) {
           output += " [temp_off]";
         }
+        if (verbose && match.getRule() instanceof AbstractPatternRule) {
+          AbstractPatternRule pRule = (AbstractPatternRule) match.getRule();
+          output += " ruleLine=" + pRule.getXmlLineNumber();
+        }
         System.out.println(output);
         String msg = match.getMessage();
-        msg = msg.replaceAll("<suggestion>", "'");
-        msg = msg.replaceAll("</suggestion>", "'");
+        msg = msg.replace("<suggestion>", "'");
+        msg = msg.replace("</suggestion>", "'");
         System.out.println("Message: " + msg);
         List<String> replacements = match.getSuggestedReplacements();
         if (!replacements.isEmpty()) {
-          System.out.println("Suggestion: " + String.join("; ", replacements));
+          System.out.println("Suggestion: " + String.join("; ", replacements.subList(0, Math.min(replacements.size(), 5))));
         }
         if (match.getRule() instanceof AbstractPatternRule) {
           AbstractPatternRule pRule = (AbstractPatternRule) match.getRule();
@@ -73,6 +86,7 @@ class StdoutHandler extends ResultHandler {
           }
         }
         System.out.println(contextTools.getPlainTextContext(match.getFromPos(), match.getToPos(), sentence.getText()));
+        //System.out.println(contextTools.getContext(match.getFromPos(), match.getToPos(), sentence.getText()));
         i++;
         checkMaxErrors(++errorCount);
       }

@@ -25,18 +25,27 @@ import morfologik.stemming.WordData;
 import org.languagetool.AnalyzedToken;
 import org.languagetool.JLanguageTool;
 import org.languagetool.Language;
+import org.languagetool.rules.spelling.morfologik.MorfologikSpeller;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+import static org.languagetool.tools.StringInterner.intern;
 
 public class BaseSynthesizer implements Synthesizer {
+
+  public final String SPELLNUMBER_TAG = "_spell_number_";
+  public final String SPELLNUMBER_FEMININE_TAG = "_spell_number_:feminine";
+  public final String SPELLNUMBER_ROMAN_TAG = "_spell_number_:Roman";
 
   protected volatile List<String> possibleTags;
 
@@ -45,25 +54,39 @@ public class BaseSynthesizer implements Synthesizer {
   private final IStemmer stemmer;
   private final ManualSynthesizer manualSynthesizer;
   private final ManualSynthesizer removalSynthesizer;
+  private final ManualSynthesizer removalSynthesizer2;
   private final String sorosFileName;
   private final Soros numberSpeller;
-  
-  public final String SPELLNUMBER_TAG = "_spell_number_";
+  private final Soros romanNumberer;
   
   private volatile Dictionary dictionary;
+
+  protected Language language = null;
 
   /**
    * @param resourceFileName The dictionary file name.
    * @param tagFileName The name of a file containing all possible tags.
+   * @deprecated use {@link #BaseSynthesizer(String, String, String, String)}
    */
   public BaseSynthesizer(String sorosFileName, String resourceFileName, String tagFileName, Language lang) {
+    this(sorosFileName, resourceFileName, tagFileName, lang.getShortCode());
+    this.language = lang;
+  }
+
+  /**
+   * @param resourceFileName The dictionary file name.
+   * @param tagFileName The name of a file containing all possible tags.
+   * @param langShortCode the language short code used to find the data files
+   */
+  public BaseSynthesizer(String sorosFileName, String resourceFileName, String tagFileName, String langShortCode) {
     this.resourceFileName = resourceFileName;
     this.tagFileName = tagFileName;
     this.stemmer = createStemmer();
     this.sorosFileName = sorosFileName;
-    this.numberSpeller = createNumberSpeller(lang.getShortCode());
+    this.numberSpeller = createNumberSpeller(langShortCode);
+    this.romanNumberer = createRomanNumberer();
     try {
-      String path = "/" + lang.getShortCode() + "/added.txt";
+      String path = "/" + langShortCode + "/added.txt";
       if (JLanguageTool.getDataBroker().resourceExists(path)) {
         try (InputStream stream = JLanguageTool.getDataBroker().getFromResourceDirAsStream(path)) {
           this.manualSynthesizer = new ManualSynthesizer(stream);
@@ -71,7 +94,7 @@ public class BaseSynthesizer implements Synthesizer {
       } else {
         this.manualSynthesizer = null;
       }
-      String removalPath = "/" + lang.getShortCode() + "/removed.txt";
+      String removalPath = "/" + langShortCode + "/removed.txt";
       if (JLanguageTool.getDataBroker().resourceExists(removalPath)) {
         try (InputStream stream = JLanguageTool.getDataBroker().getFromResourceDirAsStream(removalPath)) {
           this.removalSynthesizer = new ManualSynthesizer(stream);
@@ -79,15 +102,30 @@ public class BaseSynthesizer implements Synthesizer {
       } else {
         this.removalSynthesizer = null;
       }
+      String removalPath2 = "/" + langShortCode + "/do-not-synthesize.txt";
+      if (JLanguageTool.getDataBroker().resourceExists(removalPath2)) {
+        try (InputStream stream = JLanguageTool.getDataBroker().getFromResourceDirAsStream(removalPath2)) {
+          this.removalSynthesizer2 = new ManualSynthesizer(stream);
+        }
+      } else {
+        this.removalSynthesizer2 = null;
+      }
       
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
-  
+
+  /**
+   * @deprecated use {@link #BaseSynthesizer(String, String, String)}
+   */
   public BaseSynthesizer(String resourceFileName, String tagFileName, Language lang) {
-    this(null, resourceFileName, tagFileName, lang);
-    
+    this(resourceFileName, tagFileName, lang.getShortCode());
+    this.language = lang;
+  }
+
+  public BaseSynthesizer(String resourceFileName, String tagFileName, String langShortCode) {
+    this(null, resourceFileName, tagFileName, langShortCode);
   }
 
   /**
@@ -101,8 +139,7 @@ public class BaseSynthesizer implements Synthesizer {
       synchronized (this) {
         dict = this.dictionary;
         if (dict == null) {
-          URL url = JLanguageTool.getDataBroker().getFromResourceDirAsUrl(resourceFileName);
-          this.dictionary = dict = Dictionary.read(url);
+          dictionary = dict = MorfologikSpeller.getDictionaryWithCaching(resourceFileName);
         }
       }
     }
@@ -123,17 +160,35 @@ public class BaseSynthesizer implements Synthesizer {
   }
   
   private Soros createNumberSpeller(String langcode) {
-    Soros s = null;
+    Soros s;
     try {
       URL url = JLanguageTool.getDataBroker().getFromResourceDirAsUrl(sorosFileName);
-      BufferedReader f = new BufferedReader(new InputStreamReader(url.openStream(), "UTF-8"));
-      StringBuffer st = new StringBuffer();
-      String line = null;
+      BufferedReader f = new BufferedReader(new InputStreamReader(url.openStream(), StandardCharsets.UTF_8));
+      StringBuilder sb = new StringBuilder();
+      String line;
       while ((line = f.readLine()) != null) {
-        st.append(line);
-        st.append("\n");
+        sb.append(line);
+        sb.append('\n');
       }
-      s = new Soros(new String(st), langcode);
+      s = new Soros(new String(sb), langcode);
+    } catch (Exception e) {
+      return null;
+    }
+    return s;
+  }
+  
+  private Soros createRomanNumberer() {
+    Soros s;
+    try {
+      URL url = JLanguageTool.getDataBroker().getFromResourceDirAsUrl("Roman.sor");
+      BufferedReader f = new BufferedReader(new InputStreamReader(url.openStream(), StandardCharsets.UTF_8));
+      StringBuilder sb = new StringBuilder();
+      String line;
+      while ((line = f.readLine()) != null) {
+        sb.append(line);
+        sb.append('\n');
+      }
+      s = new Soros(new String(sb), "Roman");
     } catch (Exception e) {
       return null;
     }
@@ -144,9 +199,9 @@ public class BaseSynthesizer implements Synthesizer {
    * Lookup the inflected forms of a lemma defined by a part-of-speech tag.
    * @param lemma the lemma to be inflected.
    * @param posTag the desired part-of-speech tag.
-   * @param results the list to collect the inflected forms.
    */
-  protected void lookup(String lemma, String posTag, List<String> results) {
+  protected List<String> lookup(String lemma, String posTag) {
+    List<String> results = new ArrayList<>();
     synchronized (this) { // the stemmer is not thread-safe
       List<WordData> wordForms = stemmer.lookup(lemma + "|" + posTag);
       for (WordData wd : wordForms) {
@@ -165,6 +220,13 @@ public class BaseSynthesizer implements Synthesizer {
         results.removeAll(removeForms);
       }
     }
+    if (removalSynthesizer2 != null) {
+      List<String> removeForms = removalSynthesizer2.lookup(lemma, posTag);
+      if (removeForms != null) {
+        results.removeAll(removeForms);
+      }
+    }
+    return results;
   }
 
   /**
@@ -177,29 +239,45 @@ public class BaseSynthesizer implements Synthesizer {
   @Override
   public String[] synthesize(AnalyzedToken token, String posTag) throws IOException {
     if (posTag.equals(SPELLNUMBER_TAG)) {
-      String[] strArray = new String[] {getSpelledNumber(token.getToken())};
-      return strArray;
+      return new String[] {getSpelledNumber(token.getToken())};
     }
-    List<String> wordForms = new ArrayList<>();
-    lookup(token.getLemma(), posTag, wordForms);
-    return wordForms.toArray(new String[0]);
+    if (posTag.equals(SPELLNUMBER_FEMININE_TAG)) {
+      return new String[] {getSpelledNumber("feminine " + token.getToken())};
+    }
+    if (posTag.equals(SPELLNUMBER_ROMAN_TAG)) {
+      return new String[] {getRomanNumber(token.getToken())};
+    }
+    List<String> wordForms = lookup(token.getLemma(), posTag);
+    return removeExceptions(wordForms.toArray(new String[0]));
   }
 
   @Override
   public String[] synthesize(AnalyzedToken token, String posTag, boolean posTagRegExp) throws IOException {
     if (posTagRegExp) {
-      initPossibleTags();
-      Pattern p = Pattern.compile(posTag);
-      List<String> results = new ArrayList<>();
-      for (String tag : possibleTags) {
-        Matcher m = p.matcher(tag);
-        if (m.matches()) {
-          lookup(token.getLemma(), tag, results);
-        }
+      try {
+        Pattern p = Pattern.compile(posTag);
+        return synthesizeForPosTags(token.getLemma(), tag -> p.matcher(tag).matches());
+      } catch (PatternSyntaxException e) {
+        throw new RuntimeException("Error trying to synthesize POS tag " + posTag +
+                " (posTagRegExp: true) from token " + token.getToken(), e);
       }
-      return results.toArray(new String[0]);
     }
-    return synthesize(token, posTag);
+    return removeExceptions(synthesize(token, posTag));
+  }
+
+  /**
+   * Synthesize forms for the given lemma and for all POS tags satisfying the given predicate.
+   * @since 5.3
+   */
+  public String[] synthesizeForPosTags(String lemma, Predicate<String> acceptTag) throws IOException {
+    initPossibleTags();
+    List<String> results = new ArrayList<>();
+    for (String tag : possibleTags) {
+      if (acceptTag.test(tag)) {
+        results.addAll(lookup(lemma, tag));
+      }
+    }
+    return removeExceptions(results.toArray(new String[0]));
   }
 
   @Override
@@ -216,25 +294,28 @@ public class BaseSynthesizer implements Synthesizer {
   }
 
   protected void initPossibleTags() throws IOException {
-    List<String> tags = possibleTags;
-    if (tags == null) {
+    if (possibleTags == null) {
       synchronized (this) {
-        tags = possibleTags;
-        if (tags == null) {
-          try (InputStream stream = JLanguageTool.getDataBroker().getFromResourceDirAsStream(tagFileName)) {
-            possibleTags = SynthesizerTools.loadWords(stream);
-          }
-        }
-        // needed to be moved into synchronized block, should fix ConcurrentModificationException in synthesize
-        if (manualSynthesizer != null) {
-          for (String tag : manualSynthesizer.getPossibleTags()) {
-            if (!possibleTags.contains(tag)) {
-              possibleTags.add(tag);
-            }
-          }
+        if (possibleTags == null) {
+          possibleTags = loadTags();
         }
       }
     }
+  }
+
+  private List<String> loadTags() throws IOException {
+    List<String> tags;
+    try (InputStream stream = JLanguageTool.getDataBroker().getFromResourceDirAsStream(tagFileName)) {
+      tags = SynthesizerTools.loadWords(stream);
+    }
+    if (manualSynthesizer != null) {
+      for (String tag : manualSynthesizer.getPossibleTags()) {
+        if (!tags.contains(tag)) {
+          tags.add(intern(tag));
+        }
+      }
+    }
+    return tags;
   }
 
   @Override
@@ -243,6 +324,43 @@ public class BaseSynthesizer implements Synthesizer {
       return numberSpeller.run(arabicNumeral);
     }
     return arabicNumeral;
+  }
+  
+  public String getRomanNumber(String arabicNumeral) {
+    if (romanNumberer != null) {
+      return romanNumberer.run(arabicNumeral);
+    }
+    return arabicNumeral;
+  }
+
+  protected boolean isException(String w) {
+    return false;  
+  }
+
+  protected String[] removeExceptions(String[] words) {
+    List<String> results = new ArrayList<>();
+    for (String word : words) {
+      if (!isException(word)) {
+        results.add(word);
+      }
+    }
+    return results.toArray(new String[0]);
+  }
+
+  @Override
+  public String getTargetPosTag(List<String> posTags, String targetPosTag) {
+    if (posTags.isEmpty()) {
+      return targetPosTag;
+    }
+    // return the last one to keep the previous results
+    return posTags.get(posTags.size() - 1);
+  }
+
+  public List<String> getPossibleTagsForSynthesis() throws IOException {
+    initPossibleTags();
+    // return a copy: callers may modify it (e.g. Catalan.getAllPossibleTags), and the
+    // shared possibleTags list must not be mutated while other threads iterate it
+    return new ArrayList<>(possibleTags);
   }
 
 }

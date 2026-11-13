@@ -19,8 +19,9 @@
 package org.languagetool;
 
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
-import org.languagetool.tools.StringTools;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -31,13 +32,15 @@ import java.util.*;
  */
 public final class AnalyzedSentence {
 
+  // objects of this type are cached, so everything needs to be immutable
   private final AnalyzedTokenReadings[] tokens;
   private final AnalyzedTokenReadings[] preDisambigTokens;
   private final AnalyzedTokenReadings[] nonBlankTokens;
   private final AnalyzedTokenReadings[] nonBlankPreDisambigTokens;
   private final int[] whPositions;  // maps positions without whitespace to positions that include whitespaces
-  private final Set<String> tokenSet;
-  private final Set<String> lemmaSet;
+  private final Map<String, List<Integer>> tokenOffsets;
+  private final Map<String, List<Integer>> lemmaOffsets;
+  private final Set<String> posTagSet;
 
   /**
    * Creates an AnalyzedSentence from the given {@link AnalyzedTokenReadings}. Whitespace is also a token.
@@ -47,6 +50,20 @@ public final class AnalyzedSentence {
   }
   
   public AnalyzedSentence(AnalyzedTokenReadings[] tokens, AnalyzedTokenReadings[] preDisambigTokens) {
+    this(tokens, preDisambigTokens, null, false);
+  }
+
+  /**
+   * Like {@link #AnalyzedSentence(AnalyzedTokenReadings[], AnalyzedTokenReadings[])}, but reuses the token/lemma/POS
+   * indexes of {@code previous} where that's known to be safe, to avoid re-indexing the whole sentence each time a
+   * disambiguation rule modifies a few tokens.
+   * @param previous the sentence the given tokens were derived from, or {@code null}
+   * @param readingsUnchanged {@code true} if the caller guarantees the readings (lemmas, POS tags) of all tokens are the
+   *                          same as in {@code previous} (e.g. only immunization or ignore-spelling flags were set)
+   */
+  @ApiStatus.Internal
+  public AnalyzedSentence(AnalyzedTokenReadings[] tokens, AnalyzedTokenReadings[] preDisambigTokens,
+                          @Nullable AnalyzedSentence previous, boolean readingsUnchanged) {
     this.tokens = tokens;
     this.preDisambigTokens = preDisambigTokens;
     int whCounter = 0;
@@ -55,8 +72,27 @@ public final class AnalyzedSentence {
     this.whPositions = mapping;
     this.nonBlankTokens = getNonBlankReadings(tokens, whCounter, nonWhCounter, mapping).toArray(new AnalyzedTokenReadings[0]);
     this.nonBlankPreDisambigTokens = getNonBlankReadings(preDisambigTokens, whCounter, nonWhCounter, mapping).toArray(new AnalyzedTokenReadings[0]);
-    this.tokenSet = getTokenSet(tokens);
-    this.lemmaSet = getLemmaSet(tokens);
+    boolean sameTokens = previous != null && haveSameTokenStrings(previous.nonBlankTokens, nonBlankTokens);
+    tokenOffsets = sameTokens ? previous.tokenOffsets : indexTokens(nonBlankTokens);
+    if (sameTokens && readingsUnchanged) {
+      lemmaOffsets = previous.lemmaOffsets;
+      posTagSet = previous.posTagSet;
+    } else {
+      lemmaOffsets = indexLemmas(nonBlankTokens);
+      posTagSet = indexPosTags(nonBlankTokens);
+    }
+  }
+
+  private static boolean haveSameTokenStrings(AnalyzedTokenReadings[] a, AnalyzedTokenReadings[] b) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (int i = 0; i < a.length; i++) {
+      if (!a[i].getToken().equals(b[i].getToken())) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @NotNull
@@ -73,36 +109,61 @@ public final class AnalyzedSentence {
     return l;
   }
 
-  private AnalyzedSentence(AnalyzedTokenReadings[] tokens, int[] mapping, AnalyzedTokenReadings[] nonBlankTokens, AnalyzedTokenReadings[] nonBlankPreDisambigTokens) {
+  private AnalyzedSentence(AnalyzedTokenReadings[] tokens, AnalyzedSentence source) {
     this.tokens = tokens;
     this.preDisambigTokens = tokens;
-    this.whPositions = mapping;
-    this.nonBlankTokens = nonBlankTokens;
-    this.nonBlankPreDisambigTokens = nonBlankPreDisambigTokens;
-    this.tokenSet = getTokenSet(tokens);
-    this.lemmaSet = getLemmaSet(tokens);
+    this.whPositions = source.whPositions;
+    // same non-blank tokens as the source, so the (unmodifiable) indexes would be identical: share them
+    this.nonBlankTokens = source.nonBlankTokens.clone();
+    this.nonBlankPreDisambigTokens = source.nonBlankPreDisambigTokens.clone();
+    tokenOffsets = source.tokenOffsets;
+    lemmaOffsets = source.lemmaOffsets;
+    posTagSet = source.posTagSet;
   }
 
-  private Set<String> getTokenSet(AnalyzedTokenReadings[] tokens) {
-    Set<String> tokenSet = new HashSet<>();
-    for (AnalyzedTokenReadings token : tokens) {
-      tokenSet.add(token.getToken().toLowerCase());
+  private static Map<String, List<Integer>> indexTokens(AnalyzedTokenReadings[] tokens) {
+    Map<String, List<Integer>> result = new HashMap<>(tokens.length);
+    for (int i = 0; i < tokens.length; i++) {
+      result.computeIfAbsent(tokens[i].getTokenLowerCase(), __ -> new ArrayList<>(1)).add(i);
     }
-    return Collections.unmodifiableSet(tokenSet);
+    return makeUnmodifiable(result);
   }
 
-  private Set<String> getLemmaSet(AnalyzedTokenReadings[] tokens) {
-    Set<String> lemmaSet = new HashSet<>();
-    for (AnalyzedTokenReadings token : tokens) {
-      for (AnalyzedToken lemmaTok : token.getReadings()) {
-        if (lemmaTok.getLemma() != null) {
-          lemmaSet.add(lemmaTok.getLemma().toLowerCase());
-        } else {
-          lemmaSet.add(lemmaTok.getToken().toLowerCase());
+  private static Map<String, List<Integer>> indexLemmas(AnalyzedTokenReadings[] tokens) {
+    Map<String, List<Integer>> result = new HashMap<>(tokens.length);
+    for (int i = 0; i < tokens.length; i++) {
+      AnalyzedTokenReadings tr = tokens[i];
+      int readingsLength = tr.getReadingsLength();
+      for (int j = 0; j < readingsLength; j++) {
+        AnalyzedToken token = tr.getAnalyzedToken(j);
+        String key = token.getLemmaOrTokenLowerCase();
+        List<Integer> list = result.computeIfAbsent(key, __ -> new ArrayList<>(1));
+        if (list.isEmpty() || list.get(list.size() - 1) != i) {
+          list.add(i);
         }
       }
     }
-    return Collections.unmodifiableSet(lemmaSet);
+    return makeUnmodifiable(result);
+  }
+
+  private static Set<String> indexPosTags(AnalyzedTokenReadings[] tokens) {
+    Set<String> result = new HashSet<>();
+    for (AnalyzedTokenReadings tokenReadings : tokens) {
+      for (AnalyzedToken token : tokenReadings) {
+        String posTag = token.getPOSTag();
+        if (posTag != null) {
+          result.add(posTag);
+        }
+      }
+    }
+    return result.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(result);
+  }
+
+  private static Map<String, List<Integer>> makeUnmodifiable(Map<String, List<Integer>> result) {
+    for (Map.Entry<String, List<Integer>> entry : result.entrySet()) {
+      entry.setValue(Collections.unmodifiableList(entry.getValue()));
+    }
+    return Collections.unmodifiableMap(result);
   }
 
   /**
@@ -119,7 +180,32 @@ public final class AnalyzedSentence {
       AnalyzedTokenReadings analyzedTokens = sentence.getTokens()[i];
       copyTokens[i] = new AnalyzedTokenReadings(analyzedTokens, analyzedTokens.getReadings(), "");
     }
-    return new AnalyzedSentence(copyTokens, sentence.whPositions, sentence.getTokensWithoutWhitespace(), sentence.getPreDisambigTokensWithoutWhitespace());
+    return new AnalyzedSentence(copyTokens, sentence);
+  }
+
+  /**
+   * Returns an independent copy of the given token readings, suitable as a pre-disambiguation snapshot.
+   * Both the {@link AnalyzedTokenReadings} and their {@link AnalyzedToken} readings are copied, so later
+   * in-place modifications of {@code tokens} (e.g. by disambiguation actions {@code add}/{@code remove},
+   * or the mutable {@code hasNoPOSTag} flag set by {@code setNoRealPOStag()}) don't affect the copy.
+   * @since 6.9
+   */
+  public static AnalyzedTokenReadings[] copyReadings(AnalyzedTokenReadings[] tokens) {
+    AnalyzedTokenReadings[] copy = new AnalyzedTokenReadings[tokens.length];
+    for (int i = 0; i < tokens.length; i++) {
+      AnalyzedTokenReadings analyzedTokens = tokens[i];
+      // copy the readings themselves, not just the AnalyzedTokenReadings wrapper: hasNoPOSTag is a
+      // mutable flag that setNoRealPOStag() writes on the shared AnalyzedToken objects
+      List<AnalyzedToken> readings = new ArrayList<>(analyzedTokens.getReadingsLength());
+      for (int j = 0; j < analyzedTokens.getReadingsLength(); j++) {
+        AnalyzedToken t = analyzedTokens.getAnalyzedToken(j);
+        AnalyzedToken c = new AnalyzedToken(t.getToken(), t.getPOSTag(), t.getLemma());
+        c.setWhitespaceBefore(t.isWhitespaceBefore());
+        readings.add(c);
+      }
+      copy[i] = new AnalyzedTokenReadings(analyzedTokens, readings, "");
+    }
+    return copy;
   }
 
   /**
@@ -135,7 +221,6 @@ public final class AnalyzedSentence {
   /**
    * @since 4.5
    */
-  @Experimental
   public AnalyzedTokenReadings[] getPreDisambigTokens() {
     // It would be better to return a clone here to make this object immutable,
     // but this would be bad for performance:
@@ -152,9 +237,16 @@ public final class AnalyzedSentence {
   }
 
   /**
+   * Get the length of the array returned by {@link #getTokensWithoutWhitespace()} without additional allocations.
+   */
+  @ApiStatus.Internal
+  public int getNonWhitespaceTokenCount() {
+    return nonBlankTokens.length;
+  }
+
+  /**
    * @since 4.5
    */
-  @Experimental
   public AnalyzedTokenReadings[] getPreDisambigTokensWithoutWhitespace() {
     return nonBlankPreDisambigTokens.clone();
   }
@@ -183,16 +275,42 @@ public final class AnalyzedSentence {
     return toString(readingDelimiter, false);
   }
 
+  private volatile String text;
+
   /**
    * Return the original text.
    * @since 2.7
    */
   public String getText() {
+    String result = text;
+    if (result == null) {
+      text = result = calcText();
+    }
+    return result;
+  }
+
+  private String calcText() {
     StringBuilder sb = new StringBuilder();
     for (AnalyzedTokenReadings element : tokens) {
       sb.append(element.getToken());
     }
     return sb.toString();
+  }
+
+  /** Text length taking position fixes (for removed soft hyphens etc.) into account, so
+   * this is _not_ always equal to {@code getText()}.
+   * @since 5.1
+   */
+  public int getCorrectedTextLength() {
+    int len = 0;
+    for (int i = 0; i < tokens.length; i++) {
+      AnalyzedTokenReadings element = tokens[i];
+      len += element.getCleanToken().length();
+      if (i == tokens.length - 1) {  // only apply at end, so the position fix at every token doesn't add up
+        len += element.getPosFix();
+      }
+    }
+    return len;
   }
 
   /**
@@ -239,7 +357,7 @@ public final class AnalyzedSentence {
         }
       }
       if (!element.isWhitespace()) {
-        if (includeChunks && element.getChunkTags().size() > 0) {
+        if (includeChunks && !element.getChunkTags().isEmpty()) {
           sb.append(',');
           sb.append(StringUtils.join(element.getChunkTags(), "|"));
         }
@@ -277,7 +395,7 @@ public final class AnalyzedSentence {
    * @since 2.4
    */
   public Set<String> getTokenSet() {
-    return tokenSet;
+    return tokenOffsets.keySet();
   }
 
   /**
@@ -286,7 +404,39 @@ public final class AnalyzedSentence {
    * @since 2.5
    */
   public Set<String> getLemmaSet() {
-    return lemmaSet;
+    return lemmaOffsets.keySet();
+  }
+
+  /**
+   * Get all POS tags occurring in this sentence.
+   * Used internally for performance optimization.
+   * @since 6.9
+   */
+  @ApiStatus.Internal
+  public Set<String> getPosTagSet() {
+    return posTagSet;
+  }
+
+  /**
+   * @return all offsets in {@link #getTokensWithoutWhitespace()} where tokens with the given text occur (case-insensitive),
+   * or {@code null} if there are no such occurrences
+   * @since 5.3
+   */
+  @Nullable
+  @ApiStatus.Internal
+  public List<Integer> getTokenOffsets(String token) {
+    return tokenOffsets.get(token);
+  }
+
+  /**
+   * @return all offsets in {@link #getTokensWithoutWhitespace()} where tokens with the given lemma occur (case-insensitive),
+   * or {@code null} if there are no such occurrences
+   * @since 5.3
+   */
+  @Nullable
+  @ApiStatus.Internal
+  public List<Integer> getLemmaOffsets(String token) {
+    return lemmaOffsets.get(token);
   }
 
   @SuppressWarnings("ControlFlowStatementWithoutBraces")
@@ -308,7 +458,8 @@ public final class AnalyzedSentence {
   @Override
   public int hashCode() {
     // tokenSet and lemmaSet are a subset of tokens and don't need to be included
-    return Objects.hash(nonBlankTokens, tokens, whPositions);
+    final int hash = Objects.hash(Arrays.hashCode(nonBlankTokens), tokens, whPositions);
+    return hash;
   }
 
 }

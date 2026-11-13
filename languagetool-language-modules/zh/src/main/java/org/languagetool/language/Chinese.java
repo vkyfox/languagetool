@@ -18,16 +18,12 @@
  */
 package org.languagetool.language;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-
+import org.jetbrains.annotations.NotNull;
 import org.languagetool.Language;
+import org.languagetool.LanguageWithModel;
+import org.languagetool.Languages;
 import org.languagetool.UserConfig;
 import org.languagetool.languagemodel.LanguageModel;
-import org.languagetool.languagemodel.LuceneLanguageModel;
 import org.languagetool.rules.DoublePunctuationRule;
 import org.languagetool.rules.MultipleWhitespaceRule;
 import org.languagetool.rules.Rule;
@@ -39,12 +35,28 @@ import org.languagetool.tokenizers.Tokenizer;
 import org.languagetool.tokenizers.zh.ChineseSentenceTokenizer;
 import org.languagetool.tokenizers.zh.ChineseWordTokenizer;
 
-public class Chinese extends Language implements AutoCloseable {
+import java.io.IOException;
+import java.util.*;
 
-  private Tagger tagger;
-  private Tokenizer wordTokenizer;
-  private SentenceTokenizer sentenceTokenizer;
-  private LuceneLanguageModel languageModel;
+public class Chinese extends LanguageWithModel {
+  private static final String LANGUAGE_SHORT_CODE = "zh-CN";
+
+  private static volatile Throwable instantiationTrace;
+
+  public Chinese() {
+    Throwable trace = instantiationTrace;
+    if (trace != null) {
+      throw new RuntimeException("Language was already instantiated, see the cause stacktrace below.", trace);
+    }
+    instantiationTrace = new Throwable();
+  }
+
+  /**
+   * This is a fake constructor overload for the subclasses. Public constructors can only be used by the LT itself.
+   */
+  protected Chinese(boolean fakeValue) {
+  }
+
 
   @Override
   public String getShortCode() {
@@ -74,53 +86,35 @@ public class Chinese extends Language implements AutoCloseable {
     );
   }
 
+  @NotNull
   @Override
-  public Tagger getTagger() {
-    if (tagger == null) {
-      tagger = new ChineseTagger();
-    }
-    return tagger;
+  public Tagger createDefaultTagger() {
+    return new ChineseTagger();
   }
 
   @Override
-  public Tokenizer getWordTokenizer() {
-    if (wordTokenizer == null) {
-      wordTokenizer = new ChineseWordTokenizer();
-    }
-    return wordTokenizer;
+  public Tokenizer createDefaultWordTokenizer() {
+    return new ChineseWordTokenizer();
   }
 
   @Override
-  public SentenceTokenizer getSentenceTokenizer() {
-    if (sentenceTokenizer == null) {
-      sentenceTokenizer = new ChineseSentenceTokenizer();
-    }
-    return sentenceTokenizer;
-  }
-
-  /** @since 3.1 */
-  @Override
-  public synchronized LanguageModel getLanguageModel(File indexDir) throws IOException {
-    return initLanguageModel(indexDir, languageModel);
+  public SentenceTokenizer createDefaultSentenceTokenizer() {
+    return new ChineseSentenceTokenizer();
   }
 
   /** @since 3.1 */
   @Override
   public List<Rule> getRelevantLanguageModelRules(ResourceBundle messages, LanguageModel languageModel, UserConfig userConfig) throws IOException {
-    return Arrays.<Rule>asList(
-            new ChineseConfusionProbabilityRule(messages, languageModel, this)
+    return Collections.singletonList(
+      new ChineseConfusionProbabilityRule(messages, languageModel, this)
     );
   }
 
-  /**
-   * Closes the language model, if any. 
-   * @since 3.1
-   */
-  @Override
-  public void close() throws Exception {
-    if (languageModel != null) {
-      languageModel.close();
+  public static @NotNull Chinese getInstance() {
+    Language language = Objects.requireNonNull(Languages.getLanguageForShortCode(LANGUAGE_SHORT_CODE));
+    if (language instanceof Chinese chinese) {
+      return chinese;
     }
+    throw new RuntimeException("Chinese language expected, got " + language);
   }
-
 }

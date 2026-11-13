@@ -18,9 +18,11 @@
  */
 package org.languagetool.rules;
 
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.regex.Pattern;
 
 import org.languagetool.AnalyzedSentence;
 import org.languagetool.AnalyzedTokenReadings;
@@ -38,15 +40,25 @@ public class CommaWhitespaceRule extends Rule {
 
   private boolean quotesWhitespaceCheck;
 
-  /** @since 3.3 */
-  public CommaWhitespaceRule(ResourceBundle messages, IncorrectExample incorrectExample, CorrectExample correctExample) {
+  private Pattern FILE_EXTENSION = Pattern.compile("([a-z]{3,4}|[A-Z]{3,4}|ai|mp[34]|MP[34])(-.+)?");
+
+  /** @since 5.9 */
+  public CommaWhitespaceRule(ResourceBundle messages, IncorrectExample incorrectExample, CorrectExample correctExample, URL url) {
     super(messages);
     super.setCategory(Categories.TYPOGRAPHY.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Whitespace);
     if (incorrectExample != null && correctExample != null) {
       addExamplePair(incorrectExample, correctExample);
     }
+    if (url != null) {
+      setUrl(url);
+    }
     this.quotesWhitespaceCheck = true;
+  }
+
+  /** @since 3.3 */
+  public CommaWhitespaceRule(ResourceBundle messages, IncorrectExample incorrectExample, CorrectExample correctExample) {
+    this(messages, incorrectExample, correctExample, null);
   }
 
   public CommaWhitespaceRule(ResourceBundle messages, boolean quotesWhitespace) { 
@@ -62,7 +74,6 @@ public class CommaWhitespaceRule extends Rule {
     this.quotesWhitespaceCheck = true;
   }
 
-
   @Override
   public String getId() {
     return "COMMA_PARENTHESIS_WHITESPACE";
@@ -77,6 +88,14 @@ public class CommaWhitespaceRule extends Rule {
     return ",";
   }
 
+  /**
+   * @return Returns true if there exception to this rule
+   * @since 5.3
+   */
+  protected boolean isException(AnalyzedTokenReadings[] tokens, int tokenIdx) {
+    return false;
+  }
+  
   @Override
   public final RuleMatch[] match(AnalyzedSentence sentence) {
     List<RuleMatch> ruleMatches = new ArrayList<>();
@@ -87,6 +106,8 @@ public class CommaWhitespaceRule extends Rule {
     for (int i = 0; i < tokens.length; i++) {
       String token = tokens[i].getToken();
       boolean isWhitespace = isWhitespaceToken(tokens[i]);
+      boolean twoSuggestions = false;
+      
       String msg = null;
       String suggestionText = null;
       if (isWhitespace && isLeftBracket(prevToken)) {
@@ -96,8 +117,9 @@ public class CommaWhitespaceRule extends Rule {
           suggestionText = prevToken;
         }
       } else if (isWhitespace && isQuote(prevToken) && this.quotesWhitespaceCheck && prevPrevToken.equals(" ")) {
-          msg = messages.getString("no_space_around_quotes");
-          suggestionText = "";
+        msg = messages.getString("no_space_around_quotes");
+        suggestionText = prevToken;
+        twoSuggestions = true;
       } else if (!isWhitespace && prevToken.equals(getCommaCharacter())
           && !isQuote(token)
           && !isHyphenOrComma(token)
@@ -120,7 +142,11 @@ public class CommaWhitespaceRule extends Rule {
           if (i + 1 < tokens.length && getCommaCharacter().equals(tokens[i+1].getToken())) {
             msg = null;
           }
-        } else if (token.equals(".")) {
+          if (i + 1 < tokens.length && !tokens[i+1].isWhitespace()) {
+            suggestionText = getCommaCharacter() + " ";
+          }
+        } else if (token.equals(".") && !isDomain(tokens, i + 1) && !isFileExtension(tokens, i + 1)
+          && !isProperNoun(tokens[i])) {
           msg = messages.getString("no_space_before_dot");
           suggestionText = ".";
           // exception case for figures such as ".5" and ellipsis
@@ -132,11 +158,29 @@ public class CommaWhitespaceRule extends Rule {
           }
         }
       }
-      if (msg != null) {
+      if (msg != null && !isException(tokens, i) && !tokens[i].isImmunized()) {
         int fromPos = tokens[i - 1].getStartPos();
+        if (twoSuggestions) {
+          fromPos = tokens[i - 2].getStartPos();
+        }
         int toPos = tokens[i].getEndPos();
+        String text = sentence.getText();
+        if (toPos < text.length()) {
+          String marked = text.substring(fromPos, toPos);
+          if (marked.equals(suggestionText) && !twoSuggestions) {
+            prevPrevToken = prevToken;
+            prevToken = token;
+            prevWhite = isWhitespace && !tokens[i].isFieldCode(); // LO/OO code before comma/dot
+            continue;
+          }
+        }
         RuleMatch ruleMatch = new RuleMatch(this, sentence, fromPos, toPos, msg);
-        ruleMatch.setSuggestedReplacement(suggestionText);
+        if (twoSuggestions) {
+          ruleMatch.addSuggestedReplacement(suggestionText + " ");
+          ruleMatch.addSuggestedReplacement(" " + suggestionText);
+        } else {
+          ruleMatch.setSuggestedReplacement(suggestionText);  
+        }
         ruleMatches.add(ruleMatch);
       }
       prevPrevToken = prevToken;
@@ -147,8 +191,34 @@ public class CommaWhitespaceRule extends Rule {
     return toRuleMatchArray(ruleMatches);
   }
 
+  private boolean isProperNoun(AnalyzedTokenReadings token) {
+    // English proper noun
+    if (token.hasPosTag("NNP") || token.hasPosTag("NNPS")) {
+      return true;
+    }
+    // Catalan, Spanish, Portuguese...
+    if (token.hasPosTagStartingWith("NP")) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Case Insensitive check if the token at index i is a valid domain name (e.g. "com", "org", "net", etc.)
+   * @param tokens
+   * @param i
+   * @return true if the token at index i is a domain name, false otherwise
+   */
+  private boolean isDomain(AnalyzedTokenReadings[] tokens, int i) {
+    return i < tokens.length && tokens[i].getToken().matches("(?i)(com|org|net|int|edu|gov|mil|[a-z]{2})");
+  }
+
+  private boolean isFileExtension(AnalyzedTokenReadings[] tokens, int i) {
+    return i < tokens.length && FILE_EXTENSION.matcher(tokens[i].getToken()).matches();
+  }
+
   private static boolean isWhitespaceToken(AnalyzedTokenReadings token) {
-    return (   token.isWhitespace()
+    return (token.isWhitespace()
         || StringTools.isNonBreakingWhitespace(token.getToken())
         || token.isFieldCode()) && !token.getToken().equals("\u200B");
   }
@@ -156,11 +226,7 @@ public class CommaWhitespaceRule extends Rule {
   private static boolean isQuote(String str) {
     if (str.length() == 1) {
       char c = str.charAt(0);
-      if (c =='\'' || c == '"' || c =='’'
-          || c == '”' || c == '“'
-          || c == '«'|| c == '»') {
-        return true;
-      }
+      return c == '\'' || c == '"' || c == '’' || c == '”' || c == '“' || c == '«' || c == '»';
     }
     return false;
   }
@@ -168,9 +234,7 @@ public class CommaWhitespaceRule extends Rule {
   private static boolean isHyphenOrComma(String str) {
     if (str.length() == 1) {
       char c = str.charAt(0);
-      if (c == '-' || c == ',') {
-        return true;
-      }
+      return c == '-' || c == ',';
     }
     return false;
   }
@@ -188,7 +252,7 @@ public class CommaWhitespaceRule extends Rule {
       return false;
     }
     char c = str.charAt(0);
-    return c == '(' || c == '[' || c == '{';
+    return c == '(';
   }
 
   private static boolean isRightBracket(String str) {
@@ -196,7 +260,7 @@ public class CommaWhitespaceRule extends Rule {
       return false;
     }
     char c = str.charAt(0);
-    return c == ')' || c == ']' || c == '}';
+    return c == ')';
   }
 
   private static boolean containsDigit(String str) {

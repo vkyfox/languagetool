@@ -41,7 +41,15 @@ public class JLanguageToolTest {
     assertEquals("Als Afdeling geen deel uitmaakt van de naam, dan is juist:<suggestion>afdeling</suggestion>", matches.get(0).getMessage());
      */
     // Dutch rule has no effect with English error but they are spelling mistakes:
-    assertEquals(3, tool.check("I can give you more a detailed description.").size());
+    assertEquals(1, tool.check("Hier staat een spelvout voor testdoeleinden.").size());
+    // do not use simple replace rule: ok=ook|OK|oké
+    assertEquals(0, tool.check("'Ok Google, zet de nachtlamp naar warm wit' - Veranderd de nachtlamp kleur naar warm wit.").size());
   }
   
+  @Test
+  public void testAdvancedTypography() throws IOException {
+    Language lang = new Dutch();
+    assertEquals(lang.toAdvancedTypography("\"Fatima zei 'Hallo' tegen me.\""), "“Fatima zei ‘Hallo’ tegen me.”");
+    assertEquals(lang.toAdvancedTypography("Bedoelt u wellicht \"vivo's\"?"), "Bedoelt u wellicht “vivo’s”?");
+  }
 }

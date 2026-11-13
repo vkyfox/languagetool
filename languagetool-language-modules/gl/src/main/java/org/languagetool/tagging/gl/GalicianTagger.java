@@ -18,22 +18,19 @@
  */
 package org.languagetool.tagging.gl;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import morfologik.stemming.DictionaryLookup;
 import morfologik.stemming.IStemmer;
-
 import org.jetbrains.annotations.Nullable;
 import org.languagetool.AnalyzedToken;
 import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.chunking.ChunkTag;
 import org.languagetool.tagging.BaseTagger;
 import org.languagetool.tools.StringTools;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Galician Part-of-speech tagger.
  *
@@ -46,18 +43,7 @@ public class GalicianTagger extends BaseTagger {
 
   private static final Pattern ADJ_PART_FS = Pattern.compile("V.P..SF.|A[QO].[FC][SN].");
   private static final Pattern VERB = Pattern.compile("V.+");
-
   private static final Pattern PREFIXES_FOR_VERBS = Pattern.compile("(auto|re)(...+)",Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE);
-
-  @Override
-  public String getManualAdditionsFileName() {
-    return "/gl/added.txt";
-  }
-
-  @Override
-  public String getManualRemovalsFileName() {
-    return "/gl/removed.txt";
-  }
 
   public GalicianTagger() {
     super("/gl/galician.dict", new Locale("gl"));
@@ -84,10 +70,10 @@ public class GalicianTagger extends BaseTagger {
         if (word.contains("'")) {
           containsTypewriterApostrophe = true;
         }
-        word = word.replace("’", "'");
+        word = word.replace('’', '\'');
       }
       final List<AnalyzedToken> l = new ArrayList<>();
-      final String lowerWord = word.toLowerCase(conversionLocale);
+      final String lowerWord = word.toLowerCase(locale);
       final boolean isLowercase = word.equals(lowerWord);
       final boolean isMixedCase = StringTools.isMixedCase(word);
       List<AnalyzedToken> taggerTokens = asAnalyzedTokenListForTaggedWords(word, getWordTagger().tag(word));
@@ -130,7 +116,7 @@ public class GalicianTagger extends BaseTagger {
     List<AnalyzedToken> additionalTaggedTokens = new ArrayList<>();
     //Any well-formed adverb with suffix -mente is tagged as an adverb of manner (RM)
     if (word.endsWith("mente")){
-      final String lowerWord = word.toLowerCase(conversionLocale);
+      final String lowerWord = word.toLowerCase(locale);
       final String possibleAdj = lowerWord.replaceAll("^(.+)mente$", "$1");
       List<AnalyzedToken> taggerTokens;
       taggerTokens = asAnalyzedTokenList(lowerWord, dictLookup.lookup(possibleAdj));
@@ -168,9 +154,7 @@ public class GalicianTagger extends BaseTagger {
 
   private void addTokens(final List<AnalyzedToken> taggedTokens, final List<AnalyzedToken> l) {
     if (taggedTokens != null) {
-      for (AnalyzedToken at : taggedTokens) {
-        l.add(at);
-      }
+      l.addAll(taggedTokens);
     }
   }
 

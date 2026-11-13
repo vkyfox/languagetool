@@ -19,10 +19,8 @@
 package org.languagetool.rules.de;
 
 import org.junit.Test;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
-import org.languagetool.LanguageSpecificTest;
-import org.languagetool.Languages;
+import org.languagetool.*;
+import org.languagetool.language.German;
 import org.languagetool.rules.Rule;
 import org.languagetool.rules.patterns.AbstractPatternRule;
 import org.languagetool.rules.patterns.PatternRuleLoader;
@@ -36,17 +34,24 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+
+import org.languagetool.rules.FakeRule;
+import org.languagetool.rules.RuleMatch;
+import static org.junit.Assert.assertEquals;
+
 public class GermanTest extends LanguageSpecificTest {
   
   @Test
   public void testLanguage() throws IOException {
-    // NOTE: this text needs to be kept in sync with WelcomeController.php's getDefaultDemoTexts():
-    String s = "Fügen Sie hier Ihren Text ein. Klicken Sie nach der Prüfung auf die farbig unterlegten Textstellen. oder nutzen Sie diesen Text als Beispiel für ein Paar Fehler , die LanguageTool erkennen kann: Ihm wurde Angst und bange. Mögliche stilistische Probleme werden blau hervorgehoben: Das ist besser wie vor drei Jahren. Eine Rechtschreibprüfun findet findet übrigens auch statt. Donnerstag, den 23.01.2019 war gutes Wetter. Die Beispiel endet hier.";
+    // NOTE: this text needs to be kept in sync with config.ts -> DEMO_TEXTS:
+    String s = "Schreiben Sie in diesem Textfeld oder fügen Sie einen Text ein. Ihr Text wird kontinuierlich über prüft und Fehler werden farbig unterstrichen. Rechtshcreibfehler werden rot markirt, Grammatikfehler werden gelb hervor gehoben und Stilfehler werden, anders wie die anderen Fehler, blau unterstrichen. wussten Sie dass Synonyme per Doppelklick auf ein Wort aufgerufen werden können? Nutzen sie LanguageTool in allen Lebenslagen, etwa wenn Sie am Donnerstag, dem 13. Mai 2022, einen Basketballkorb in 10 Fuß Höhe montieren möchten.";
     Language lang = Languages.getLanguageForShortCode("de-DE");
     testDemoText(lang, s,
-      Arrays.asList("UPPERCASE_SENTENCE_START", "EIN_PAAR", "COMMA_PARENTHESIS_WHITESPACE", "ANGST_UND_BANGE", "KOMP_WIE", "GERMAN_SPELLER_RULE", "SAGT_RUFT", "DATUM_WOCHENTAG", "DE_AGREEMENT")
+      Arrays.asList("ZUSAMMENSCHREIBUNG_UEBER", "GERMAN_SPELLER_RULE", "GERMAN_SPELLER_RULE", "ZUSAMMENSCHREIBUNG_HER", "KOMP_WIE", "UPPERCASE_SENTENCE_START", "KOMMA_ZWISCHEN_HAUPT_UND_NEBENSATZ_2", "AUFFORDERUNG_SIE", "DE_DATE_WEEKDAY", "EINHEITEN_METRISCH")
     );
-    runTests(lang);
+    runTests(lang, null, "_");
   }
 
   @Test
@@ -54,14 +59,21 @@ public class GermanTest extends LanguageSpecificTest {
     Language lang = Languages.getLanguageForShortCode("de-DE");
     JLanguageTool lt = new JLanguageTool(lang);
     for (Rule rule : lt.getAllRules()) {
-      if (rule instanceof AbstractPatternRule) {
-        AbstractPatternRule patternRule = (AbstractPatternRule) rule;
+      if (rule instanceof AbstractPatternRule patternRule) {
         String message = patternRule.getMessage();
         String origWord = null;
         String suggWord = null;
         if (message.contains("Kommata")) {
           origWord = "Kommata";
           suggWord = "Kommas";
+        }
+        if (message.contains("Präfix")) {
+          origWord = "Präfix";
+          suggWord = "Vorsilbe";
+        }
+        if (message.contains("Suffix")) {
+          origWord = "Suffix";
+          suggWord = "Nachsilbe";
         }
         if (message.contains("Substantiv")) {
           origWord = "Substantiv";
@@ -93,17 +105,65 @@ public class GermanTest extends LanguageSpecificTest {
         }
         if (message.contains("auseinandergeschrieben")) {
           origWord = "auseinandergeschrieben";
-          suggWord = "getrennt geschrieben";
+          suggWord = "auseinander geschrieben";
         }
         if (message.contains("getrenntgeschrieben")) {
           origWord = "getrenntgeschrieben";
           suggWord = "getrennt geschrieben";
+        }
+        if (message.contains("Meinten sie")) {
+          origWord = "Meinten sie";
+          suggWord = "Meinten Sie";
+        }
+        if (message.contains("meinten sie")) {
+          origWord = "meinten sie";
+          suggWord = "meinten Sie";
+        }
+        if (message.toLowerCase().contains("wollen sie")) {
+          origWord = "Wollen Sie";
+          suggWord = "Möchten Sie";
         }
         if (origWord != null) {
           System.err.println("WARNING: Aus Gründen der Einheitlichkeit bitte '" + suggWord + "' nutzen statt '" + origWord + "' in der Regel " + patternRule.getFullId() + ", message: '" + message + "'");
         }
       }
     }
+  }
+  
+  @Test
+  public void testGenderCharsAgainstAllRules() throws IOException {
+    Language lang = Languages.getLanguageForShortCode("de-DE");
+    JLanguageTool lt = new JLanguageTool(lang);
+    assertThat(lt.check("Die Jurist_innenausbildung ist schwer.").size(), is(0));
+    assertThat(lt.check("Die Jurist*innenausbildung ist schwer.").size(), is(0));
+    assertThat(lt.check("Die Jurist:innenausbildung ist schwer.").size(), is(0));
+    assertThat(lt.check("Die Datei heißt Juriest_innenausbieldung.mfgjg und ist leer.").size(), is(0));
+    assertThat(lt.check("Alles richtig_stimmt.").size(), is(0)); //not treated by GermanSpellerRule.removeGenderCompoundMatches
+    assertThat(lt.check("Das ist flasch_nittrichtig.").size(), is(2)); //not treated by GermanSpellerRule.removeGenderCompoundMatches
+  }
+
+  @Test
+  public void testMergingOfGrammarCorrections() throws IOException {
+    Language lang = new German();
+    JLanguageTool lt = new JLanguageTool(lang);
+    AnalyzedSentence analyzedSentence = lt.getAnalyzedSentence("Diese Mail ist z Hd Frau Müllers.");
+
+    // Mocking two adjacent grammar issues
+    RuleMatch ruleMatch1 = new RuleMatch(new FakeRule("AI_DE_GGEC_TEST"), analyzedSentence, 16, 24, "Adjektivfehler");
+    ruleMatch1.setSuggestedReplacement("absolute");
+    RuleMatch ruleMatch2 = new RuleMatch(new FakeRule("AI_DE_GGEC_TEST2"), analyzedSentence, 25, 28, "Adjektivfehler");
+    ruleMatch2.setSuggestedReplacement("sich");
+
+    List<RuleMatch> ruleMatches = new ArrayList<>();
+    ruleMatches.add(ruleMatch1);
+    ruleMatches.add(ruleMatch2);
+
+    // Process the rule matches
+    List<RuleMatch> processedMatches = lang.filterRuleMatches(ruleMatches, null, null);
+
+    // Asserts
+    assertEquals("absolute sich", processedMatches.get(0).getSuggestedReplacements().get(0));
+    assertEquals("AI_DE_MERGED_MATCH", processedMatches.get(0).getSpecificRuleId());
   }
 
   // test that patterns with 'ß' also contain that pattern with 'ss' so the rule can match for de-CH users
@@ -116,7 +176,7 @@ public class GermanTest extends LanguageSpecificTest {
     for (String ruleFileName : lang.getRuleFileNames()) {
       int i = 0;
       InputStream is = this.getClass().getResourceAsStream(ruleFileName);
-      List<AbstractPatternRule> rules = new PatternRuleLoader().getRules(is, dirBase + "/" + ruleFileName);
+      List<AbstractPatternRule> rules = new PatternRuleLoader().getRules(is, dirBase + "/" + ruleFileName, lang);
       for (AbstractPatternRule rule : rules) {
         if (ignoreIds.contains(rule.getId())) {
           continue;
@@ -161,13 +221,14 @@ public class GermanTest extends LanguageSpecificTest {
   private boolean lacksSwitzerlandSpelling(String pattern) {
     return pattern != null && pattern.contains("ß") 
       && !pattern.contains("(ß|ss)") 
-      && !containsSwitzerlandSpelling(pattern) 
+      && !pattern.contains("(ss|ß)")
+      && !containsSwitzerlandSpelling(pattern)
       && !allInBrackets('ß', pattern);
   }
 
   // only works for e.g.: foo|baß|bla
   private boolean containsSwitzerlandSpelling(String pattern) {
-    String[] parts = pattern.split("\\|");
+    String[] parts = pattern.split("[|()]");
     for (String part : parts) {
       if (part.contains("ß")) {
         if (!cleanSyntax(pattern).contains(cleanSyntax(part).replace("ß", "ss"))) {

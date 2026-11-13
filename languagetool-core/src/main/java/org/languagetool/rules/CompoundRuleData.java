@@ -18,10 +18,11 @@
  */
 package org.languagetool.rules;
 
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
+import org.languagetool.JLanguageTool;
+
 import java.io.IOException;
 import java.util.*;
-
-import org.languagetool.JLanguageTool;
 
 /**
  * Data about words that are compounds and should thus not be written
@@ -30,11 +31,13 @@ import org.languagetool.JLanguageTool;
  */
 public class CompoundRuleData {
 
-  private final Set<String> incorrectCompounds = new HashSet<>();
-  private final Set<String> noDashSuggestion = new HashSet<>();
-  private final Set<String> noDashLowerCaseSuggestion = new HashSet<>();
-  private final Set<String> onlyDashSuggestion = new HashSet<>();
+  private final Set<String> incorrectCompounds = new ObjectOpenHashSet<>();
+  private final Set<String> joinedSuggestion = new ObjectOpenHashSet<>();
+  private final Set<String> joinedLowerCaseSuggestion = new ObjectOpenHashSet<>();
+  private final Set<String> dashSuggestion = new ObjectOpenHashSet<>();
+  private final Set<String> firstWords = new ObjectOpenHashSet<>();
   private final LineExpander expander;
+  private boolean hasDigitPatterns = false;
 
   public CompoundRuleData(String path) {
     this(new String[] {path});
@@ -55,20 +58,33 @@ public class CompoundRuleData {
     }
   }
 
-  Set<String> getIncorrectCompounds() {
+  public Set<String> getIncorrectCompounds() {
     return Collections.unmodifiableSet(incorrectCompounds);
   }
 
-  Set<String> getNoDashSuggestion() {
-    return Collections.unmodifiableSet(noDashSuggestion);
+  public Set<String> getJoinedSuggestion() {
+    return Collections.unmodifiableSet(joinedSuggestion);
   }
 
-  Set<String> getOnlyDashSuggestion() {
-    return Collections.unmodifiableSet(onlyDashSuggestion);
+  public Set<String> getDashSuggestion() {
+    return Collections.unmodifiableSet(dashSuggestion);
   }
 
-  Set<String> getNoDashLowerCaseSuggestion() {
-	return Collections.unmodifiableSet(noDashLowerCaseSuggestion);
+  public Set<String> getJoinedLowerCaseSuggestion() {
+	return Collections.unmodifiableSet(joinedLowerCaseSuggestion);
+  }
+
+  /**
+   * @return the lower-cased first words of all known incorrect compounds. Used to quickly discard
+   * text positions where no compound can start.
+   * @since 6.9
+   */
+  public Set<String> getFirstWords() {
+    return Collections.unmodifiableSet(firstWords);
+  }
+
+  public boolean hasDigitPatterns() {
+    return hasDigitPatterns;
   }
 
   private void loadCompoundFile(String path) throws IOException {
@@ -77,6 +93,7 @@ public class CompoundRuleData {
       if (line.isEmpty() || line.startsWith("#")) {
         continue;     // ignore comments
       }
+      line = line.replaceFirst("#.*$", "").trim();
       List<String> expandedLines = new ArrayList<>();
       if (expander != null) {
         expandedLines = expander.expandLine(line);
@@ -88,19 +105,34 @@ public class CompoundRuleData {
         validateLine(path, expLine);
         if (expLine.endsWith("+")) {
           expLine = removeLastCharacter(expLine);
-          noDashSuggestion.add(expLine);
+          joinedSuggestion.add(expLine);
         } else if (expLine.endsWith("*")) {
           expLine = removeLastCharacter(expLine);
-          onlyDashSuggestion.add(expLine);
+          dashSuggestion.add(expLine);
         } else if (expLine.endsWith("?")) { // github issue #779
           expLine = removeLastCharacter(expLine);
-          noDashSuggestion.add(expLine);
-          noDashLowerCaseSuggestion.add(expLine);
+          joinedSuggestion.add(expLine);
+          joinedLowerCaseSuggestion.add(expLine);
         } else if (expLine.endsWith("$")) { // github issue #779
           expLine = removeLastCharacter(expLine);
-          noDashLowerCaseSuggestion.add(expLine);
+          joinedSuggestion.add(expLine);
+          dashSuggestion.add(expLine);
+          joinedLowerCaseSuggestion.add(expLine);
+        } else {
+          joinedSuggestion.add(expLine);
+          dashSuggestion.add(expLine);
         }
         incorrectCompounds.add(expLine);
+        int spaceIndex = expLine.indexOf(' ');
+        if (spaceIndex > 0) {
+          String firstWord = expLine.substring(0, spaceIndex).toLowerCase();
+          if (!firstWord.contains("\\d")) {
+            firstWords.add(firstWord);
+          }
+        }
+        if (expLine.contains("\\d")) {
+          hasDigitPatterns = true;
+        }
       }
     }
   }

@@ -18,6 +18,8 @@
  */
 package org.languagetool.rules.nl;
 
+import org.languagetool.Language;
+import org.languagetool.UserConfig;
 import org.languagetool.rules.AbstractCompoundRule;
 import org.languagetool.rules.CompoundRuleData;
 
@@ -29,15 +31,16 @@ import java.util.ResourceBundle;
  */
 public class CompoundRule extends AbstractCompoundRule {
 
-  private static final CompoundRuleData compoundData = new CompoundRuleData("/nl/compounds.txt");
+  private static volatile CompoundRuleData compoundData;
 
-  public CompoundRule(ResourceBundle messages) throws IOException {
-    super(messages,
+  public CompoundRule(ResourceBundle messages, Language lang, UserConfig userConfig) throws IOException {
+    super(messages, lang, userConfig,
             "Dit woord hoort waarschijnlijk aaneengeschreven met een koppelteken.",
             "Dit woord hoort waarschijnlijk aaneengeschreven.",
             "Deze uitdrukking hoort mogelijk aan elkaar, eventueel met een koppelteken.",
             "Koppeltekenprobleem");
     super.sentenceStartsWithUpperCase = true;
+    super.useSubRuleSpecificIds();
   }
 
   @Override
@@ -47,12 +50,22 @@ public class CompoundRule extends AbstractCompoundRule {
 
   @Override
   public String getDescription() {
-    return "Woorden die aaneen geschreven horen, bijvoorbeeld 'zee-egel' i.p.v. 'zee egel'";
+    return "Woorden die aaneengeschreven horen, bijvoorbeeld 'zee-egel' i.p.v. 'zee egel': $match";
   }
 
   @Override
-  protected CompoundRuleData getCompoundRuleData() {
-    return compoundData;
+  public CompoundRuleData getCompoundRuleData() {
+    CompoundRuleData data = compoundData;
+    if (data == null) {
+      synchronized (CompoundRule.class) {
+        data = compoundData;
+        if (data == null) {
+          compoundData = data = new CompoundRuleData("/nl/compounds.txt");
+        }
+      }
+    }
+
+    return data;
   }
 
 }

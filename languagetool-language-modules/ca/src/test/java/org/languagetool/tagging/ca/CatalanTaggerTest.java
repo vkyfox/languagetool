@@ -23,27 +23,33 @@ import org.junit.Test;
 import org.languagetool.TestTools;
 import org.languagetool.language.Catalan;
 import org.languagetool.tokenizers.WordTokenizer;
+import org.languagetool.tokenizers.ca.CatalanWordTokenizer;
 
 import java.io.IOException;
 
 public class CatalanTaggerTest {
 
-  private CatalanTagger tagger;
+  private CatalanTagger tagger = CatalanTagger.INSTANCE_CAT;
   private WordTokenizer tokenizer;
 
   @Before
   public void setUp() {
-    tagger = new CatalanTagger(new Catalan());
-    tokenizer = new WordTokenizer();
+    tokenizer = CatalanWordTokenizer.INSTANCE;
   }
 
   @Test
   public void testDictionary() throws IOException {
-    TestTools.testDictionary(tagger, new Catalan());
+    TestTools.testDictionary(tagger, Catalan.getInstance());
   }
 
   @Test
   public void testTagger() throws IOException {
+
+    //verbs incorrectes, analitzats amb flexió
+    TestTools.myAssert("enfotia", "enfotia/[enfotre]VMII1S00|enfotia/[enfotre]VMII3S00", tokenizer, tagger);
+    TestTools.myAssert("quebrada", "quebrada/[quebrar]VMP00SF0", tokenizer, tagger);
+    TestTools.myAssert("liava", "liava/[liar]VMII1S00|liava/[liar]VMII3S00", tokenizer, tagger);
+
     TestTools.myAssert("UPF", "UPF/[UPF]NPFSO00", tokenizer, tagger);
     TestTools
         .myAssert(
@@ -57,5 +63,9 @@ public class CatalanTaggerTest {
         "Acomplexadament/[acomplexadament]RG", tokenizer, tagger);
     TestTools.myAssert("FRANÇA",
         "FRANÇA/[França]NPFSG00", tokenizer, tagger);
+    // combining characters
+    TestTools.myAssert("dema\u0300", "dema\u0300/[demà]NCMS000|dema\u0300/[demà]RG", tokenizer, tagger);
+    TestTools.myAssert("Folklòrico-populars",
+        "Folklòrico-populars/[folklòrico-popular]AQ0CP0", tokenizer, tagger);
   }
 }

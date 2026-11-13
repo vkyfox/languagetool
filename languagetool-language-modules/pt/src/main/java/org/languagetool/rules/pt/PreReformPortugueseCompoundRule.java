@@ -18,10 +18,9 @@
  */
 package org.languagetool.rules.pt;
 
-import org.languagetool.rules.AbstractCompoundRule;
-import org.languagetool.rules.CompoundRuleData;
-import org.languagetool.rules.Categories;
-import org.languagetool.rules.ITSIssueType;
+import org.languagetool.Language;
+import org.languagetool.UserConfig;
+import org.languagetool.rules.*;
 
 import java.io.IOException;
 import java.util.ResourceBundle;
@@ -32,16 +31,17 @@ import java.util.ResourceBundle;
  */
 public class PreReformPortugueseCompoundRule extends AbstractCompoundRule {
 
-  private static final CompoundRuleData compoundData = new CompoundRuleData("/pt/pre-reform-compounds.txt");
+  private static volatile CompoundRuleData compoundData;
 
-  public PreReformPortugueseCompoundRule(ResourceBundle messages) throws IOException {    
-    super(messages,
+  public PreReformPortugueseCompoundRule(ResourceBundle messages, Language lang, UserConfig userConfig) throws IOException {    
+    super(messages, lang, userConfig,
             "Esta palavra é hifenizada.",
             "Esta palavra é composta por justaposição.",
             "Esta palavra pode ser composta por justaposição ou hifenizada.",
             "Este conjunto forma uma palavra composta.");
     super.setCategory(Categories.COMPOUNDING.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Grammar);
+    this.useSubRuleSpecificIds();
   }
 
   @Override
@@ -55,8 +55,18 @@ public class PreReformPortugueseCompoundRule extends AbstractCompoundRule {
   }
 
   @Override
-  protected CompoundRuleData getCompoundRuleData() {
-    return compoundData;
+  public CompoundRuleData getCompoundRuleData() {
+    CompoundRuleData data = compoundData;
+    if (data == null) {
+      synchronized (PreReformPortugueseCompoundRule.class) {
+        data = compoundData;
+        if (data == null) {
+          compoundData = data = new CompoundRuleData("/pt/pre-reform-compounds.txt");
+        }
+      }
+    }
+
+    return data;
   }
 
 }

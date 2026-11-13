@@ -36,74 +36,85 @@ public class MorfologikPolishSpellerRuleTest {
     final MorfologikPolishSpellerRule rule =
         new MorfologikPolishSpellerRule (TestTools.getMessages("pl"), new Polish(), null, Collections.emptyList());
 
-    final JLanguageTool langTool = new JLanguageTool(new Polish());
+    final JLanguageTool lt = new JLanguageTool(new Polish());
 
     // correct sentences:
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("To jest test bez jakiegokolwiek błędu.")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Żółw na starość wydziela dziwną woń.")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Żółw na starość wydziela dziwną woń numer 1234.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("To jest test bez jakiegokolwiek błędu.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Żółw na starość wydziela dziwną woń.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Żółw na starość wydziela dziwną woń numer 1234.")).length);
 
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("W MI-6 pracuje 15-letni agent.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("W MI-6 pracuje 15-letni agent.")).length);
     //test for "LanguageTool":
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("LanguageTool jest świetny!")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("LanguageTool jest świetny!")).length);
 
     //test for the ignored uppercase word "Gdym":
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Gdym to zobaczył, zdębiałem.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Gdym to zobaczył, zdębiałem.")).length);
 
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence(",")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("123454")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence(",")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("123454")).length);
+
+    //test for accentuated (foreign) words, such as "purée"
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Roztrzepać widelcem jajka razem z purée z dyni.")).length);
 
     //compound word with ignored part "techniczno"
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Bogactwo nie rośnie proporcjonalnie do jej rozwoju techniczno-terytorialnego.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Bogactwo nie rośnie proporcjonalnie do jej rozwoju techniczno-terytorialnego.")).length);
 
     //compound word with one of the compound prefixes:
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Antypostmodernistyczna batalia hiperfilozofów")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Antypostmodernistyczna batalia hiperfilozofów")).length);
    //compound words: "trzynastobitowy", "zgniłożółty"
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Trzynastobitowe przystawki w kolorze zgniłożółtym")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Trzynastobitowe przystawki w kolorze zgniłożółtym")).length);
+
+    //compound word that failed test when CamelCase was on:
+
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Nie spotkałem tutaj Saint-Exupérych")).length);
+
 
     //incorrect sentences:
 
-    RuleMatch[] matches = rule.match(langTool.getAnalyzedSentence("Zolw"));
+    RuleMatch[] matches = rule.match(lt.getAnalyzedSentence("Zolw"));
     // check match positions:
     assertEquals(1, matches.length);
     assertEquals(0, matches[0].getFromPos());
     assertEquals(4, matches[0].getToPos());
     assertEquals("Żółw", matches[0].getSuggestedReplacements().get(0));
 
-    matches = rule.match(langTool.getAnalyzedSentence("😂 Zolw"));
+    matches = rule.match(lt.getAnalyzedSentence("😂 Zolw"));
     // check match positions:
     assertEquals(1, matches.length);
     assertEquals(3, matches[0].getFromPos());
     assertEquals(7, matches[0].getToPos());
     assertEquals("Żółw", matches[0].getSuggestedReplacements().get(0));
 
-    matches = rule.match(langTool.getAnalyzedSentence("😂😂 Zolw"));
+    matches = rule.match(lt.getAnalyzedSentence("😂😂 Zolw"));
     // check match positions:
     assertEquals(1, matches.length);
     assertEquals(5, matches[0].getFromPos());
     assertEquals(9, matches[0].getToPos());
     assertEquals("Żółw", matches[0].getSuggestedReplacements().get(0));
 
-    assertEquals(1, rule.match(langTool.getAnalyzedSentence("aõh")).length);
+    assertEquals(1, rule.match(lt.getAnalyzedSentence("aõh")).length);
 
     //tokenizing on prefixes niby- and quasi-
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Niby-artysta spotkał się z quasi-opiekunem i niby-Francuzem.")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Niby-artysta spotkał się z quasi-opiekunem i niby-Francuzem.")).length);
 
-    final RuleMatch[] prunedMatches = rule.match(langTool.getAnalyzedSentence("Clarkem"));
+    final RuleMatch[] prunedMatches = rule.match(lt.getAnalyzedSentence("Clarkem"));
     assertEquals(1, prunedMatches.length);
-    assertEquals(5, prunedMatches[0].getSuggestedReplacements().size());
+    assertEquals(6, prunedMatches[0].getSuggestedReplacements().size());
     assertEquals("Clarke", prunedMatches[0].getSuggestedReplacements().get(0));
-    assertEquals("Clarkiem", prunedMatches[0].getSuggestedReplacements().get(1));
-    assertEquals("Ciarkę", prunedMatches[0].getSuggestedReplacements().get(2));
-    assertEquals("Clarkom", prunedMatches[0].getSuggestedReplacements().get(3));
-    assertEquals("Czarkę", prunedMatches[0].getSuggestedReplacements().get(4));
+    assertEquals("Czarkę", prunedMatches[0].getSuggestedReplacements().get(1));
+    assertEquals("Clarkiem", prunedMatches[0].getSuggestedReplacements().get(2));
+    assertEquals("Ciarkę", prunedMatches[0].getSuggestedReplacements().get(3));
+    assertEquals("Clarkom", prunedMatches[0].getSuggestedReplacements().get(4));
+
+    //with default ignore-camel-case == yes this was not catched at all
+    assertEquals(1, rule.match(lt.getAnalyzedSentence("Saint-Exupérymu")).length);
 
     // There should be a match, this is not a prefix!
 
-    assertEquals(1, rule.match(langTool.getAnalyzedSentence("premoc")).length);
+    assertEquals(1, rule.match(lt.getAnalyzedSentence("premoc")).length);
 
     // "0" instead "o"...
-    assertEquals(1, rule.match(langTool.getAnalyzedSentence("dziwneg0")).length);
+    assertEquals(1, rule.match(lt.getAnalyzedSentence("dziwneg0")).length);
   }
 
 }

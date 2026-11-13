@@ -153,7 +153,7 @@ public final class Tools {
    * @return String UI element string without mnemonics.
    */
   public static String getLabel(String label) {
-    return label.replaceAll("&([^&])", "$1").replaceAll("&&", "&");
+    return label.replaceAll("&([^&])", "$1").replace("&&", "&");
   }
 
   /**
@@ -191,34 +191,34 @@ public final class Tools {
   /**
    * @since 3.3
    */
-  public static void configureFromRules(JLanguageTool langTool, Configuration config) {
+  public static void configureFromRules(JLanguageTool lt, Configuration config) {
     Set<String> disabledRules = config.getDisabledRuleIds();
     if (disabledRules != null) {
       for (String ruleId : disabledRules) {
-        langTool.disableRule(ruleId);
+        lt.disableRule(ruleId);
       }
     }
     Set<String> disabledCategories = config.getDisabledCategoryNames();
     if (disabledCategories != null) {
       for (String categoryName : disabledCategories) {
-        langTool.disableCategory(new CategoryId(categoryName));
+        lt.disableCategory(new CategoryId(categoryName));
       }
     }
     if(config.getEnabledRulesOnly()) {
-      for (Rule rule : langTool.getAllRules()) {
-        langTool.disableRule(rule.getId());
+      for (Rule rule : lt.getAllRules()) {
+        lt.disableRule(rule.getId());
       }
     }
     Set<String> enabledRules = config.getEnabledRuleIds();
     if (enabledRules != null) {
       for (String ruleName : enabledRules) {
-        langTool.enableRule(ruleName);
+        lt.enableRule(ruleName);
       }
     }
-    langTool.setConfigValues(config.getConfigurableValues());
+    lt.setConfigValues(config.getConfigurableValues());
   }
   
-  static void addHyperlinkListener(JTextPane pane) {
+  public static void addHyperlinkListener(JTextPane pane) {
     pane.addHyperlinkListener(new HyperlinkListener() {
       @Override
       public void hyperlinkUpdate(HyperlinkEvent e) {
@@ -235,7 +235,7 @@ public final class Tools {
    * @param url the URL to be displayed
    * @since 4.1
    */
-  static void openURL(String url) {
+  public static void openURL(String url) {
     try {
       openURL(new URL(url));
     } catch (MalformedURLException ex) {
@@ -278,7 +278,7 @@ public final class Tools {
     textPane.setBackground(new Color(0, 0, 0, 0));
     Tools.addHyperlinkListener(textPane);
     textPane.setSize(dialogWidth, Short.MAX_VALUE);
-    String messageWithBold = message.replaceAll("<suggestion>", "<b>").replaceAll("</suggestion>", "</b>");
+    String messageWithBold = message.replace("<suggestion>", "<b>").replace("</suggestion>", "</b>");
     String exampleSentences = getExampleSentences(rule, messages);
     String url = "http://community.languagetool.org/rule/show/" + encodeUrl(rule)
             + "?lang=" + lang + "&amp;ref=standalone-gui";
@@ -300,7 +300,7 @@ public final class Tools {
             JOptionPane.INFORMATION_MESSAGE);
   }
 
-  private static String encodeUrl(Rule rule) {
+  public static String encodeUrl(Rule rule) {
     try {
       return URLEncoder.encode(rule.getId(), "utf-8");
     } catch (UnsupportedEncodingException e) {
@@ -308,7 +308,7 @@ public final class Tools {
     }
   }
 
-  private static String getExampleSentences(Rule rule, ResourceBundle messages) {
+  public static String getExampleSentences(Rule rule, ResourceBundle messages) {
     StringBuilder examples = new StringBuilder(200);
     List<IncorrectExample> incorrectExamples = rule.getIncorrectExamples();
     if (incorrectExamples.size() > 0) {
@@ -324,7 +324,7 @@ public final class Tools {
     } else if (incorrectExamples.size() > 0) {
       IncorrectExample incorrectExample = incorrectExamples.iterator().next();
       List<String> corrections = incorrectExample.getCorrections();
-      if (!corrections.isEmpty()) {
+      if (!corrections.isEmpty() && !corrections.get(0).isEmpty()) {
         String incorrectSentence = incorrectExamples.iterator().next().getExample();
         String correctedSentence = incorrectSentence.replaceAll("<marker>.*?</marker>",
                 "<span style='background-color:#80ff80'>" + corrections.get(0) + "</span>");
@@ -337,7 +337,7 @@ public final class Tools {
     return examples.toString();
   }
 
-  private static String formatURL(URL url) {
+  public static String formatURL(URL url) {
     if (url == null) {
       return "";
     }

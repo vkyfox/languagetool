@@ -19,12 +19,11 @@
 
 package org.languagetool.rules.ru;
 
-import org.languagetool.Languages;
+import com.hankcs.algorithm.AhoCorasickDoubleArrayTrie;
 import org.languagetool.rules.AbstractDashRule;
-import org.languagetool.rules.patterns.PatternRule;
-
-import java.io.IOException;
-import java.util.List;
+import java.util.Collections;
+import java.util.ResourceBundle;
+import java.util.regex.Pattern;
 
 /**
  * Check for compounds written with dashes instead of hyphens.
@@ -32,12 +31,14 @@ import java.util.List;
  */
 public class RussianDashRule extends AbstractDashRule {
 
-  private static final List<PatternRule> dashRules = loadCompoundFile("/ru/compounds.txt",
-          "Использовано тире вместо дефиса. Предполагалось: ", Languages.getLanguageForShortCode("ru"));
+  private static final Pattern PATTERN = Pattern.compile("[\u0400-\u04FF]");
 
-  public RussianDashRule() throws IOException {
-    super(dashRules);
-     setDefaultOff(); // Slows down start up. See GitHub issue #1016.
+  private static volatile AhoCorasickDoubleArrayTrie<String> trie;
+
+  public RussianDashRule(ResourceBundle messages) {
+    super(messages);
+  //  setDefaultTempOff(); // Slows down start up. See GitHub issue #1016.
+    setTags(Collections.emptyList());
   }
 
   @Override
@@ -47,7 +48,31 @@ public class RussianDashRule extends AbstractDashRule {
 
   @Override
   public String getDescription() {
-    return "Проверка на использование тире вместо дефиса (то есть «из — за» вместо «из-за»).";
+    return "Тире вместо дефиса («из — за» вместо «из-за»).";
+  }
+
+  @Override
+  public String getMessage() {
+    return "Использовано тире вместо дефиса.";
+  }
+
+  @Override
+  protected boolean isBoundary(String s) {
+    return !PATTERN.matcher(s).matches();
+  }
+
+  @Override
+  protected AhoCorasickDoubleArrayTrie<String> getCompoundsData() {
+    AhoCorasickDoubleArrayTrie<String> data = trie;
+    if (data == null) {
+      synchronized (RussianDashRule.class) {
+        data = trie;
+        if (data == null) {
+          trie = data = loadCompoundFile("/ru/compounds.txt");
+        }
+      }
+    }
+    return data;
   }
 
 }

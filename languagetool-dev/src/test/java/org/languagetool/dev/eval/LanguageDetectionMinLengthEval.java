@@ -22,16 +22,15 @@ import com.google.common.io.CharStreams;
 import org.languagetool.DetectedLanguage;
 import org.languagetool.Language;
 import org.languagetool.Languages;
-import org.languagetool.language.LanguageIdentifier;
+import org.languagetool.language.identifier.LanguageIdentifier;
+import org.languagetool.language.identifier.LanguageIdentifierService;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Evaluate the quality of our language detection - looking for shortest strings still being detected correctly.
@@ -41,15 +40,24 @@ class LanguageDetectionMinLengthEval {
 
   private final LanguageIdentifier languageIdentifier;
 
+  private static final int MIN_INPUT_LEN = 5;
+  private static final int MAX_INPUT_LEN = 30;
+
   private int totalInputs = 0;
   private int totalFailures = 0;
 
   private LanguageDetectionMinLengthEval() {
-    languageIdentifier = new LanguageIdentifier();
-    //languageIdentifier = new CLD2Identifier();
-    //languageIdentifier.enableFasttext(new File("/path/to/fasttext/binary"), new File("/path/to/fasttext/model"));
-    // Daniel's paths:
-    //languageIdentifier.enableFasttext(new File("/prg/fastText-0.1.0/fasttext"), new File("/prg/fastText-0.1.0/data/lid.176.bin"));
+//    Stefan 's paths
+    File ngrams = new File("/home/stefan/Dokumente/languagetool/data/model_ml50_new.zip");
+    File fastTextBin = new File("/home/stefan/Dokumente/languagetool/data/fasttext/fasttext");
+    File fastTextModel = new File("/home/stefan/Dokumente/languagetool/data/fasttext/lid.176.bin");
+//    Daniel's paths:
+//    File ngrams = new File("/home/languagetool/model_ml50_new.zip");
+//    File fastTextBin = new File("/home/languagetool/fasttext/fasttext");
+//    File fastTextModel = new File("/home/languagetool/fasttext/lid.176.bin");
+    languageIdentifier = LanguageIdentifierService.INSTANCE.getDefaultLanguageIdentifier(0, ngrams, fastTextBin, fastTextModel);
+//    languageIdentifier = LanguageIdentifierFactory.INSTANCE.getLocalLanguageIdentifier(Arrays.asList("de-DE", "en-US"));
+//    languageIdentifier = LanguageIdentifierFactory.INSTANCE.getLocalLanguageIdentifier(null);
   }
 
   private float evaluate(Language language) throws IOException {
@@ -63,10 +71,24 @@ class LanguageDetectionMinLengthEval {
       String maxText = null;
       int minChars = 0;
       int failures = 0;
+      int linesConsidered = 0;
       List<String> list = getLines(stream);
       for (String line : list) {
+        if (line.trim().isEmpty()) {
+          System.err.println("Skipping empty input for " + language.getShortCode());
+          continue;
+        }
+        if (line.trim().length() < MIN_INPUT_LEN) {
+          System.err.println("Skipping short input for " + language.getShortCode() + ": " + line);
+          continue;
+        }
         try {
           int minChar = getShortestCorrectDetection(line, language);
+          if (minChar == -1) {
+            System.err.println("Skipping line, could not find minimum text length for '" + line + "'");
+            continue;
+          }
+          linesConsidered++;
           minChars += minChar;
           if (minChar > minCharsMax) {
             minCharsMax = minChar;
@@ -77,7 +99,7 @@ class LanguageDetectionMinLengthEval {
           failures++;
         }
       }
-      float avgMinChars = (float) minChars / list.size();
+      float avgMinChars = (float) minChars / linesConsidered;
       System.out.printf(Locale.ENGLISH, "Average minimum size still correctly detected: %.2f, max: %d ('%s')\n", avgMinChars, minCharsMax, maxText);
       if (failures > 0) {
         System.out.println("Detection failures: " + failures + " of " + list.size());
@@ -89,10 +111,15 @@ class LanguageDetectionMinLengthEval {
 
   private int getShortestCorrectDetection(String line, Language expectedLanguage) {
     totalInputs++;
-    int textLength = 1;
-    for (int i = line.length(); i > 0; i--) {
+    int textLength = -1;
+    boolean stillOkay = true;
+    for (int i = Math.min(line.length(), MAX_INPUT_LEN); i > MIN_INPUT_LEN; i--) {
       String text = line.substring(0, i);
+      if (stillOkay) {
+        textLength = text.length();
+      }
       DetectedLanguage detectedLangObj = languageIdentifier.detectLanguage(text, Collections.emptyList(), Collections.emptyList());
+      //System.out.println("INPUT: " + text + " - " + text.length() + " - " + detectedLangObj);
       String detectedLang = null;
       if (detectedLangObj != null) {
         detectedLang = detectedLangObj.getDetectedLanguage().getShortCode();
@@ -100,46 +127,44 @@ class LanguageDetectionMinLengthEval {
       if (detectedLang == null && i == line.length()) {
         throw new DetectionException("Detection failed for '" + line + "', detected <null>");
       } else if (detectedLang == null) {
-        if (textLength == 1) {
-          textLength = i + 1;
-        }
         //System.out.println("minLen: " + textLength);
         //System.out.println("TEXT     : " + line);
         //System.out.println("TOO SHORT : " + text + " => " + detectedLang + " (" + textLength + ")");
+        stillOkay = false;
       } else if (!expectedLanguage.getShortCode().equals(detectedLang)){
         //System.out.printf(Locale.ENGLISH, "WRONG: Expected %s, but got %s -> %s (%.2f)%n", expectedLanguage.getShortCode(), detectedLang, text, detectedLangObj.getDetectionConfidence());
-        if (textLength == 1) {
-          textLength = i + 1;
-        }
+        //System.out.print("detectedLang: " + detectedLang + " does not match with expectedLanguage: " + expectedLanguage.getShortCode());
+        //System.out.print(" Text: \""  + text + "\" Scores: ");
+        //System.out.println(LanguageDetectionService.INSTANCE.getTmpResultSC().entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder())).collect(Collectors.toList()));
+        //System.out.println(LanguageDetectionService.INSTANCE.getTmpResultAll().entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder())).collect(Collectors.toList()));
+
+        stillOkay = false;
       } else {
         //System.out.println("STILL OKAY: " + text + " => " + detectedLang);
       }
     }
-    return textLength;
+    //System.out.println("textLen: " + (textLength+1));
+    return textLength + 1;
   }
 
   private List<String> getLines(InputStream stream) throws IOException {
     List<String> lines = CharStreams.readLines(new InputStreamReader(stream));
-    List<String> result = new ArrayList<>();
-    for (String line : lines) {
-      if (!line.startsWith("#")) {
-        result.add(line);
-      }
-    }
-    return result;
+    return lines.stream().filter(k -> !k.startsWith("#")).collect(Collectors.toList());
   }
 
   public static void main(String[] args) throws IOException {
+    System.out.println("Input length: " + MIN_INPUT_LEN + " to " + MAX_INPUT_LEN + " characters");
     LanguageDetectionMinLengthEval eval = new LanguageDetectionMinLengthEval();
     long startTime = System.currentTimeMillis();
     float minCharsTotal = 0;
     int languageCount = 0;
-    List<Language> languages = new ArrayList<>();
-    languages.addAll(Languages.get());
+    List<Language> languages = new ArrayList<>(Languages.get());
+//    List<Language> languages = Arrays.asList(Languages.getLanguageForShortCode("de"), Languages.getLanguageForShortCode("en"));
     //languages.add(new DynamicMorfologikLanguage("Norwegian (Bokmal)", "nb", new File("/home/dnaber/lt/dynamic-languages/no/nb_NO.dict")));
     //languages.add(new DynamicMorfologikLanguage("Norwegian (Nynorsk)", "nn", new File("/home/dnaber/lt/dynamic-languages/no/nn_NO.dict")));
     for (Language language : languages) {
-      //if ((language.getShortCode().equals("ja"))) { continue; }
+      // Japanese has no spellchecker and no common words file.  
+//      if (language.getShortCode().equals("ja")) { continue; }
       if (language.isVariant()) {
         continue;
       }
@@ -156,7 +181,7 @@ class LanguageDetectionMinLengthEval {
     System.out.printf(Locale.ENGLISH, "Avg. minimum chars: %.3f\n", avgMinChars);
   }
 
-  class DetectionException extends RuntimeException {
+  static class DetectionException extends RuntimeException {
     DetectionException(String s) {
       super(s);
     }

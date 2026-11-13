@@ -18,9 +18,12 @@
  */
 package org.languagetool;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
+
+import static org.languagetool.tools.StringInterner.intern;
 
 /**
  * A word (or punctuation, or whitespace) and its analysis (part-of-speech tag, lemma)
@@ -33,24 +36,26 @@ public final class AnalyzedToken {
   private final String posTag;
   private final String lemma;
   private final String lemmaOrToken;  // used only for matching with Elements
+  private String lemmaOrTokenLowerCase;  // lazily computed, benign race (deterministic value)
 
   private boolean isWhitespaceBefore;
   private boolean hasNoPOSTag;
 
   public AnalyzedToken(String token, String posTag, String lemma) {
-    this.token = Objects.requireNonNull(token, "token cannot be null");
-    this.posTag = posTag;
-    this.lemma = lemma;    
-    if (lemma == null) {
-      lemmaOrToken = token;
+    this.token = intern(Objects.requireNonNull(token, "token cannot be null"));
+    this.posTag = posTag != null ? intern(posTag.trim()) : null;
+    this.lemma = lemma != null ? intern(lemma) : null;
+    if (this.lemma == null) {
+      lemmaOrToken = this.token;
     } else {
-      lemmaOrToken = lemma;
+      lemmaOrToken = this.lemma;
     }
     hasNoPOSTag = (posTag == null 
         || JLanguageTool.SENTENCE_END_TAGNAME.equals(posTag)
         || JLanguageTool.PARAGRAPH_END_TAGNAME.equals(posTag));
   }
 
+  @NotNull
   public String getToken() {
     return token;
   }
@@ -69,6 +74,19 @@ public final class AnalyzedToken {
   @Nullable
   public String getLemma() {
     return lemma;
+  }
+
+  /**
+   * Lowercased lemma, or lowercased token if there's no lemma. Cached, as it's needed for every
+   * {@link AnalyzedSentence} built from this token.
+   */
+  String getLemmaOrTokenLowerCase() {
+    String result = lemmaOrTokenLowerCase;
+    if (result == null) {
+      result = lemmaOrToken.toLowerCase();
+      lemmaOrTokenLowerCase = result;
+    }
+    return result;
   }
 
   public void setWhitespaceBefore(boolean whitespaceBefore) {

@@ -18,32 +18,27 @@
  */
 package org.languagetool.tools;
 
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
-import org.languagetool.rules.Category;
-import org.languagetool.rules.CategoryId;
-import org.languagetool.rules.Rule;
-import org.languagetool.rules.RuleMatch;
+import org.languagetool.*;
+import org.languagetool.rules.*;
 import org.languagetool.rules.bitext.BitextRule;
 import org.languagetool.rules.patterns.PasswordAuthenticator;
-import org.languagetool.rules.patterns.bitext.BitextPatternRule;
-import org.languagetool.rules.patterns.bitext.BitextPatternRuleLoader;
-import org.languagetool.rules.patterns.bitext.FalseFriendsAsBitextLoader;
+import org.languagetool.rules.patterns.bitext.*;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.ParserConfigurationException;
 import java.io.*;
 import java.lang.reflect.Constructor;
-import java.net.Authenticator;
-import java.net.MalformedURLException;
-import java.net.NetPermission;
-import java.net.URL;
+import java.net.*;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.MessageFormat;
 import java.util.*;
 
 public final class Tools {
 
+  private static LinguServices linguServices = null;
+  
   private Tools() {
     // cannot construct, static methods only
   }
@@ -54,7 +49,7 @@ public final class Tools {
    */
   public static String i18n(ResourceBundle messages, String key, Object... messageArguments) {
     MessageFormat formatter = new MessageFormat("");
-    formatter.applyPattern(messages.getString(key).replaceAll("'", "''"));
+    formatter.applyPattern(messages.getString(key));
     return formatter.format(messageArguments);
   }
 
@@ -74,7 +69,7 @@ public final class Tools {
                                             List<BitextRule> bRules) throws IOException {
     AnalyzedSentence srcText = srcLt.getAnalyzedSentence(src);
     AnalyzedSentence trgText = trgLt.getAnalyzedSentence(trg);
-    List<Rule> nonBitextRules = trgLt.getAllRules();
+    List<Rule> nonBitextRules = trgLt.getAllActiveRules();
     List<RuleMatch> ruleMatches = trgLt.checkAnalyzedSentence(JLanguageTool.ParagraphHandling.NORMAL, nonBitextRules, trgText, true);
     for (BitextRule bRule : bRules) {
       RuleMatch[] curMatch = bRule.match(srcText, trgText);
@@ -263,17 +258,33 @@ public final class Tools {
   /**
    * Load a file from the classpath using {@link Class#getResourceAsStream(String)}.
    * Please load files in the {@code rules} and {@code resource} directories with
-   * {@link org.languagetool.databroker.ResourceDataBroker} instead.
+   * {@link org.languagetool.broker.ResourceDataBroker} instead.
    */
   public static InputStream getStream(String path) throws IOException {
     // the other ways to load the stream like
     // "Tools.class.getClass().getResourceAsStream(filename)"
     // don't work in a web context (using Grails):
-    InputStream is = Tools.class.getResourceAsStream(path);
+    InputStream is = JLanguageTool.getDataBroker().getAsStream(path);
     if (is == null) {
       throw new IOException("Could not load file from classpath: '" + path + "'");
     }
     return is;
+  }
+
+  public static InputStream getStream(String path, String requiredHash) throws IOException, NoSuchAlgorithmException {
+    byte[] data;
+
+    try (InputStream is = getStream(path)) {
+      data = is.readAllBytes();
+    }
+
+    MessageDigest md = MessageDigest.getInstance("SHA-256");
+    String computedHash = HexFormat.of().formatHex(md.digest(data));
+
+    if (!computedHash.equals(requiredHash)) {
+      throw new IOException("Checksum mismatch for the file '" + path + "': expected " + requiredHash + ", got " + computedHash);
+    }
+    return new ByteArrayInputStream(data);
   }
 
   /**
@@ -288,45 +299,62 @@ public final class Tools {
     disabledRuleIdsSet.addAll(disabledRuleIds);
     Set<String> enabledRuleIdsSet = new HashSet<>();
     enabledRuleIdsSet.addAll(enabledRuleIds);
-    selectRules(lt, Collections.emptySet(), Collections.emptySet(), disabledRuleIdsSet, enabledRuleIdsSet, useEnabledOnly);
+    selectRules(lt, Collections.emptySet(), Collections.emptySet(), disabledRuleIdsSet, enabledRuleIdsSet, useEnabledOnly, false);
   }
 
   /**
    * @since 3.3
    */
   public static void selectRules(JLanguageTool lt, Set<CategoryId> disabledCategories, Set<CategoryId> enabledCategories,
-                                 Set<String> disabledRules, Set<String> enabledRules, boolean useEnabledOnly) {
+                                 Set<String> disabledRules, Set<String> enabledRules, boolean useEnabledOnly, boolean enableTempOff) {
+    if (enableTempOff) {
+      for (Rule rule : lt.getAllRules()) {
+        if (rule.isDefaultTempOff()) {
+          System.out.println("Activating " + rule.getFullId() + ", which is default='temp_off'");
+          lt.enableRule(rule.getFullId());
+        }
+      }
+    }
     for (CategoryId id : disabledCategories) {
       lt.disableCategory(id);
     }
-    if (enabledCategories.size() > 0) {
-      for (CategoryId id : enabledCategories) {
-        lt.enableRuleCategory(id);
-      }
-      if (useEnabledOnly) {
-        // disable all rules except those in explicitly enabled categories, if any:
-        for (Rule rule : lt.getAllRules()) {
-          Category category = rule.getCategory();
-          if (category == null || !enabledCategories.contains(category.getId())) {
-            lt.disableRule(rule.getId());
-          }
-        }
-      }
+    for (CategoryId id : enabledCategories) {
+      lt.enableRuleCategory(id);
     }
     // disable rules that are disabled explicitly:
     for (String disabledRule : disabledRules) {
       lt.disableRule(disabledRule);
     }
     // enable rules
-    if (enabledRules.size() > 0) {
-      for (String ruleName : enabledRules) {
-        lt.enableRule(ruleName);
-      }
-      if (useEnabledOnly) {
-        // disable all rules except those enabled explicitly, if any:
+    for (String ruleName : enabledRules) {
+      lt.enableRule(ruleName);
+    }
+    if (useEnabledOnly) {
+      if (!enabledRules.isEmpty() && enabledCategories.isEmpty()) {
+        // With rule IDs only, disable every rule that was not enabled explicitly.
         for (Rule rule : lt.getAllRules()) {
-          if (!enabledRules.contains(rule.getId())) {
-            lt.disableRule(rule.getId());
+          boolean enabledById = enabledRules.contains(rule.getFullId()) || enabledRules.contains(rule.getId());
+          if (!enabledById) {
+            lt.disableRule(rule.getFullId());
+          }
+        }
+      } else if (!enabledCategories.isEmpty()) {
+        if (enabledRules.isEmpty()) {
+          // With categories only, disable categories outside the enabled set.
+          for (CategoryId categoryId : lt.getCategories().keySet()) {
+            if (!enabledCategories.contains(categoryId)) {
+              lt.disableCategory(categoryId);
+            }
+          }
+        } else {
+          // With both, keep each rule's current state inside enabled categories
+          // and add explicitly enabled rules from outside those categories.
+          for (Rule rule : lt.getAllRules()) {
+            boolean enabledById = enabledRules.contains(rule.getFullId()) || enabledRules.contains(rule.getId());
+            boolean inEnabledCategory = enabledCategories.contains(rule.getCategory().getId());
+            if (!enabledById && !inEnabledCategory) {
+              lt.disableRule(rule.getFullId());
+            }
           }
         }
       }
@@ -426,4 +454,26 @@ public final class Tools {
     return false;
   }
 
+  /**
+   * set linguistic services (only to introduce external speller for LT)
+   * since 5.7
+   */
+  public static void setLinguisticServices(LinguServices ls) {
+    linguServices = ls;
+  }
+  
+  /**
+   * since 5.7
+   */
+  public static boolean isExternSpeller() {
+    return linguServices != null;
+  }
+  
+  /**
+   * since 5.7
+   */
+  public static LinguServices getLinguisticServices() {
+    return linguServices;
+  }
+  
 }

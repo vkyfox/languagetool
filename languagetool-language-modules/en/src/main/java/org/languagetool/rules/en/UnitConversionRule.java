@@ -21,10 +21,12 @@
 
 package org.languagetool.rules.en;
 
+import org.languagetool.Tag;
 import org.languagetool.rules.AbstractUnitConversionRule;
 
 import java.math.RoundingMode;
 import java.text.NumberFormat;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
@@ -35,11 +37,11 @@ import static tech.units.indriya.unit.Units.*;
  */
 public class UnitConversionRule extends AbstractUnitConversionRule {
 
-
   protected NumberFormat format;
 
   public UnitConversionRule(ResourceBundle messages) {
     super(messages);
+    setTags(Arrays.asList(Tag.picky));
     format = NumberFormat.getNumberInstance(Locale.ENGLISH);
     format.setMaximumFractionDigits(2);
     format.setRoundingMode(RoundingMode.HALF_UP);
@@ -57,8 +59,8 @@ public class UnitConversionRule extends AbstractUnitConversionRule {
     addUnit("yards?", YARD, "yards", 1, false);
     addUnit("inch(es)?", INCH, "inches", 1, false);
 
-    addUnit( "(?:degrees?)? Fahrenheit", FAHRENHEIT, "degree Fahrenheit", 1, false);
-    addUnit( "(?:degrees?)? Celsius", CELSIUS, "degree Celsius", 1, true);
+    addUnit("(?:degrees?)? Fahrenheit", FAHRENHEIT, "degree Fahrenheit", 1, false);
+    addUnit("(?:degrees?)? Celsius", CELSIUS, "degree Celsius", 1, true);
   }
 
   @Override

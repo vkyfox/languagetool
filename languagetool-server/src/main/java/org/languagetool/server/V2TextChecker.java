@@ -20,15 +20,16 @@ package org.languagetool.server;
 
 import com.sun.net.httpserver.HttpExchange;
 import org.jetbrains.annotations.NotNull;
-import org.languagetool.DetectedLanguage;
-import org.languagetool.Language;
-import org.languagetool.Languages;
+import org.languagetool.*;
 import org.languagetool.markup.AnnotatedText;
 import org.languagetool.rules.RuleMatch;
+import org.languagetool.tools.ConfidenceKey;
 import org.languagetool.tools.StringTools;
 import org.languagetool.tools.RuleMatchesAsJsonSerializer;
 
+import java.io.IOException;
 import java.util.*;
+import java.util.regex.Pattern;
 
 import static org.languagetool.server.ServerTools.setCommonHeaders;
 
@@ -39,9 +40,19 @@ import static org.languagetool.server.ServerTools.setCommonHeaders;
 class V2TextChecker extends TextChecker {
 
   private static final String JSON_CONTENT_TYPE = "application/json";
+  private static final Pattern COMMA_WHITESPACE_PATTERN = Pattern.compile(",\\s*");
+
+  private static Map<ConfidenceKey,Float> confidenceMap;
 
   V2TextChecker(HTTPServerConfig config, boolean internalServer, Queue<Runnable> workQueue, RequestCounter reqCounter) {
     super(config, internalServer, workQueue, reqCounter);
+    try {
+      if (config.getRuleIdToConfidenceFile() != null) {
+        confidenceMap = new ConfidenceMapLoader().load(config.getRuleIdToConfidenceFile());
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
@@ -50,10 +61,12 @@ class V2TextChecker extends TextChecker {
   }
 
   @Override
-  protected String getResponse(AnnotatedText text, DetectedLanguage lang, Language motherTongue, List<RuleMatch> matches,
-                               List<RuleMatch> hiddenMatches, String incompleteResultsReason, int compactMode) {
-    RuleMatchesAsJsonSerializer serializer = new RuleMatchesAsJsonSerializer(compactMode);
-    return serializer.ruleMatchesToJson(matches, hiddenMatches, text, CONTEXT_SIZE, lang, incompleteResultsReason);
+  protected String getResponse(AnnotatedText text, Language usedLang, DetectedLanguage lang, Language motherTongue, List<CheckResults> matches,
+                               List<RuleMatch> hiddenMatches, String incompleteResultsReason, int compactMode, boolean showPremiumHint, JLanguageTool.Mode mode) {
+    RuleMatchesAsJsonSerializer serializer = new RuleMatchesAsJsonSerializer(compactMode, usedLang);
+    serializer.setRuleIdToConfidenceMap(confidenceMap);
+    return serializer.ruleMatchesToJson2(matches, hiddenMatches, text, CONTEXT_SIZE, lang, incompleteResultsReason,
+      showPremiumHint, mode);
   }
 
   @NotNull
@@ -82,35 +95,37 @@ class V2TextChecker extends TextChecker {
   protected void checkParams(Map<String, String> parameters) {
     super.checkParams(parameters);
     if (StringTools.isEmpty(parameters.get("language"))) {
-      throw new IllegalArgumentException("Missing 'language' parameter, e.g. 'language=en-US' for American English or 'language=fr' for French");
+      throw new BadRequestException("Missing 'language' parameter, e.g. 'language=en-US' for American English or 'language=fr' for French");
     }
     if (parameters.get("enabled") != null) {
-      throw new IllegalArgumentException("You specified 'enabled' but the parameter is now called 'enabledRules' in v2 of the API");
+      throw new BadRequestException("You specified 'enabled' but the parameter is now called 'enabledRules' in v2 of the API");
     }
     if (parameters.get("disabled") != null) {
-      throw new IllegalArgumentException("You specified 'disabled' but the parameter is now called 'disabledRules' in v2 of the API");
+      throw new BadRequestException("You specified 'disabled' but the parameter is now called 'disabledRules' in v2 of the API");
     }
     if (parameters.get("preferredvariants") != null) {
-      throw new IllegalArgumentException("You specified 'preferredvariants' but the parameter is now called 'preferredVariants' (uppercase 'V') in v2 of the API");
+      throw new BadRequestException("You specified 'preferredvariants' but the parameter is now called 'preferredVariants' (uppercase 'V') in v2 of the API");
     }
     if (parameters.get("autodetect") != null) {
-      throw new IllegalArgumentException("You specified 'autodetect' but automatic language detection is now activated with 'language=auto' in v2 of the API");
+      throw new BadRequestException("You specified 'autodetect' but automatic language detection is now activated with 'language=auto' in v2 of the API");
     }
   }
   
   @Override
   @NotNull
   protected DetectedLanguage getLanguage(String text, Map<String, String> parameters, List<String> preferredVariants,
-                                         List<String> noopLangs, List<String> preferredLangs) {
+                                         List<String> noopLangs, List<String> preferredLangs, boolean testMode) {
     String langParam = parameters.get("language");
-    DetectedLanguage detectedLang = detectLanguageOfString(text, null, preferredVariants, noopLangs, preferredLangs);
+    boolean forcePreferredLanguages = "true".equals(parameters.get("forcePreferredLanguages"));
+    DetectedLanguage detectedLang = detectLanguageOfString(text, null, preferredVariants, noopLangs, preferredLangs, forcePreferredLanguages);
     Language givenLang;
     if (getLanguageAutoDetect(parameters)) {
       givenLang = detectedLang.getDetectedLanguage();
     } else {
-      givenLang = Languages.getLanguageForShortCode(langParam);
+      givenLang = parseLanguage(langParam);
     }
-    return new DetectedLanguage(givenLang, detectedLang.getDetectedLanguage(), detectedLang.getDetectionConfidence());
+    return new DetectedLanguage(givenLang, detectedLang.getDetectedLanguage(), detectedLang.getDetectionConfidence(),
+      detectedLang.getDetectionSource());
   }
 
   @Override
@@ -118,9 +133,9 @@ class V2TextChecker extends TextChecker {
   protected List<String> getPreferredVariants(Map<String, String> parameters) {
     List<String> preferredVariants;
     if (parameters.get("preferredVariants") != null) {
-      preferredVariants = Arrays.asList(parameters.get("preferredVariants").split(",\\s*"));
+      preferredVariants = Arrays.asList(COMMA_WHITESPACE_PATTERN.split(parameters.get("preferredVariants")));
       if (!"auto".equals(parameters.get("language")) && (parameters.get("multilingual") == null || parameters.get("multilingual").equals("false"))) {
-        throw new IllegalArgumentException("You specified 'preferredVariants' but you didn't specify 'language=auto'");
+        throw new BadRequestException("You specified 'preferredVariants' but you didn't specify 'language=auto'");
       }
     } else {
       preferredVariants = Collections.emptyList();

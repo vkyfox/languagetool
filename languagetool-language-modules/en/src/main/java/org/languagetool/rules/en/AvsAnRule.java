@@ -18,17 +18,16 @@
  */
 package org.languagetool.rules.en;
 
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.AnalyzedToken;
-import org.languagetool.AnalyzedTokenReadings;
+import org.languagetool.*;
 import org.languagetool.rules.*;
 import org.languagetool.tools.StringTools;
+import org.languagetool.tools.Tools;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ResourceBundle;
+import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.util.regex.Pattern.*;
 import static org.languagetool.rules.en.AvsAnData.getWordsRequiringA;
 import static org.languagetool.rules.en.AvsAnData.getWordsRequiringAn;
 
@@ -49,11 +48,16 @@ public class AvsAnRule extends Rule {
     A, AN, A_OR_AN, UNKNOWN
   }
 
-  private static final Pattern cleanupPattern = Pattern.compile("[^αa-zA-Z0-9\\.;,:']");
+  private static final Pattern cleanupPattern = compile("[^αa-zA-Z0-9.;,:']");
+  private static final Pattern delimPattern = compile("[-\"“'‘()\\[\\]]+");
+  private static final Pattern dashQuotePattern = compile("[-']");
+  private static final Pattern anPrefixes = compile("^(unidentif|uni[mn])[a-z]+$", Pattern.CASE_INSENSITIVE);
+  private static final Pattern anExceptionPrefixes = compile("^(eu|one|uni|u[rst][aeiou])[a-z]*$", Pattern.CASE_INSENSITIVE);
 
   public AvsAnRule(ResourceBundle messages) {
     super.setCategory(Categories.MISC.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Misspelling);
+    setUrl(Tools.getUrl("https://languagetool.org/insights/post/indefinite-articles/"));
     addExamplePair(Example.wrong("The train arrived <marker>a hour</marker> ago."),
                    Example.fixed("The train arrived <marker>an hour</marker> ago."));
   }
@@ -84,9 +88,7 @@ public class AvsAnRule extends Rule {
     for (int i = 1; i < tokens.length; i++) {  // ignoring token 0, i.e., SENT_START
       AnalyzedTokenReadings token = tokens[i];
       String prevTokenStr = prevTokenIndex > 0 ? tokens[prevTokenIndex].getToken() : null;
-
       isSentenceStart = prevTokenIndex == 1;
-
       if (!isSentenceStart) {
         equalsA = "a".equals(prevTokenStr);
         equalsAn = "an".equals(prevTokenStr);
@@ -94,28 +96,32 @@ public class AvsAnRule extends Rule {
       	equalsA = "a".equalsIgnoreCase(prevTokenStr);
         equalsAn = "an".equalsIgnoreCase(prevTokenStr);
       }
-
       if (equalsA || equalsAn) {
         Determiner determiner = getCorrectDeterminerFor(token);
         String msg = null;
         if (equalsA && determiner == Determiner.AN) {
           String replacement = StringTools.startsWithUppercase(prevTokenStr) ? "An" : "an";
           msg = "Use <suggestion>" + replacement + "</suggestion> instead of '" + prevTokenStr + "' if the following "+
-                  "word starts with a vowel sound, e.g. 'an article', 'an hour'";
+                  "word starts with a vowel sound, e.g. 'an article', 'an hour'.";
         } else if (equalsAn && determiner == Determiner.A) {
           String replacement = StringTools.startsWithUppercase(prevTokenStr) ? "A" : "a";
           msg = "Use <suggestion>" + replacement + "</suggestion> instead of '" + prevTokenStr + "' if the following "+
-                  "word doesn't start with a vowel sound, e.g. 'a sentence', 'a university'";
+                  "word doesn't start with a vowel sound, e.g. 'a sentence', 'a university'.";
         }
         if (msg != null) {
           RuleMatch match = new RuleMatch(
-              this, sentence, tokens[prevTokenIndex].getStartPos(), tokens[prevTokenIndex].getEndPos(), msg, "Wrong article");
+              this, sentence, tokens[prevTokenIndex].getStartPos(), tokens[prevTokenIndex].getEndPos(),
+                  tokens[prevTokenIndex].getStartPos(), token.getEndPos(), msg, "Wrong article");
           ruleMatches.add(match);
         }
       }
+      String nextToken = "";
+      if (i + 1 < tokens.length) {
+        nextToken = tokens[i + 1].getToken();
+      }
       if (token.hasPosTag("DT")) {
         prevTokenIndex = i;
-      } else if (token.getToken().matches("[-\"()\\[\\]]+")) {
+      } else if (nextToken.length() > 1 && delimPattern.matcher(token.getToken()).matches()) {
         // skip e.g. the quote in >>an "industry party"<<
       } else {
         prevTokenIndex = 0;
@@ -134,18 +140,20 @@ public class AvsAnRule extends Rule {
     AnalyzedTokenReadings token = new AnalyzedTokenReadings(new AnalyzedToken(origWord, null, null), 0);
     Determiner determiner = getCorrectDeterminerFor(token);
     if (determiner == Determiner.A || determiner == Determiner.A_OR_AN) {
-      return "a " + origWord;
+      return "a " + StringTools.lowercaseFirstCharIfCapitalized(origWord);
     } else if (determiner == Determiner.AN) {
-      return "an " + origWord;
+      return "an " + StringTools.lowercaseFirstCharIfCapitalized(origWord);
     } else {
       return origWord;
     }
   }
 
-  Determiner getCorrectDeterminerFor(AnalyzedTokenReadings token) {
+  static Determiner getCorrectDeterminerFor(AnalyzedTokenReadings token) {
     String word = token.getToken();
     Determiner determiner = Determiner.UNKNOWN;
-    String[] parts = word.split("[-']");  // for example, in "one-way" only "one" is relevant
+    String[] parts = dashQuotePattern.split(word);  // for example, in "one-way" only "one" is relevant
+    Matcher anPrefix = anPrefixes.matcher(token.getToken());
+    Matcher anExceptionPrefix = anExceptionPrefixes.matcher(token.getToken());
     if (parts.length >= 1 && !parts[0].equalsIgnoreCase("a")) {  // avoid false alarm on "A-levels are..."
       word = parts[0];
     }
@@ -171,7 +179,9 @@ public class AvsAnRule extends Rule {
         // we don't know how all-uppercase words (often abbreviations) are pronounced,
         // so never complain about these
         determiner = Determiner.UNKNOWN;
-      } else if (isVowel(tokenFirstChar)) {
+      } else if (anPrefix.find()) {
+        determiner = Determiner.AN;
+      } else if (isVowel(tokenFirstChar) && !anExceptionPrefix.find()) {
         determiner = Determiner.AN;
       } else {
         determiner = Determiner.A;
@@ -180,7 +190,7 @@ public class AvsAnRule extends Rule {
     return determiner;
   }
 
-  private boolean isVowel(char c) {
+  private static boolean isVowel(char c) {
     char lc = Character.toLowerCase(c);
     return lc == 'a' || lc == 'e' || lc == 'i' || lc == 'o' || lc == 'u';
   }

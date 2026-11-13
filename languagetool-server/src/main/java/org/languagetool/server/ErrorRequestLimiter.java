@@ -19,6 +19,8 @@
 package org.languagetool.server;
 
 import org.languagetool.JLanguageTool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Date;
 import java.util.List;
@@ -29,8 +31,10 @@ import java.util.Map;
  */
 class ErrorRequestLimiter extends RequestLimiter {
 
+  private static final Logger logger = LoggerFactory.getLogger(ErrorRequestLimiter.class);
+
   /**
-   * @param requestLimit the maximum number of request per <tt>requestLimitPeriodInSeconds</tt>
+   * @param requestLimit the maximum number of request per <code>requestLimitPeriodInSeconds</code>
    * @param requestLimitPeriodInSeconds the time period over which requests are considered, in seconds
    */
   ErrorRequestLimiter(int requestLimit, int requestLimitPeriodInSeconds) {
@@ -46,6 +50,7 @@ class ErrorRequestLimiter extends RequestLimiter {
       checkLimit(ipAddress, parameters, httpHeader);
       return true;
     } catch (TooManyRequestsException e) {
+      logger.info("wouldAccessBeOkay -> false: " + e.getMessage());
       return false;
     }
   }

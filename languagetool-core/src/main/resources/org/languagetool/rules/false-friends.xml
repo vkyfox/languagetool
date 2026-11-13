@@ -35,6 +35,66 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="en">skill</translation>
         </rule>
     </rulegroup>
+    <rulegroup id="ABSOLVENT_WIECKOWSKI">
+        <!--source: Wieckowski, Angielsko-polski słownik fałszywych przyjaciół (DIF 2014)-->
+        <rule>
+            <pattern lang="en">
+                <token inflected="yes">absolvent</token>
+            </pattern>
+            <translation lang="pl">rozgrzeszający, wybaczający</translation>
+        </rule>
+        <rule>
+            <pattern lang="pl">
+                <token inflected="yes">absolwent</token>
+            </pattern>
+            <translation lang="en">graduate; alumnus</translation>
+        </rule>
+    </rulegroup>
+    <rulegroup id="ABSTINENT_WIECKOWSKI">
+        <!--source: Wieckowski, Angielsko-polski słownik fałszywych przyjaciół (DIF 2014)-->
+        <rule>
+            <pattern lang="en">
+                <token inflected="yes">abstinent</token>
+            </pattern>
+            <translation lang="pl">osoba wstrzemięźliwa</translation>
+        </rule>
+        <rule>
+            <pattern lang="pl">
+                <token inflected="yes">abstynent</token>
+            </pattern>
+            <translation lang="en">teetotaler</translation>
+        </rule>
+    </rulegroup>
+    <rulegroup id="ACADEMIA_WIECKOWSKI">
+        <!--source: Wieckowski, Angielsko-polski słownik fałszywych przyjaciół (DIF 2014)-->
+        <rule>
+            <pattern lang="en">
+                <token inflected="yes">academia</token>
+            </pattern>
+            <translation lang="pl">środowisko akademickie/naukowe</translation>
+        </rule>
+        <rule>
+            <pattern lang="pl">
+                <token inflected="yes">akademia</token>
+            </pattern>
+            <translation lang="en">academy</translation>
+        </rule>
+    </rulegroup>
+    <rulegroup id="ACTUALIZATION_WIECKOWSKI">
+        <!--source: Wieckowski, Angielsko-polski słownik fałszywych przyjaciół (DIF 2014)-->
+        <rule>
+            <pattern lang="en">
+                <token inflected="yes">actualization</token>
+            </pattern>
+            <translation lang="pl">1. urzeczywistnienie (np. marzeń); 2. realistyczne przedstawienie</translation>
+        </rule>
+        <rule>
+            <pattern lang="pl">
+                <token inflected="yes">aktualizacja</token>
+            </pattern>
+            <translation lang="en">update</translation>
+        </rule>
+    </rulegroup>
     <rulegroup id="BRIBE">
         <rule>
             <pattern lang="en">
@@ -290,7 +350,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
     <rulegroup id="ACCOMMODATE ">
         <rule>
             <pattern lang="en">
-                <token inflected="yes">accommodate </token>
+                <token inflected="yes">accommodate</token>
             </pattern>
             <translation lang="fr">loger</translation>
         </rule>
@@ -1426,7 +1486,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="pt">alongar</translation>
         </rule>
     </rulegroup>
-    <rulegroup id="ALSO">
+    <rulegroup id="ALSO" default="off">
         <rule>
             <pattern lang="en">
                 <token>also</token>
@@ -1453,7 +1513,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
         <rule>
             <pattern lang="de"><token inflected="yes">alt</token></pattern>
             <translation lang="es">viejo</translation>
-            <translation lang="es">velho</translation>
+            <translation lang="pt">velho</translation>
         </rule>
         <rule>
             <pattern lang="pt"><token inflected="yes">alto</token></pattern>
@@ -1637,6 +1697,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="de">realistisch darstellen</translation>
             <translation lang="gl">realizar</translation>
             <translation lang="gl">describir con realismo</translation>
+            <translation lang="pl">1. urzeczywistnić; 2. realistycznie przedstawić</translation>
         </rule>
         <rule>
             <pattern lang="de">
@@ -1647,6 +1708,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
         <rule>
             <pattern lang="gl">
                 <token inflected="yes">actualizar</token>
+            </pattern>
+            <translation lang="en">update</translation>
+        </rule>
+        <rule>
+            <pattern lang="pl">
+                <token inflected="yes">aktualizować</token>
             </pattern>
             <translation lang="en">update</translation>
         </rule>
@@ -1662,16 +1729,25 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="pt">motivar</translation>
         </rule>
         <rule>
-            <pattern lang="de">
-                <token inflected="yes">actuar</token>
-            </pattern>
-            <translation lang="en">act</translation>
-        </rule>
-        <rule>
             <pattern lang="pt">
                 <token inflected="yes">atuar</token>
             </pattern>
             <translation lang="en">act</translation>
+        </rule>
+    </rulegroup>
+    <rulegroup id="ADAPTER_WIECKOWSKI">
+        <!--source: Wieckowski, Angielsko-polski słownik fałszywych przyjaciół (DIF 2014)-->
+        <rule>
+            <pattern lang="en">
+                <token inflected="yes">adapter</token>
+            </pattern>
+            <translation lang="pl">przejściówka, rozgałęźnik (rodzaj wtyczki)</translation>
+        </rule>
+        <rule>
+            <pattern lang="pl">
+                <token inflected="yes">adapter</token>
+            </pattern>
+            <translation lang="en">record player</translation>
         </rule>
     </rulegroup>
     <rulegroup id="ADEPT">
@@ -1852,6 +1928,21 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             </pattern>
             <translation lang="en">attorney</translation>
             <translation lang="en">lawyer</translation>
+        </rule>
+    </rulegroup>
+    <rulegroup id="AEROBIC_WIECKOWSKI">
+        <!--source: Wieckowski, Angielsko-polski słownik fałszywych przyjaciół (DIF 2014)-->
+        <rule>
+            <pattern lang="en">
+                <token inflected="yes">aerobic</token>
+            </pattern>
+            <translation lang="pl">1. używający tlenu, będący tlenowcem (zwierzę) 2. aerobikowy, związany z aerobikiem (np. ćwiczenia)</translation>
+        </rule>
+        <rule>
+            <pattern lang="pl">
+                <token inflected="yes">aerobik</token>
+            </pattern>
+            <translation lang="en">aerobics</translation>
         </rule>
     </rulegroup>
     <rulegroup id="AFFAIR">
@@ -2396,7 +2487,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
     <rulegroup id="APPELATION">
         <rule>
             <pattern lang="en">
-                <token>appelation</token>
+                <token>appellation</token>
             </pattern>
             <translation lang="pl">nazwa</translation>
             <translation lang="pl">tytuł</translation>
@@ -2509,7 +2600,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="en">navy</translation>
         </rule>
     </rulegroup>
-    <rulegroup id="ART">
+    <rulegroup id="ART" default="off">
         <rule>
             <pattern lang="en">
                 <token>art</token>
@@ -3605,8 +3696,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <pattern lang="pl">
                 <token inflected="yes">bufon</token>
             </pattern>
-            <translation lang="pl">boaster</translation>
-            <translation lang="pl">braggart</translation>
+            <translation lang="en">boaster</translation>
+            <translation lang="en">braggart</translation>
         </rule>
     </rulegroup>
     <rulegroup id="BUFFOONERY">
@@ -3689,6 +3780,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="pt">filho de uma cabra</translation>
         </rule>
     </rulegroup>
+    <!--
     <rulegroup id="CAÇAR">
         <rule>
             <pattern lang="pt">
@@ -3703,6 +3795,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="es">casarse</translation>
         </rule>
     </rulegroup>
+    -->
     <rulegroup id="CACHO">
         <rule>
             <pattern lang="pt">
@@ -4534,6 +4627,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="pt">pescoço</translation>
         </rule>
     </rulegroup>
+    <!--
     <rulegroup id="COLA">
         <rule>
             <pattern lang="es">
@@ -4548,6 +4642,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="pt">pegamento</translation>
         </rule>
     </rulegroup>
+    -->
     <rulegroup id="COLCHÃO">
         <rule>
             <pattern lang="pt">
@@ -5062,7 +5157,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
     <rulegroup id="COLLABORATE">
         <rule>
             <pattern lang="en">
-                <token inflected="yes">colaborate</token>
+                <token inflected="yes">collaborate</token>
             </pattern>
             <translation lang="pl">współpracować</translation>
         </rule>
@@ -5346,7 +5441,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token>criminal</token>
             </pattern>
             <translation lang="pl">przestępca</translation>
-            <translation lang="en">kryminalista</translation>
+            <translation lang="pl">kryminalista</translation>
         </rule>
         <rule>
             <pattern lang="pl">
@@ -5605,7 +5700,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
     <rulegroup id="DEMORALIZE">
         <rule>
             <pattern lang="en">
-                <token inflected="yes">demoralize</token>
+                <token inflected="yes" regexp="yes">demorali[sz]e</token>
             </pattern>
             <translation lang="pl">zniechęcać</translation>
         </rule>
@@ -5688,7 +5783,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">depuis</token>
             </pattern>
             <translation lang="pt">desde</translation>
-            <translation lang="en">since</translation>
+            <!--<translation lang="en">since</translation>-->
         </rule>
     </rulegroup>
     <rulegroup id="DESASTRADO">
@@ -6103,7 +6198,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <pattern lang="it">
                 <token inflected="yes">educato</token>
             </pattern>
-            <translation lang="it">polite</translation>
+            <translation lang="en">polite</translation>
         </rule>
         <rule>
             <pattern lang="pt">
@@ -6123,7 +6218,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <pattern lang="pl">
                 <token inflected="yes">elewator</token>
             </pattern>
-            <translation lang="pl">(grain) elevator</translation>
+            <translation lang="en">(grain) elevator</translation>
         </rule>
     </rulegroup>
     <rulegroup id="EMBARAÇADA">
@@ -6188,7 +6283,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">empeçar</token>
             </pattern>
             <translation lang="es">enredar</translation>
-            <translation lang="pt">dificultar</translation>
+            <translation lang="es">dificultar</translation>
         </rule>
         <rule>
             <pattern lang="es">
@@ -6212,7 +6307,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
              <translation lang="pt">ftrancar</translation>
         </rule>
     </rulegroup>
-    <rulegroup id="ENGAGEMENT">
+    <rulegroup id="ENGAGEMENT" default="off">
         <rule>
             <pattern lang="en">
                 <token>engagement</token>
@@ -6353,7 +6448,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">ermita</token>
             </pattern>
             <translation lang="es">ermitaño</translation>
-            <translation lang="pt">eremita</translation>
         </rule>
         <rule>
             <pattern lang="es">
@@ -7068,7 +7162,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="en">speed</translation>
         </rule>
     </rulegroup>
-    <rulegroup id="FAST">
+    <rulegroup id="FAST" default="off">
         <rule>
             <pattern lang="en">
                 <token>fast</token>
@@ -7420,6 +7514,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <pattern lang="pl">
                 <token inflected="yes">freon</token>
             </pattern>
+            <translation lang="en">refrigerant</translation>
+            <translation lang="en">coolant</translation>
             <translation lang="en">CFC</translation>
         </rule>
         <rule>
@@ -8003,7 +8099,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
         </rule>
     </rulegroup>
     <rulegroup id="GROSS">
-        <rule>
+        <rule default="off">
             <pattern lang="en">
                 <token>gross</token>
             </pattern>
@@ -8190,7 +8286,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <pattern lang="en">
                 <token>helm</token>
             </pattern>
-            <translation lang="en">tiller</translation>
             <translation lang="it">timone</translation>
             <translation lang="de">Ruder</translation>
             <translation lang="de">Steuer</translation>
@@ -9455,7 +9550,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">mas</token>
             </pattern>
             <translation lang="es">pero</translation>
-            <translation lang="pt">mas</translation>
         </rule>
         <rule>
             <pattern lang="es">
@@ -9678,7 +9772,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <pattern lang="it">
                 <token>morbido</token>
             </pattern>
-            <translation lang="it">soft</translation>
             <translation lang="fr">souple</translation>
             <translation lang="de">weich</translation>
         </rule>
@@ -9900,7 +9993,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">nota</token>
             </pattern>
             <translation lang="es">nota</translation>
-            <translation lang="pt">calificación</translation>
         </rule>
         <rule>
             <pattern lang="es">
@@ -10726,7 +10818,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">perdigão</token>
             </pattern>
             <translation lang="es">perdigón</translation>
-            <translation lang="pt">pollo de la perdiz</translation>
         </rule>
         <rule>
             <pattern lang="es">
@@ -11496,7 +11587,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">pronto</token>
             </pattern>
             <translation lang="es">listo</translation>
-            <translation lang="pt">terminado</translation>
         </rule>
         <rule>
             <pattern lang="es">
@@ -11847,7 +11937,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
     <rulegroup id="REALIZE">
         <rule>
             <pattern lang="en">
-                <token inflected="yes">realize</token>
+                <token inflected="yes" regexp="yes">reali[sz]e</token>
             </pattern>
             <!-- TODO: realise?? -->
             <translation lang="de">erkennen</translation>
@@ -11855,7 +11945,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="it">comprendere</translation>
             <translation lang="pl">zdawać sobie sprawę</translation>
             <translation lang="pl">pojmować</translation>
-            <translation lang="es">percatarse</translation>
+            <!--<translation lang="es">percatarse</translation>-->
             <translation lang="gl">decatarse</translation>
             <translation lang="gl">darse conta</translation>
             <translation lang="ru">точно пpедставлять</translation>
@@ -11921,8 +12011,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="en">container</translation>
         </rule>
     </rulegroup>
-    <rulegroup id="RECEIPT">
-        <rule>
+    <rulegroup id="RECEIPT" >
+        <rule default="off">
             <pattern lang="en">
                 <token inflected="yes">receipt</token>
             </pattern>
@@ -11933,20 +12023,20 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="pl">kwitek</translation>
             <translation lang="ru">квитанция</translation>
         </rule>
-        <rule>
+        <rule default="off">
             <pattern lang="de">
                 <token inflected="yes">Rezept</token>
             </pattern>
             <translation lang="en">recipe</translation>
             <translation lang="en">prescription</translation>
         </rule>
-        <rule>
+        <rule default="off">
             <pattern lang="pl">
                 <token inflected="yes">recepta</token>
             </pattern>
             <translation lang="en">prescription</translation>
         </rule>
-        <rule>
+        <rule default="off">
             <pattern lang="ru">
                 <token inflected="yes">рецепт</token>
             </pattern>
@@ -12445,7 +12535,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">sala</token>
             </pattern>
             <translation lang="fr">salon</translation>
-            <translation lang="pt">salle</translation>
         </rule>
         <rule>
             <pattern lang="fr">
@@ -12672,7 +12761,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <translation lang="en">sentence</translation>
         </rule>
     </rulegroup>
-    <rulegroup id="SEA">
+    <rulegroup id="SEA" default="off"><!-- very low acceptance rate (3%) -->
         <rule>
             <pattern lang="en">
                 <token>sea</token>
@@ -13097,13 +13186,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                 <token inflected="yes">subir</token>
             </pattern>
             <translation lang="pt">sofrer</translation>
-        </rule>
-        <rule>
-            <pattern lang="pt">
-                <token inflected="yes" regexp='yes'>subir</token>
-            </pattern>
-            <translation lang="pt">augmenter</translation>
-            <translation lang="pt">monter</translation>
         </rule>
     </rulegroup>
     <rulegroup id="SUBTÍTULO">
@@ -14018,7 +14100,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <pattern lang="fr">
                 <token inflected="yes">vers</token>
             </pattern>
-            <translation lang="fr">em direção a</translation>
             <translation lang="pt">vermes</translation>
             <translation lang="pt">verso</translation>
         </rule>
@@ -14241,8 +14322,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
             <pattern lang="en">
                 <token inflected="yes">wall</token>
             </pattern>
-            <translation lang="en">wand</translation>
-            <translation lang="en">muur</translation>
+            <translation lang="nl">wand</translation>
+            <translation lang="nl">muur</translation>
         </rule>
     </rulegroup>
     <rulegroup id="WAREHOUSE">

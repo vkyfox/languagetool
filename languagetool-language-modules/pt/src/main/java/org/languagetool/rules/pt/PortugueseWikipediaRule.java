@@ -18,16 +18,13 @@
  */
 package org.languagetool.rules.pt;
 
-import org.languagetool.language.Portuguese;
+import org.languagetool.Language;
 import org.languagetool.rules.AbstractSimpleReplaceRule2;
 import org.languagetool.rules.Categories;
-import org.languagetool.rules.Example;
 import org.languagetool.rules.ITSIssueType;
 import org.languagetool.tools.Tools;
 
-import java.io.IOException;
-import java.util.Locale;
-import java.util.ResourceBundle;
+import java.util.*;
 
 import java.net.URL;
 
@@ -43,31 +40,34 @@ public class PortugueseWikipediaRule extends AbstractSimpleReplaceRule2 {
 
   public static final String WIKIPEDIA_COMMON_ERRORS = "PT_WIKIPEDIA_COMMON_ERRORS";
 
-  private static final String FILE_NAME = "/pt/wikipedia.txt";
   private static final Locale PT_LOCALE = new Locale("pt");// locale used on case-conversion
 
+  private final String path;
+
   @Override
-  public final String getFileName() {
-    return FILE_NAME;
+  public List<String> getFileNames() {
+    return Collections.singletonList(path);
   }
 
-
-  public PortugueseWikipediaRule(ResourceBundle messages) throws IOException {
-    super(messages, new Portuguese());
-    super.setCategory(Categories.WIKIPEDIA.getCategory(messages));
+  public PortugueseWikipediaRule(ResourceBundle messages, String path, Language language) {
+    super(messages, language);
+    this.path = Objects.requireNonNull(path);
+    setCategory(Categories.WIKIPEDIA.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Grammar);
-    addExamplePair(Example.wrong("<marker>mais também</marker>"),
-                   Example.fixed("<marker>mas também</marker>"));
+    useSubRuleSpecificIds();
+    // gradually making this rule obsolete, we've removed tests and also this example pair
+//    addExamplePair(Example.wrong("<marker>mais também</marker>"),
+//                   Example.fixed("<marker>mas também</marker>"));
   }
 
   @Override
-  public final String getId() {
+  public String getId() {
     return WIKIPEDIA_COMMON_ERRORS;
   }
 
   @Override
   public String getDescription() {
-    return "Erros frequentes nos artigos da Wikipédia";
+    return "Erros frequentes nos artigos da Wikipédia: $match";
   }
 
   @Override
@@ -76,8 +76,8 @@ public class PortugueseWikipediaRule extends AbstractSimpleReplaceRule2 {
   }
   
   @Override
-  public String getSuggestion() {
-    return "'$match' é um erro. Considere utilizar $suggestions";
+  public String getMessage() {
+    return "Possível erro em \"$match\". Prefira $suggestions";
   }
 
   @Override

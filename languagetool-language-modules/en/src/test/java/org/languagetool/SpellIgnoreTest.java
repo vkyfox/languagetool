@@ -32,11 +32,11 @@ import static org.hamcrest.core.Is.is;
 
 public class SpellIgnoreTest {
   
-  // code also used in http://wiki.languagetool.org/java-api
+  // code also used in https://dev.languagetool.org/java-api
   @Test
   public void testIgnore() throws IOException {
     String text = "This is a text with specialword and myotherword";
-    JLanguageTool lt = new JLanguageTool(new AmericanEnglish());
+    JLanguageTool lt = new JLanguageTool(AmericanEnglish.getInstance());
     assertThat(lt.check(text).size(), is(2));
     for (Rule rule : lt.getAllActiveRules()) {
       if (rule instanceof SpellingCheckRule) {

@@ -27,7 +27,8 @@ import org.languagetool.MultiThreadedJLanguageTool;
 import org.languagetool.bitext.TabBitextReader;
 import org.languagetool.language.AmericanEnglish;
 import org.languagetool.language.English;
-import org.languagetool.language.LanguageIdentifier;
+import org.languagetool.language.identifier.LanguageIdentifier;
+import org.languagetool.language.identifier.LanguageIdentifierService;
 import org.languagetool.rules.Rule;
 import org.languagetool.rules.bitext.BitextRule;
 import org.languagetool.rules.patterns.AbstractPatternRule;
@@ -70,28 +71,22 @@ class Main {
     srcLt = null;
     bRules = null;
     lt = new MultiThreadedJLanguageTool(options.getLanguage(), options.getMotherTongue());
-    lt.setCleanOverlappingMatches(false);
+    lt.setCleanOverlappingMatches(options.isCleanOverlapping());
     if (options.getRuleFile() != null) {
-      addExternalRules(options.getRuleFile());
+      addExternalRules(options.getRuleFile(), options.getLanguage());
     }
     if (options.getLanguageModel() != null) {
       lt.activateLanguageModelRules(options.getLanguageModel());
     }
-    if (options.getWord2VecModel() != null) {
-      lt.activateWord2VecModelRules(options.getWord2VecModel());
-    }
-    if (options.getNeuralNetworkModel() != null) {
-      lt.activateNeuralNetworkRules(options.getNeuralNetworkModel());
-    }
     lt.activateRemoteRules(options.getRemoteRulesFile() != null ? new File(options.getRemoteRulesFile()) : null);
     Tools.selectRules(lt, options.getDisabledCategories(), options.getEnabledCategories(),
-            new HashSet<>(options.getDisabledRules()), new HashSet<>(options.getEnabledRules()), options.isUseEnabledOnly());
+            new HashSet<>(options.getDisabledRules()), new HashSet<>(options.getEnabledRules()), options.isUseEnabledOnly(), options.isEnableTempOff());
   }
 
-  private void addExternalRules(String filename) throws IOException {
+  private void addExternalRules(String filename, Language lang) throws IOException {
     PatternRuleLoader ruleLoader = new PatternRuleLoader();
     try (InputStream is = new FileInputStream(filename)) {
-      List<AbstractPatternRule> externalRules = ruleLoader.getRules(is, filename);
+      List<AbstractPatternRule> externalRules = ruleLoader.getRules(is, filename, lang);
       for (AbstractPatternRule externalRule : externalRules) {
         lt.addRule(externalRule);
       }
@@ -169,7 +164,7 @@ class Main {
       if (options.isApplySuggestions()) {
         CommandLineTools.correctBitext(reader, srcLt, lt, bRules);
       } else {
-        CommandLineTools.checkBitext(reader, srcLt, lt, bRules, options.isXmlFormat());
+        CommandLineTools.checkBitext(reader, srcLt, lt, bRules);
       }
     } else {
       String text = getFilteredText(filename, encoding, xmlFiltering);
@@ -182,7 +177,7 @@ class Main {
         Language language = detectLanguageOfString(text);
         if (language == null) {
           System.err.println("Could not detect language well enough, using American English");
-          language = new AmericanEnglish();
+          language = AmericanEnglish.getInstance();
         }
         changeLanguage(language, options.getMotherTongue(), options.getDisabledRules(), options.getEnabledRules());
         System.err.println("Using " + language.getName() + " for file " + filename);
@@ -192,22 +187,22 @@ class Main {
       } else if (profileRules) {
         CommandLineTools.profileRulesOnText(text, lt);
       } else if (!options.isTaggerOnly()) {
-        CommandLineTools.checkText(text, lt, options.isXmlFormat(), options.isJsonFormat(), 0, options.isListUnknown());
+        CommandLineTools.checkText(text, lt, options.isJsonFormat(), 0, options.getLevel(), options.isListUnknown(), options.isVerbose());
       } else {
         CommandLineTools.tagText(text, lt);
       }
-      if (options.isListUnknown() && !options.isXmlFormat() && !options.isJsonFormat()) {
+      if (options.isListUnknown() && !options.isJsonFormat()) {
         System.out.println("Unknown words: " + lt.getUnknownWords());
       }
     }
   }
 
-  private void runOnFileLineByLine(String filename, String encoding) throws IOException {
+  private void runOnFileLineByLine(String filename, String encoding, JLanguageTool.Level level) throws IOException {
     System.err.println("Warning: running in line by line mode. Cross-paragraph checks will not work.\n");
     if (options.isVerbose()) {
       lt.setOutput(System.err);
     }
-    if (!options.isXmlFormat() && !options.isApplySuggestions()) {
+    if (!options.isApplySuggestions()) {
       if (isStdIn(filename)) {
         System.err.println("Working on STDIN...");
       } else {
@@ -226,7 +221,7 @@ class Main {
     }
     int lineOffset = 0;
     int tmpLineOffset = 0;
-    handleLine(ApiPrintMode.START_API, 0, new StringBuilder());
+    handleLine(ApiPrintMode.START_API, 0, new StringBuilder(), level);
     StringBuilder sb = new StringBuilder();
     for (int ruleIndex = 0; !rules.isEmpty() && ruleIndex < runCount; ruleIndex++) {
       currentRule = rules.get(ruleIndex);
@@ -244,7 +239,7 @@ class Main {
             Language language = detectLanguageOfString(line);
             if (language == null) {
               System.err.println("Could not detect language well enough, using American English");
-              language = new AmericanEnglish();
+              language = AmericanEnglish.getInstance();
             }
             System.err.println("Language used is: " + language.getName());
             language.getSentenceTokenizer().setSingleLineBreaksMarksParagraph(
@@ -255,7 +250,7 @@ class Main {
           tmpLineOffset++;
 
           if (isBreakPoint(line)) {
-            handleLine(ApiPrintMode.CONTINUE_API, lineOffset, sb);
+            handleLine(ApiPrintMode.CONTINUE_API, lineOffset, sb, level);
             if (profileRules) {
               lt.sentenceTokenize(sb.toString()).size();
             }
@@ -269,12 +264,12 @@ class Main {
             lt.sentenceTokenize(sb.toString()).size();
           }
         }
-        handleLine(ApiPrintMode.END_API, tmpLineOffset - 1, sb);
+        handleLine(ApiPrintMode.END_API, tmpLineOffset - 1, sb, level);
       }
     }
   }
 
-  private void handleLine(ApiPrintMode mode, int lineOffset, StringBuilder sb) throws IOException {
+  private void handleLine(ApiPrintMode mode, int lineOffset, StringBuilder sb, JLanguageTool.Level level) throws IOException {
     int matches = 0;
     String s = filterXML(sb.toString());
     if (options.isApplySuggestions()) {
@@ -282,8 +277,8 @@ class Main {
     } else if (profileRules) {
       Tools.profileRulesOnLine(s, lt, currentRule);
     } else if (!options.isTaggerOnly()) {
-      CommandLineTools.checkText(s, lt, options.isXmlFormat(), options.isJsonFormat(), -1, 
-          lineOffset, matches, mode, options.isListUnknown(), Collections.emptyList());
+      CommandLineTools.checkText(s, lt, options.isJsonFormat(), -1,
+          lineOffset, matches, mode, options.isListUnknown(), level, Collections.emptyList(), options.isVerbose());
     } else {
       CommandLineTools.tagText(s, lt);
     }
@@ -313,7 +308,7 @@ class Main {
     return "-".equals(filename);
   }
 
-  private void runRecursive(String filename, String encoding, boolean xmlFiltering) {
+  private void runRecursive(String filename, String encoding, boolean xmlFiltering, JLanguageTool.Level level) {
     File dir = new File(filename);
     File[] files = dir.listFiles();
     if (files == null) {
@@ -322,10 +317,10 @@ class Main {
     for (File file : files) {
       try {
         if (file.isDirectory()) {
-          runRecursive(file.getAbsolutePath(), encoding, xmlFiltering);
+          runRecursive(file.getAbsolutePath(), encoding, xmlFiltering, level);
         } else {
           if (options.isLineByLine()) {
-            runOnFileLineByLine(file.getAbsolutePath(), encoding);
+            runOnFileLineByLine(file.getAbsolutePath(), encoding, level);
           } else {
             runOnFile(file.getAbsolutePath(), encoding, xmlFiltering);
           }
@@ -368,6 +363,14 @@ class Main {
     }
   }
 
+  @FunctionalInterface
+  interface SystemExitHandler {
+    void exit(int status);
+    SystemExitHandler DEFAULT = System::exit;
+  }
+
+  static SystemExitHandler exitHandler = SystemExitHandler.DEFAULT;
+
   /**
    * Command line tool to check plain text files.
    */
@@ -379,50 +382,46 @@ class Main {
        options = commandLineParser.parseOptions(args);
     } catch (WrongParameterNumberException e) {
       commandLineParser.printUsage();
-      System.exit(1);
+      exitHandler.exit(1);
     } catch (IllegalArgumentException e) {
-      System.err.println(e.toString());
-      System.exit(1);
+      System.err.println(e);
+      exitHandler.exit(1);
     } catch (UnknownParameterException e) {
       if (e.getMessage() != null) {
         System.err.println(e.getMessage());
       } else {
-        System.err.println(e.toString());
+        System.err.println(e);
       }
       commandLineParser.printUsage(System.err);
-      System.exit(1);
+      exitHandler.exit(1);
     }
     if (options.isPrintUsage()) {
       commandLineParser.printUsage();
-      System.exit(1);
+      exitHandler.exit(1);
     }
     if (options.isPrintVersion()) {
       System.out.println("LanguageTool version " + JLanguageTool.VERSION + " (" + JLanguageTool.BUILD_DATE + ", " + JLanguageTool.GIT_SHORT_ID + ")");
-      System.exit(0);
+      exitHandler.exit(0);
     }
     if (options.isPrintLanguages()) {
       printLanguages();
-      System.exit(0);
+      exitHandler.exit(0);
     }
-
     if (options.getFilename() == null) {
       options.setFilename("-");
     }
-
     String languageHint = null;
     if (options.getLanguage() == null) {
-      if (!options.isXmlFormat() && !options.isAutoDetect()) {
+      if (!options.isAutoDetect()) {
         System.err.println("No language specified, using English (no spell checking active, " +
                 "specify a language variant like 'en-GB' if available)");
       }
       options.setLanguage(new English());
-    } else if (!options.isXmlFormat() && !options.isApplySuggestions()) {
+    } else if (!options.isApplySuggestions()) {
       languageHint = "Expected text language: " + options.getLanguage().getName();
     }
-
     options.getLanguage().getSentenceTokenizer().setSingleLineBreaksMarksParagraph(
             options.isSingleLineBreakMarksParagraph());
-
     Main prg = new Main(options);
     if (options.getFalseFriendFile() != null) {
       List<AbstractPatternRule> ffRules = prg.lt.loadFalseFriendRules(options.getFalseFriendFile());
@@ -459,10 +458,10 @@ class Main {
       prg.setBitextMode(options.getMotherTongue(), options.getDisabledRules(), options.getEnabledRules(), bitextRuleFile);
     }
     if (options.isRecursive()) {
-      prg.runRecursive(options.getFilename(), options.getEncoding(), options.isXmlFiltering());
+      prg.runRecursive(options.getFilename(), options.getEncoding(), options.isXmlFiltering(), options.getLevel());
     } else {
       if (options.isLineByLine()) {
-        prg.runOnFileLineByLine(options.getFilename(), options.getEncoding());
+        prg.runOnFileLineByLine(options.getFilename(), options.getEncoding(), options.getLevel());
       } else {
         prg.runOnFile(options.getFilename(), options.getEncoding(), options.isXmlFiltering());
       }
@@ -482,8 +481,7 @@ class Main {
   }
 
   private Language detectLanguageOfString(String text) {
-    LanguageIdentifier identifier = new LanguageIdentifier();
-    identifier.enableFasttext(options.getFasttextBinary(), options.getFasttextModel());
+    LanguageIdentifier identifier = LanguageIdentifierService.INSTANCE.getDefaultLanguageIdentifier(0, null,options.getFasttextBinary(), options.getFasttextModel());
     return identifier.detectLanguage(text);
   }
 

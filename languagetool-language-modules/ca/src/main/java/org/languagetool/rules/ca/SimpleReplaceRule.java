@@ -18,68 +18,98 @@
  */
 package org.languagetool.rules.ca;
 
+import org.languagetool.AnalyzedSentence;
+import org.languagetool.Language;
 import org.languagetool.rules.AbstractSimpleReplaceRule;
 import org.languagetool.rules.Categories;
 import org.languagetool.rules.ITSIssueType;
+import org.languagetool.rules.RuleMatch;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.ResourceBundle;
+import java.util.*;
 
 /**
- * A rule that matches words which should not be used and suggests
- * correct ones instead. 
+ * A rule that matches words which should not be used and suggests correct ones
+ * instead.
  * 
- * Catalan implementations. Loads the
- * relevant words from <code>rules/ca/replace.txt</code>.
+ * Catalan implementations. Loads the relevant words from
+ * <code>rules/ca/replace.txt</code>.
  * 
  * @author Jaume Ortolà
  */
 public class SimpleReplaceRule extends AbstractSimpleReplaceRule {
 
-  private static final Map<String, List<String>> wrongWords = loadFromPath("/ca/replace.txt");
+  private static final Map<String, List<String>> wrongWords = loadFromPath("/ca/replace.txt", "/ca/replace_custom.txt");
   private static final Locale CA_LOCALE = new Locale("CA");
 
   @Override
-  protected Map<String, List<String>> getWrongWords() {
+  public Map<String, List<String>> getWrongWords() {
     return wrongWords;
   }
-  
-  public SimpleReplaceRule(final ResourceBundle messages) throws IOException {
-    super(messages);
+
+  public SimpleReplaceRule(ResourceBundle messages, Language language) throws IOException {
+    super(messages, language);
     super.setCategory(Categories.TYPOS.getCategory(messages));
-    super.setLocQualityIssueType(ITSIssueType.Misspelling);
+    super.setLocQualityIssueType(ITSIssueType.Grammar);
     this.setIgnoreTaggedWords();
     this.setCheckLemmas(false);
-  }  
+    super.useSubRuleSpecificIds();
+  }
 
   @Override
   public final String getId() {
-    return "CA_SIMPLE_REPLACE";
+    return "CA_SIMPLE_REPLACE_SIMPLE";
   }
 
- @Override
+  @Override
   public String getDescription() {
-    return "Detecta paraules incorrectes i proposa suggeriments de canvi";
+    return "Paraula incorrecta: $match";
   }
 
   @Override
   public String getShort() {
     return "Paraula incorrecta";
   }
-  
+
   @Override
-  public String getMessage(String tokenStr,List<String> replacements) {
-    return "Paraula incorrecta.";
+  public String getMessage(String tokenStr, List<String> replacements) {
+    if (replacements.size() > 0) {
+      return "¿Volíeu dir «" + replacements.get(0) + "»?";
+    }
+    return getShort();
   }
-  
+
+  private static final Map<String, String> argumentsMap = Map.of("lemmaSelect", "[NA].*");
+
+  private final Set<String> exceptions = Set.of("perquè", "què", "per què");
+
+  @Override
+  public RuleMatch[] match(AnalyzedSentence sentence) throws IOException {
+    RuleMatch[] potentialMatches = super.match(sentence);
+    ConvertToGenderAndNumberFilter filter = new ConvertToGenderAndNumberFilter();
+    filter.setLanguage(getLanguage());
+    List<RuleMatch> ruleMatches = new ArrayList<>();
+    // Adjust determinants and adjectives
+    for (RuleMatch potentialRuleMatch : potentialMatches) {
+      if (potentialRuleMatch.getSuggestedReplacements().stream()
+        .map(String::toLowerCase)
+        .anyMatch(exceptions::contains)) {
+        ruleMatches.add(potentialRuleMatch);
+        continue;
+      }
+      RuleMatch finalMatch = filter.acceptRuleMatch(potentialRuleMatch, argumentsMap, 0, null, null);
+      if (finalMatch != null) {
+        ruleMatches.add(finalMatch);
+      }
+    }
+    return toRuleMatchArray(ruleMatches);
+  }
+
   @Override
   public boolean isCaseSensitive() {
     return false;
   }
-  
+
   @Override
   public Locale getLocale() {
     return CA_LOCALE;

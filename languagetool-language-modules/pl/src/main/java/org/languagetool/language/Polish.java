@@ -18,34 +18,25 @@
  */
 package org.languagetool.language;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-
-import org.languagetool.Language;
-import org.languagetool.LanguageMaintainedState;
-import org.languagetool.UserConfig;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.languagetool.*;
 import org.languagetool.rules.*;
 import org.languagetool.rules.pl.*;
+import org.languagetool.rules.spelling.SpellingCheckRule;
 import org.languagetool.synthesis.Synthesizer;
 import org.languagetool.synthesis.pl.PolishSynthesizer;
 import org.languagetool.tagging.Tagger;
 import org.languagetool.tagging.disambiguation.Disambiguator;
 import org.languagetool.tagging.disambiguation.pl.PolishHybridDisambiguator;
 import org.languagetool.tagging.pl.PolishTagger;
-import org.languagetool.tokenizers.SRXSentenceTokenizer;
-import org.languagetool.tokenizers.SentenceTokenizer;
-import org.languagetool.tokenizers.WordTokenizer;
+import org.languagetool.tokenizers.*;
 import org.languagetool.tokenizers.pl.PolishWordTokenizer;
 
-public class Polish extends Language {
+import java.io.IOException;
+import java.util.*;
 
-  private Tagger tagger;
-  private SentenceTokenizer sentenceTokenizer;
-  private PolishWordTokenizer wordTokenizer;
-  private Disambiguator disambiguator;
-  private Synthesizer synthesizer;
+public class Polish extends Language {
 
   @Override
   public String getName() {
@@ -62,46 +53,33 @@ public class Polish extends Language {
     return new String[]{"PL"};
   }
 
+  @NotNull
   @Override
-  public Tagger getTagger() {
-    if (tagger == null) {
-      tagger = new PolishTagger();
-    }
-    return tagger;
+  public Tagger createDefaultTagger() {
+    return new PolishTagger();
   }
 
   @Override
-  public SentenceTokenizer getSentenceTokenizer() {
-    if (sentenceTokenizer == null) {
-      sentenceTokenizer = new SRXSentenceTokenizer(this);
-    }
-    return sentenceTokenizer;
+  public SentenceTokenizer createDefaultSentenceTokenizer() {
+    return new SRXSentenceTokenizer(this);
   }
 
   @Override
-  public WordTokenizer getWordTokenizer() {
-    if (wordTokenizer == null) {
-      wordTokenizer = new PolishWordTokenizer();
-      wordTokenizer.setTagger(getTagger());
-    }
+  public Tokenizer createDefaultWordTokenizer() {
+    PolishWordTokenizer wordTokenizer = new PolishWordTokenizer();
+    wordTokenizer.setTagger(getTagger());
     return wordTokenizer;
   }
 
-
   @Override
-  public Disambiguator getDisambiguator() {
-    if (disambiguator == null) {
-      disambiguator = new PolishHybridDisambiguator();
-    }
-    return disambiguator;
+  public Disambiguator createDefaultDisambiguator() {
+    return new PolishHybridDisambiguator();
   }
 
+  @Nullable
   @Override
-  public Synthesizer getSynthesizer() {
-    if (synthesizer == null) {
-      synthesizer = new PolishSynthesizer(this);
-    }
-    return synthesizer;
+  public Synthesizer createDefaultSynthesizer() {
+    return PolishSynthesizer.INSTANCE;
   }
 
   @Override
@@ -121,9 +99,10 @@ public class Polish extends Language {
         new PolishUnpairedBracketsRule(messages, this),
         new MorfologikPolishSpellerRule(messages, this, userConfig, altLanguages),
         new PolishWordRepeatRule(messages),
-        new CompoundRule(messages),
-        new SimpleReplaceRule(messages),
-        new DashRule()
+        new CompoundRule(messages, this, userConfig),
+        new SimpleReplaceRule(messages, this),
+        new WordCoherencyRule(messages),
+        new DashRule(messages)
         );
   }
 
@@ -132,4 +111,17 @@ public class Polish extends Language {
     return LanguageMaintainedState.ActivelyMaintained;
   }
 
+  @Override
+  protected int getPriorityForId(String id) {
+    switch (id) {
+      case "ZDANIA_ZLOZONE": return -1;  //so that it does not override more important rules
+    }
+    return super.getPriorityForId(id);
+  }
+
+  @Nullable
+  @Override
+  protected SpellingCheckRule createDefaultSpellingRule(ResourceBundle messages) throws IOException {
+    return new MorfologikPolishSpellerRule(messages, this, null, null);
+  }
 }

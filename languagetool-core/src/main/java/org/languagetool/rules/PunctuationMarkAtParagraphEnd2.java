@@ -42,7 +42,9 @@ public class PunctuationMarkAtParagraphEnd2 extends TextLevelRule {
     this.lang = Objects.requireNonNull(lang);
     super.setCategory(Categories.PUNCTUATION.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Grammar);
-    setDefaultTempOff();  // TODO
+//  setDefaultTempOff();  // TODO
+    setDefaultOff(); 
+
   }
 
   @Override
@@ -81,7 +83,7 @@ public class PunctuationMarkAtParagraphEnd2 extends TextLevelRule {
         tokenCount = 0;
       }
       sentPos++;
-      pos += sentence.getText().length();
+      pos += sentence.getCorrectedTextLength();
     }
     return toRuleMatchArray(ruleMatches);
   }

@@ -1578,7 +1578,7 @@ Adipinsäurediethylester
 Adipinsäuredinitril/SEPm
 Adipositas/m
 Adipositaschirurgie/m
-Adipositasprävalenz /m
+Adipositasprävalenz/m
 Adipsie
 Adirondack/S
 Adjazenzmatrix/m
@@ -12600,7 +12600,7 @@ Bietergespräche/NS
 Bietergruppe/Nm
 Bieterinformationen
 Bieterkampf/Sm
-Bieterkarte/N	
+Bieterkarte/N
 Bieterkonferenz/Pm
 Bieterkonsortien/m
 Bieterkonsortium/Sm
@@ -32701,7 +32701,7 @@ Freisass/FP
 Freischaltungsgebühr
 Freischaltungsgebühren
 Freischar/P
-Freischwingersystem/EPS	
+Freischwingersystem/EPS
 Freischärler/FNSm
 Freischärlerarmee/Nm
 Freischärlereinheit/Pm
@@ -58116,7 +58116,7 @@ Krempling/EPSm
 Krems
 Krems/m
 Kremsmünster/S
-Kren/S m
+Kren/Sm
 Kren/m
 Krengen/nSJ
 Krennerit
@@ -59592,7 +59592,7 @@ Kälbermasthöfe/N
 Kälbermastskandal/Sm
 Kälbermägen/m
 Kälberruhr/m
-Kälberstall(STp/m
+Kälberstall/STpm
 Kälberzähne/Nm
 Källskär/S
 Kälte/ijm
@@ -116334,7 +116334,7 @@ Verbeugen/SJm
 Verbeulen/S
 Verbiegen/SJm
 Verbieten/S
-Verbieterkarte/N	
+Verbieterkarte/N
 Verbildlichen/SJm
 Verbilligen/SJm
 Verbinden/SJm
@@ -117553,7 +117553,7 @@ Vernehmlassungs/hij
 Vernehmungsabteilung/Pm
 Vernehmungsbeamte/NRm
 Vernehmungsexperte/Nm
-Vernehmungshandbuch /STm
+Vernehmungshandbuch/STm
 Vernehmungshandbücher/Nm
 Vernehmungsmethode/Nm
 Vernehmungspersonal/S
@@ -129855,7 +129855,7 @@ adipinsäure/Nozm
 adipinsäuredinitril/SEPozm
 adipositas/ozm
 adipositaschirurgie/ozm
-adipositasprävalenz /ozm
+adipositasprävalenz/ozm
 adipös/A
 adjazenzmatrix/ozm
 adjektiv/EPSozm
@@ -145462,7 +145462,7 @@ bietergefecht/EPSTozm
 bietergemeinschaft/Pozm
 bietergruppe/Nozm
 bieterkampf/Sozm
-bieterkarte/N	
+bieterkarte/N
 bieterkonferenz/Pozm
 bieterkonsortien/ozm
 bieterkonsortium/Sozm
@@ -162405,7 +162405,7 @@ erbärmlichkeit/ozm
 erbäte/Z
 erböte/Z
 erbötig/A
-erd/hke
+#erd/hke
 erdabgewandt/A
 erdacht/AZ
 erdartig/A
@@ -163781,8 +163781,8 @@ erythrozytenmembran/EPozm
 erythrozytenmischpipette/Nozm
 erythrozytenstoffwechsel/ozm
 erythrozytenzahl/Pozm
-erz/EPTozm
-erz/hke
+#erz/EPTozm
+#erz/hke
 erzbildend/A
 erzbischöflich/A
 erzböse/A
@@ -170217,7 +170217,7 @@ freischwamm/Z
 freischweben/DIXY
 freischwimmen/DIX
 freischwingend/nA
-freischwingersystem/EPS	
+freischwingersystem/EPS
 freischwämme/Z
 freischwömme/Z
 freischärler/FNSozm
@@ -206060,7 +206060,7 @@ krempelärmel/NSozm
 krempig/A
 krempling/EPSozm
 krems/ozm
-kren/S ozm
+kren/Sozm
 kren/ozm
 krenelieren/IOXY
 krengen/nDIXY
@@ -207737,7 +207737,7 @@ kälbermast/ozm
 kälbermastskandal/Sozm
 kälbermägen/ozm
 kälberruhr/ozm
-kälberstall(STp/ozm
+kälberstall/STpozm
 kälberzähne/Nozm
 kälte/hke
 kälte/ozm
@@ -208405,7 +208405,7 @@ lahnbrücke/Nozm
 lahnstraße/ozm
 lahntal/STozm
 lahntalbahn/ozm
-lahr/ozm
+#lahr/ozm
 laib/ESTMozm
 laich/ozm
 laichakt/EPSTozm
@@ -242403,8 +242403,8 @@ rumänischsprachig/A
 rumänisierungsbestrebungen/ozm
 rumänisierungsdruck/STozm
 rumänisierungspolitik/ozm
-run/Sozm
-run/ozm
+#run/Sozm  -- auskommentiert, damit "Halterun" etc. nicht fälschlich akzeptiert wird
+#run/ozm
 rund/AC
 rund/ACUke
 rundblättrig/A
@@ -268007,7 +268007,7 @@ verbeugt/A
 verbeulen/DIOXY
 verbiegen/SJozm
 verbiestern/IOXY
-verbieterkarte/N	
+verbieterkarte/N
 verbildlichen/DIOXY
 verbildlichen/SJozm
 verbilligen/DIOXY
@@ -269721,7 +269721,7 @@ vernehmungsabteilung/Pozm
 vernehmungsbeamte/NRozm
 vernehmungsexperte/Nozm
 vernehmungsfähig/A
-vernehmungshandbuch /STozm
+vernehmungshandbuch/STozm
 vernehmungshandbücher/Nozm
 vernehmungsmethode/Nozm
 vernehmungsprotokoll/EPSozm
@@ -286692,7 +286692,7 @@ zürnen/DIXY
 überlebensfähig/A
 überlebensgroß/A
 überlebensnotwendig/AC
-überlebenswichtig/A  
+überlebenswichtig/A
 überlegen/ADIOXY
 überlegen/SJozm
 überlegener/A

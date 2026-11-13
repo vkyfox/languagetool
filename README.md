@@ -1,46 +1,56 @@
 ## LanguageTool
 
-**LanguageTool** is an Open Source proofreading software for English, French, German,
-Polish, Russian, and [more than 20 other languages](https://languagetool.org/languages/).
+**LanguageTool** is open-source proofreading software for English, Spanish, French, German,
+Portuguese, Polish, Dutch, and [more than 20 other languages](https://languagetool.org/languages/).
 It finds many errors that a simple spell checker cannot detect.
 
-* [How to run your own LanguageTool server](http://wiki.languagetool.org/http-server)
+* [LanguageTool Forum](https://forum.languagetool.org)
+
+* [How to run your own LanguageTool server](https://dev.languagetool.org/http-server)
+
 * [HTTP API documentation](https://languagetool.org/http-api/swagger-ui/#!/default/post_check)
-* [How to use our public server via HTTP](http://wiki.languagetool.org/public-http-api)
-* [How to use LanguageTool from Java](http://wiki.languagetool.org/java-api) ([Javadoc](https://languagetool.org/development/api/index.html?org/languagetool/JLanguageTool.html))
 
-For more information, please see our homepage at https://languagetool.org,
-[this README](https://github.com/languagetool-org/languagetool/blob/master/languagetool-standalone/README.md),
-and [CHANGES](https://github.com/languagetool-org/languagetool/blob/master/languagetool-standalone/CHANGES.md).
+* [How to use our public server via HTTP](https://dev.languagetool.org/public-http-api)
 
-LanguageTool is freely available under the LGPL 2.1 or later.
+* [How to use LanguageTool from Java](https://dev.languagetool.org/java-api) ([Javadoc](https://languagetool.org/development/api/index.html?org/languagetool/JLanguageTool.html))
+
+For more information, please see our homepage, at [`languagetool.org`](https://languagetool.org),
+[this `README`](https://github.com/languagetool-org/languagetool/blob/master/languagetool-standalone/README.md),
+and [`CHANGES`](https://github.com/languagetool-org/languagetool/blob/master/languagetool-standalone/CHANGES.md).
+
+The LanguageTool core (this repo) is freely available under the LGPL 2.1 or later.
 
 ## Docker
 
 Try one of the following projects for a community-contributed Docker file:
 
-- https://github.com/silvio/docker-languagetool ([Docker Hub](https://hub.docker.com/r/silviof/docker-languagetool))
-- https://github.com/Erikvl87/docker-languagetool ([Docker Hub](https://hub.docker.com/r/erikvl87/languagetool))
+`github.com`                                                                      | `hub.docker.com/r`
+----------------------------------------------------------------------------------|--------------------------------------------------------------------------------------
+[`meyayl/docker-languagetool`](https://github.com/meyayl/docker-languagetool)     | [`meyay/languagetool`](https://hub.docker.com/r/meyay/languagetool)
+[`Erikvl87/docker-languagetool`](https://github.com/Erikvl87/docker-languagetool) | [`erikvl87/languagetool`](https://hub.docker.com/r/erikvl87/languagetool)
+[`silvio/docker-languagetool`](https://github.com/silvio/docker-languagetool)     | [`silviof/docker-languagetool`](https://hub.docker.com/r/silviof/docker-languagetool)
 
 ## Contributions
 
-[The development overview](http://wiki.languagetool.org/development-overview) describes
+[The development overview](https://dev.languagetool.org/development-overview) describes
 how you can contribute error detection rules.
 
-See ['easy fix' issues](https://github.com/languagetool-org/languagetool/issues?q=is%3Aopen+is%3Aissue+label%3A%22easy+fix%22)
-for issues to get started.
-
-For more technical details, see [our wiki](http://wiki.languagetool.org).
+For more technical details, see [our dev pages](https://dev.languagetool.org).
 
 ## Scripted installation and building
+
 To install or build using a script, simply type:
-```
-curl -L https://raw.githubusercontent.com/languagetool-org/languagetool/master/install.sh | sudo bash <options>
+
+```sh
+#!/usr/bin/env sh
+curl -L https://raw.githubusercontent.com/languagetool-org/languagetool/master/install.sh | sudo bash $options
 ```
 
-If you wish to have more options, download the install.sh script. Usage options follow:
+If you wish to have more options, download the `install.sh` script. Usage options follow:
 
-```
+<blockquote>
+
+```HTML
 sudo bash install.sh <options>
 
 Usage: install.sh <option> <package>
@@ -67,38 +77,74 @@ Commands:
    server                      Runs server version of LanguageTool
 ```
 
+</blockquote>
+
 ## Alternate way to build from source
 
-Before start: you will need to clone from GitHub and install Java 8 and Apache Maven.
+Before start: you will need to clone from GitHub and install Java 17 and Apache Maven.
 
-Warning: a complete clone requires downloading more than 360 MB and needs more than 500 MB on disk.
-This can be reduced if you only need the last few revisions of the master branch
+Warning: a complete clone requires downloading more than 500 MiB and needs more than 1 500 MiB on disk.
+This can be reduced, if you only need the last few revisions of the master branch
 by creating a shallow clone:
 
-    git clone --depth 5 https://github.com/languagetool-org/languagetool.git
+```sh
+#!/usr/bin/env sh
+git clone --depth 5 https://github.com/languagetool-org/languagetool.git
+```
 
-A shallow clone downloads less than 60 MB and needs less than 200 MB on disk.
+A shallow clone downloads less than 60 MiB, and needs less than 200 MiB on disk.
 
 In the root project folder, run:
 
-    mvn clean test
+```sh
+#!/usr/bin/env sh
+mvn clean test
+```
 
-(sometimes you can skip Maven step for repeated builds)
+(Sometimes, you can skip Maven step for repeated builds.)
 
-    ./build.sh languagetool-standalone package -DskipTests
+```sh
+#!/usr/bin/env sh
+./build.sh languagetool-standalone package -DskipTests
+```
 
 Test the result in `languagetool-standalone/target/`.
 
-    ./build.sh languagetool-wikipedia package -DskipTests
+```sh
+#!/usr/bin/env sh
+./build.sh languagetool-wikipedia package -DskipTests
+```
 
 Test the result in `languagetool-wikipedia/target`.
 
-    ./build.sh languagetool-office-extension package -DskipTests
+Now, you can use the bleeding edge development copy of LanguageTool `*.jar` files, be aware that it might contain regressions.
 
-Test the result in `languagetool-office-extension/target`, rename the `*.zip` to `*.oxt` to install it in LibreOffice/OpenOffice.
+### How to run under Mac M1 or M2
 
-Now you can use the bleeding edge development copy of LanguageTool `*.jar` files, be aware that it might contain regressions.
+1. Install Brew for Rosetta:
+
+   ```sh
+   #!/usr/bin/env sh
+   arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+   ```
+
+1. Install OpenJDK for Rosetta:
+
+   ```sh
+   #!/usr/bin/env sh
+   arch -x86_64 brew install openjdk
+   ```
+
+1. Install Maven for Rosetta:
+
+   ```sh
+   #!/usr/bin/env sh
+   arch -x86_64 brew install maven
+   ```
+
+1. Now, run the build scripts.
 
 ### License
 
-Unless otherwise noted, this software is distributed under the LGPL, see file [COPYING.txt](https://github.com/languagetool-org/languagetool/blob/master/COPYING.txt).
+Unless otherwise noted, this software – the LanguageTool core – is distributed under the LGPL; see
+[`COPYING.txt`](https://github.com/languagetool-org/languagetool/blob/master/COPYING.txt).

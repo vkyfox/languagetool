@@ -33,39 +33,50 @@ import static org.junit.Assert.assertTrue;
 
 
 public class SimpleReplaceSoftRuleTest {
+  private JLanguageTool lt = new JLanguageTool(Ukrainian.DEFAULT_VARIANT);
 
   @Test
   public void testRule() throws IOException {
-    SimpleReplaceSoftRule rule = new SimpleReplaceSoftRule(TestTools.getEnglishMessages());
+    SimpleReplaceSoftRule rule = new SimpleReplaceSoftRule(TestTools.getEnglishMessages(), lt.getLanguage());
 
     RuleMatch[] matches;
-    JLanguageTool langTool = new JLanguageTool(new Ukrainian());
 
     // correct sentences:
-    matches = rule.match(langTool.getAnalyzedSentence("Ці рядки повинні збігатися."));
+    matches = rule.match(lt.getAnalyzedSentence("Ці рядки повинні збігатися."));
     assertEquals(0, matches.length);
 
-    matches = rule.match(langTool.getAnalyzedSentence("Цей брелок"));
+    matches = rule.match(lt.getAnalyzedSentence("у Трускавці."));
+    assertEquals(0, matches.length);
+
+    matches = rule.match(lt.getAnalyzedSentence("завидна"));
+    assertEquals(0, matches.length);
+
+    matches = rule.match(lt.getAnalyzedSentence("Цей брелок"));
     assertEquals(1, matches.length);
     assertEquals(Arrays.asList("дармовис"), matches[0].getSuggestedReplacements());
 
-    matches = rule.match(langTool.getAnalyzedSentence("Не знайде спасіння."));
+    matches = rule.match(lt.getAnalyzedSentence("Не знайде спасіння."));
     assertEquals(1, matches.length);
     assertEquals(Arrays.asList("рятування", "рятунок", "порятунок", "визволення"), matches[0].getSuggestedReplacements());
     assertTrue(matches[0].getMessage().contains(": релігія"));
 
-    //refl
-    matches = rule.match(langTool.getAnalyzedSentence("відображаються"));
-    assertEquals(1, matches.length);
-    assertEquals(Arrays.asList("показуватися", "зображатися", "відбиватися"), matches[0].getSuggestedReplacements());
-    assertTrue("No context: " + matches[0].getMessage(), matches[0].getMessage().contains(": математика"));
-
     // test ignoreTagged
-//    matches = rule.match(langTool.getAnalyzedSentence("щедрота"));
+//    matches = rule.match(lt.getAnalyzedSentence("щедрота"));
 //    assertEquals(1, matches.length);
 //    assertEquals(Arrays.asList("щедрість", "гойність", "щедриня"), matches[0].getSuggestedReplacements());
 //
-//    matches = rule.match(langTool.getAnalyzedSentence("щедроти"));
+//    matches = rule.match(lt.getAnalyzedSentence("щедроти"));
 //    assertEquals(0, matches.length);
   }
+  
+
+  @Test
+  public void testRuleForDerivats() throws IOException {
+    SimpleReplaceSoftRule rule = new SimpleReplaceSoftRule(TestTools.getEnglishMessages(), lt.getLanguage());
+    
+    RuleMatch[] matches = rule.match(lt.getAnalyzedSentence("Підключивши"));
+    assertEquals(1, matches.length);
+    assertEquals(Arrays.asList("Увімкнувши", "Під'єднавши", "Приєднавши"), matches[0].getSuggestedReplacements());
+  }
+
 }

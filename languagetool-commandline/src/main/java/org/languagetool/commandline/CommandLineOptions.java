@@ -19,6 +19,7 @@
 package org.languagetool.commandline;
 
 import org.jetbrains.annotations.Nullable;
+import org.languagetool.JLanguageTool;
 import org.languagetool.Language;
 import org.languagetool.rules.CategoryId;
 
@@ -58,16 +59,15 @@ public class CommandLineOptions {
   private boolean autoDetect = false;
   private boolean xmlFiltering = false;
   private boolean lineByLine = false;
+  private boolean enableTempOff = false;
+  private boolean cleanOverlapping = false;
+  private JLanguageTool.Level level = JLanguageTool.Level.DEFAULT;
   @Nullable
   private Language language = null;
   @Nullable
   private Language motherTongue = null;
   @Nullable
   private File languageModel = null;
-  @Nullable
-  private File word2vecModel = null;
-  @Nullable
-  private File neuralNetworkModel = null;
 
   @Nullable
   private File fasttextModel = null;
@@ -122,6 +122,25 @@ public class CommandLineOptions {
     this.lineByLine = lineByLine;
   }
 
+  public boolean isEnableTempOff() {
+    return enableTempOff;
+  }
+
+  public void setEnableTempOff(boolean enableTempOff) {
+    this.enableTempOff = enableTempOff;
+  }
+  
+  /**
+   * @since 6.1
+   */
+  public boolean isCleanOverlapping() {
+    return cleanOverlapping;
+  }
+
+  public void setCleanOverlapping(boolean cleanOverlapping) {
+    this.cleanOverlapping = cleanOverlapping;
+  }
+
   public boolean isRecursive() {
     return recursive;
   }
@@ -144,20 +163,6 @@ public class CommandLineOptions {
 
   public void setSingleLineBreakMarksParagraph(boolean singleLineBreakMarksParagraph) {
     this.singleLineBreakMarksParagraph = singleLineBreakMarksParagraph;
-  }
-
-  /**
-   * @since 3.6
-   */
-  public boolean isXmlFormat() {
-    return this.outputFormat == OutputFormat.XML;
-  }
-  
-  /**
-   * @since 3.6
-   */
-  public void setXmlFormat() {
-    this.outputFormat = OutputFormat.XML;
   }
 
   /**
@@ -246,37 +251,6 @@ public class CommandLineOptions {
    */
   public void setLanguageModel(File languageModel) {
     this.languageModel = languageModel;
-  }
-
-  /**
-   * @return a directory with a word2vec language model for use with neural network rules in sub directories like ({@code en}), or {@code null}
-   * @since 4.0
-   */
-  @Nullable
-  public File getWord2VecModel() {
-    return word2vecModel;
-  }
-
-  /**
-   * @since 4.0
-   */
-  public void setWord2VecModel(File neuralNetworkLanguageModel) {
-    this.word2vecModel = neuralNetworkLanguageModel;
-  }
-
-  /**
-   * @since 4.4
-   */
-  @Nullable
-  public File getNeuralNetworkModel() {
-    return neuralNetworkModel;
-  }
-
-  /**
-   * @since 4.4
-   */
-  public void setNeuralNetworkModel(File neuralNetworkModel) {
-    this.neuralNetworkModel = neuralNetworkModel;
   }
 
   /**
@@ -458,6 +432,16 @@ public class CommandLineOptions {
    */
   public void setBitextRuleFile(String bitextRuleFile) {
     this.bitextRuleFile = bitextRuleFile;
+  }
+
+  /** @since 5.1 */
+  public void setLevel(JLanguageTool.Level level) {
+    this.level = level;
+  }
+
+  /** @since 5.1 */
+  public JLanguageTool.Level getLevel() {
+    return this.level;
   }
 
 }

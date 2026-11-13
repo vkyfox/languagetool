@@ -20,6 +20,7 @@ abendesst
 abendgegessen
 abendisst
 abendzuessen
+Bankomatkarte/N
 Alkolenker/NS
 Alkolenkerin
 Alkolenkerinnen
@@ -521,7 +522,7 @@ Schmolle
 #Fasche
 Binkel #ugs
 Eitrige #ugs
-Absolutorium
+Absolutorium/S
 pumpern
 Erlag/S
 ferten #ugs
@@ -530,8 +531,47 @@ Steckerlfische/N
 ludeln
 Turnusarzt
 Turnusarztes
-Turnusärzte
+Turnusärzte/N
 Turnusärztin
 Turnusärztinnen
 Öffi/S
 Nightjet/S
+Billa/S #name
+Bursektomie/N
+Brömmel/S #name
+Boubacar/S #name
+Carpendale/S #name
+Carbonara/S #name
+Anonymverfügung
+Anonymverfügungen
+Krot
+WKStA
+Straflegistik
+Kücken/S
+Subfrächter/NS
+Frächter/NS
+Ordinationsöffnung
+Parifizierung
+parifiziert
+parifiziere/N
+Mindestkonsumation
+Zwiebacke
+Anrainerparken/S
+handelseins
+Verfassungsminister/NS
+Verfassungsministerin
+Verfassungsministerinnen
+Stiegensteigen/S
+Taggeld/S
+Taggelder/N
+Taggeldes
+Krankentaggeld
+Arbeitsinspektorat/S
+Arbeitsinspektorate/N
+Würstel/SN
+Fortpflanz
+Stiegenhausbeleuchtung
+Stiegenhausbeleuchtungen
+Förderansuchen
+Mocca/S
+obgenannt/A

@@ -34,6 +34,7 @@ import org.languagetool.rules.spelling.SpellingCheckRule;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.hamcrest.core.Is.is;
@@ -41,13 +42,13 @@ import static org.junit.Assert.*;
 
 public class JLanguageToolTest {
 
-  @Ignore("not a test, but used on http://wiki.languagetool.org/java-api")
+  @Ignore("not a test, but used on https://dev.languagetool.org/java-api")
   @Test
   public void demoCodeForHomepage() throws IOException {
-    JLanguageTool langTool = new JLanguageTool(new BritishEnglish());
+    JLanguageTool lt = new JLanguageTool(BritishEnglish.getInstance());
     // comment in to use statistical ngram data:
-    //langTool.activateLanguageModelRules(new File("/data/google-ngram-data"));
-    List<RuleMatch> matches = langTool.check("A sentence with a error in the Hitchhiker's Guide tot he Galaxy");
+    //lt.activateLanguageModelRules(new File("/data/google-ngram-data"));
+    List<RuleMatch> matches = lt.check("A sentence with a error in the Hitchhiker's Guide tot he Galaxy");
     for (RuleMatch match : matches) {
       System.out.println("Potential error at characters " +
           match.getFromPos() + "-" + match.getToPos() + ": " +
@@ -57,16 +58,16 @@ public class JLanguageToolTest {
     }
   }
 
-  @Ignore("not a test, but used on http://wiki.languagetool.org/java-spell-checker")
+  @Ignore("not a test, but used on https://dev.languagetool.org/java-spell-checker")
   @Test
   public void spellCheckerDemoCodeForHomepage() throws IOException {
-    JLanguageTool langTool = new JLanguageTool(new BritishEnglish());
-    for (Rule rule : langTool.getAllRules()) {
+    JLanguageTool lt = new JLanguageTool(BritishEnglish.getInstance());
+    for (Rule rule : lt.getAllRules()) {
       if (!rule.isDictionaryBasedSpellingRule()) {
-        langTool.disableRule(rule.getId());
+        lt.disableRule(rule.getId());
       }
     }
-    List<RuleMatch> matches = langTool.check("A speling error");
+    List<RuleMatch> matches = lt.check("A speling error");
     for (RuleMatch match : matches) {
       System.out.println("Potential typo at characters " +
           match.getFromPos() + "-" + match.getToPos() + ": " +
@@ -76,16 +77,16 @@ public class JLanguageToolTest {
     }
   }
 
-  @Ignore("not a test, but used on http://wiki.languagetool.org/java-spell-checker")
+  @Ignore("not a test, but used on https://dev.languagetool.org/java-spell-checker")
   @Test
   public void spellCheckerDemoCodeForHomepageWithAddedWords() throws IOException {
-    JLanguageTool langTool = new JLanguageTool(new BritishEnglish());
-    for (Rule rule : langTool.getAllRules()) {
+    JLanguageTool lt = new JLanguageTool(BritishEnglish.getInstance());
+    for (Rule rule : lt.getAllRules()) {
       if (rule instanceof SpellingCheckRule) {
         ((SpellingCheckRule) rule).addIgnoreTokens(Arrays.asList("myspecialword", "anotherspecialword"));
       }
     }
-    List<RuleMatch> matches = langTool.check("These are myspecialword and anotherspecialword");
+    List<RuleMatch> matches = lt.check("These are myspecialword and anotherspecialword");
     System.out.println(matches.size() + " matches");   // => "0 matches"
   }
 
@@ -94,6 +95,7 @@ public class JLanguageToolTest {
     //more error-free sentences to deal with possible regressions
     if (System.getProperty("disableHardcodedTests") == null) {
       JLanguageTool lt = new JLanguageTool(new English());
+      assertNoError("Old values may remain although they are ignored.", lt);
       assertNoError("A test that should not give errors.", lt);
       assertNoError("As long as you have hope, a chance remains.", lt);
       assertNoError("A rolling stone gathers no moss.", lt);
@@ -110,18 +112,41 @@ public class JLanguageToolTest {
       assertNoError("And the few must win what the many lose, for the opposite arrangement would not support markets as we know them at all, and is, in fact, unimaginable.", lt);
       assertNoError("He explained his errand, but without bothering much to make it plausible, for he felt something well up in him which was the reason he had fled the army.", lt);
       assertNoError("I think it's better, and it's not a big deal.", lt);
+      assertNoError("The files .edu and .htaccess are special", lt);
 
+      // with hidden characters, separated with annotated text
+      assertNoError("This\u202D\u202C \u202D\u202Cis\u202D\u202C \u202D\u202Ca\u202D\u202C "
+          + "\u202D\u202Ctest\u202D\u202C \u202D\u202Csentence,\u202D\u202C \u202D\u202Cwith"
+          + "\u202D\u202C \u202D\u202Cstrange\u202D\u202C \u202D\u202Chidden\u202D\u202C \u202D\u202Ccharacters.", lt);
+      
       assertOneError("A test test that should give errors.", lt);
       assertOneError("I can give you more a detailed description.", lt);
+      assertNoError("This is a sentence.  This is another sentence.", lt);
+      assertOneError("This is a sentence.   This is another sentence.", lt);
       assertTrue(lt.getAllRules().size() > 1000);
-      assertNoError("The sea ice is highly variable — frozen solid during cold, calm weather and broke...", lt);
+      assertNoError("The sea ice is highly variable — frozen solid during cold, calm weather and broke ...", lt);
       assertTrue(lt.getAllRules().size() > 3);
       assertOneError("I can give you more a detailed description.", lt);
       lt.disableRule("MORE_A_JJ");
       assertNoError("I can give you more a detailed description.", lt);
       assertOneError("I've go to go.", lt);
       lt.disableCategory(Categories.TYPOS.getId());
-      assertNoError("I've go to go.", lt);
+      if (Premium.isPremiumVersion()) {
+        assertOneError("I've go to go.", lt);
+      } else {
+        assertNoError("I've go to go.", lt);
+      }
+            
+      // Passive voice: repetitions
+      // the first match is at a long distance
+      assertNoError(
+          "The territory of Metropolitan France was settled by Celtic tribes known as Gauls. France reached its political and military zenith in the early 19th century under Napoleon Bonaparte, subjugating much of continental Europe and establishing the First French Empire. The French Revolutionary and Napoleonic Wars shaped the course of European and world history. The collapse of the empire initiated a period of relative decline, in which France endured a tumultuous succession of governments until the founding of the French Third Republic during the Franco-Prussian War in 1870. Subsequent decades saw a period of optimism, cultural and scientific flourishing, as well as economic prosperity known as the Belle Époque. France was one of the major participants of World War I, from which it emerged victorious at great human and economic cost. It was among the Allied powers of World War II, but was soon occupied by the Axis in 1940. France was plunged into a series of dynastic conflicts involving England. The second half of the 16th century was dominated by religious civil wars. The short-lived Fourth Republic was established and later dissolved during the Algerian War. The current Fifth Republic was formed in 1958 by Charles de Gaulle.",
+          lt);
+      // 4 previous matches within 80 tokens
+      // the match for this text is from a picky rule
+      // so we need to call check with the correct level
+      List<RuleMatch> matches = lt.check("The territory of Metropolitan France was settled by Celtic tribes known as Gauls. France was plunged into a series of dynastic conflicts involving England. The second half of the 16th century was dominated by religious civil wars. The short-lived Fourth Republic was established and later dissolved during the Algerian War. The current Fifth Republic was formed in 1958 by Charles de Gaulle. ", JLanguageTool.Level.PICKY);
+      assertEquals("Expected one match", 1, matches.size());
     }
   }
 
@@ -137,7 +162,7 @@ public class JLanguageToolTest {
 
   @Test
   public void testPositionsWithEnglish() throws IOException {
-    JLanguageTool tool = new JLanguageTool(new AmericanEnglish());
+    JLanguageTool tool = new JLanguageTool(AmericanEnglish.getInstance());
     List<RuleMatch> matches = tool.check("A sentence with no period\n" +
         "A sentence. A typoh.");
     assertEquals(1, matches.size());
@@ -148,13 +173,20 @@ public class JLanguageToolTest {
 
   @Test
   public void testPositionsWithEnglishTwoLineBreaks() throws IOException {
-    JLanguageTool tool = new JLanguageTool(new AmericanEnglish());
+    JLanguageTool tool = new JLanguageTool(AmericanEnglish.getInstance());
     List<RuleMatch> matches = tool.check("This sentence.\n\n" +
         "A sentence. A typoh.");
     assertEquals(1, matches.size());
     RuleMatch match = matches.get(0);
     assertEquals(2, match.getLine());
-    assertEquals(14, match.getColumn());   // TODO: should actually be 15, as in testPositionsWithEnglish()
+    // It was 14. It should actually be 15, as in testPositionsWithEnglish(). 
+    // Fixed thanks to a change in the sentence split.
+    if (Premium.isPremiumVersion()) {
+      // TODO: there should be no difference here
+      assertEquals(14, match.getColumn());
+    } else {
+      assertEquals(15, match.getColumn());
+    }
   }
 
   @Test
@@ -168,6 +200,12 @@ public class JLanguageToolTest {
         tool.getAnalyzedSentence("This is a test\u00aded sentence.").toString());
     //test paragraph ends adding
     assertEquals("<S> </S><P/> ", tool.getAnalyzedSentence("\n").toString());
+    
+    //test vertical tab as white space
+    String sentence = "I'm a cool test\u000Bwith a line";
+    AnalyzedSentence aSentence = tool.getAnalyzedSentence(sentence);
+    assertTrue(aSentence.getTokens()[9].isWhitespace());
+    assertTrue(aSentence.getTokens()[10].isWhitespaceBefore());
   }
 
   @Test
@@ -200,7 +238,7 @@ public class JLanguageToolTest {
     AnalyzedSentence raw = tool.getRawAnalyzedSentence("Let's do a \"test\", do you understand?");
     AnalyzedSentence cooked = tool.getAnalyzedSentence("Let's do a \"test\", do you understand?");
     //test if there was a change
-    assertFalse(raw.equals(cooked));
+    assertNotEquals(raw, cooked);
     //see if nothing has been deleted
     assertEquals(raw.getTokens().length, cooked.getTokens().length);
     int i = 0;
@@ -214,7 +252,7 @@ public class JLanguageToolTest {
   @Test
   public void testOverlapFilter() throws IOException {
     Category category = new Category(new CategoryId("TEST_ID"), "test category");
-    List<PatternToken> elements1 = Arrays.asList(new PatternToken("one", true, false, false));
+    List<PatternToken> elements1 = Collections.singletonList(new PatternToken("one", true, false, false));
     PatternRule rule1 = new PatternRule("id1", new English(), elements1, "desc1", "msg1", "shortMsg1");
     rule1.setSubId("1");
     rule1.setCategory(category);
@@ -256,7 +294,7 @@ public class JLanguageToolTest {
       if (text.getGlobalMetaData(AnnotatedText.MetaDataKey.EmailToAddress, "").contains("Foo Bar")) {
         return new RuleMatch[]{new RuleMatch(this, null, 0, 1, "test message")};
       }
-      return new RuleMatch[0];
+      return RuleMatch.EMPTY_ARRAY;
     }
     @Override
     public RuleMatch[] match(List<AnalyzedSentence> sentences) throws IOException {
@@ -273,6 +311,34 @@ public class JLanguageToolTest {
     @Override
     public int minToCheckParagraph() {
       return -1;
+    }
+  }
+  
+  @Test
+  public void testAdvancedTypography() {
+    Language lang = AmericanEnglish.getInstance();
+    assertEquals(lang.toAdvancedTypography("The genitive ('s) may be missing."), "The genitive (’s) may be missing.");
+    assertEquals(lang.toAdvancedTypography("The word 'Language‘s' is not standard English"), "The word ‘Language‘s’ is not standard English");
+    assertEquals(lang.toAdvancedTypography("Did you mean <suggestion>Language's</suggestion> (straight apostrophe) or <suggestion>Language’s</suggestion> (curly apostrophe)?"), "Did you mean “Language's” (straight apostrophe) or “Language’s” (curly apostrophe)?");
+    assertEquals(lang.toAdvancedTypography("Did you mean <suggestion>Language’s</suggestion> (curly apostrophe) or <suggestion>Language's</suggestion> (straight apostrophe)?"), "Did you mean “Language’s” (curly apostrophe) or “Language's” (straight apostrophe)?");
+    assertEquals(lang.toAdvancedTypography("Did you mean <suggestion>|?</suggestion>"), "Did you mean “|?”");
+  }
+  
+  @Test 
+  public void testAdaptSuggestions() throws IOException {
+    JLanguageTool tool = new JLanguageTool(AmericanEnglish.getInstance());
+    List<RuleMatch> matches = tool.check("Whatever their needs, we doesn't never disappoint them.");
+    assertEquals(matches.get(0).getSuggestedReplacements().toString(), "[n't,  never]"); 
+  }
+  
+  @Test
+  public void testEnglishVariants() throws IOException {
+    String sentence = "This is a test.";
+    String sentence2 = "This is an test.";
+    for (String langCode : new String[] { "en-US", "en-AU", "en-GB", "en-CA", "en-ZA", "en-NZ" }) {
+      JLanguageTool lt = new JLanguageTool(Languages.getLanguageForShortCode(langCode));
+      assertEquals(0, lt.check(sentence).size());
+      assertEquals(1, lt.check(sentence2).size());
     }
   }
 }

@@ -27,7 +27,7 @@ import org.languagetool.tokenizers.SentenceTokenizer;
 
 public class CatalanSentenceTokenizerTest {
 
-  private final SentenceTokenizer stokenizer = new SRXSentenceTokenizer(new Catalan());
+  private final SentenceTokenizer stokenizer = new SRXSentenceTokenizer(Catalan.getInstance());
 
   @Test
   public final void testTokenize() {
@@ -49,6 +49,17 @@ public class CatalanSentenceTokenizerTest {
             "»La Maria va engegar el cotxe");
     testSplit("diu que va dir. ", "A mi em feia estrany.");
     testSplit("Són del s. III dC. ", "Són importants les pintures.");
+    testSplit("Primera frase.[4] ", "Segona frase");
+    testSplit("23. Article vint-i-tres");
+    testSplit("Això és una frase.   ", "Això és una altra frase.");
+    testSplit("Això és una frase.\n", "Això és una altra frase.");
+    testSplit("Això és una frase. \n", "Això és una altra frase.");
+    testSplit("Això és una frase. \n  ", "Això és una altra frase.");
+    testSplit("Això és una frase.\r\n", "Això és una altra frase.");
+    testSplit("Això és una frase. \r\n  ", "Això és una altra frase.");
+    testSplit("Això és una frase. \n \n", "  Això és una altra frase.");
+    testSplit("Això és una frase? \n", "Sí, i tant.");
+    testSplit("Ja ho tinc!\n", "Què vols dir?");
     
     // N., t.
     testSplit("Vés-te’n. ", "A mi em feia estrany.");  
@@ -62,10 +73,17 @@ public class CatalanSentenceTokenizerTest {
     testSplit("(\"n. 3\".");
     testSplit("En el t. 2 de la col·lecció");
     testSplit("Llança't. ", "Fes-ho.");
+    testSplit("És professor a l'Inst. Joan Vives.");
     
     // Initials
     testSplit("A l'atenció d'A. Comes.");
     testSplit("A l'atenció d'À. Comes.");
+    testSplit("Són els alumnes de Física I. ", "Ara no venen ben preparats.");
+    testSplit("Són els alumnes de Física II. ", "Ara no venen ben preparats.");
+    testSplit("Va ser obra de Felip V. ", "Ara ho sabem.");
+    testSplit("Va ser obra d'Alfons X. ", "Ara ho sabem.");
+    testSplit("La manera com funciona la publicació a X. ", "No és una decisió fàcil.");
+    testSplit("La manera com funciona la publicació a X. ", "Probablement no és una decisió fàcil.");
     testSplit("Núm. operació 220130000138.");
 
     // Ellipsis
@@ -81,6 +99,7 @@ public class CatalanSentenceTokenizerTest {
     testSplit("Vegeu el cap. 24 del llibre.");
     testSplit("Vegeu el cap. IX del llibre.");
     testSplit("Viu al núm. 24 del carrer de l'Hort.");
+    testSplit("Viu al núm. vint-i-quatre del carrer de l'Hort.");
     testSplit("El Dr. Joan no vindrà.");
     testSplit("Distingit Sr. Joan,");
     testSplit("Molt Hble. Sr. President");
@@ -92,6 +111,36 @@ public class CatalanSentenceTokenizerTest {
     testSplit("Arriba fins a les pp. XI-XII.");
     testSplit("i no ho vol. ", "Malgrat que és així.");
     testSplit("i és del vol. 3 de la col·lecció");
+    testSplit("Els EE. UU. són un país.");
+    testSplit("Els EE.UU. són un país.");
+    testSplit("Els ee. uu. són un país.");
+    testSplit("Els ee.uu. són un país.");
+    testSplit("Me'n vaig als EE.UU. ", "Bon viatge.");
+    testSplit("Garcia, Joan (coords.)");
+    testSplit("fins al curs de 8è. ", "\"No es pot oblidar allò\"");
+    testSplit("fins al curs de 8è. ", "-No es pot oblidar allò");
+    testSplit("Aprovació (ca. 2010), suspensió (c. 2011), segle (ca. XIX)");
+    testSplit("La Dra. Ma. Victòria.");
+    testSplit("la projectada Sta. Ma. de Gàllecs");
+    testSplit("El fruit té de 6 a 8 cm de long. i 4 a 6 cm d'ample.");
+    testSplit("Geiger (Proc. Roy. Soc. 1 de febrer de 1910).");
+    testSplit("El poble tenia 50 hab. a finals de segle XX.");
+    testSplit("Vam veure un documental sobre Warner Bros. Cartoons.");
+    testSplit("Vam veure un documental sobre la Warner Bros. ", "Era boníssim.");
+    testSplit("La Warner Bros. feia coses que m'agradaven molt.");
+    testSplit("Introduïu açí el vostre text. ", "o feu servir aquest texts com a a exemple per a alguns errades que LanguageTool hi pot detectat.");
+    
+    // Unknown abbreviations inside parentheses
+    testSplit("(Impren. Disss)");
+    testSplit("(Impren. 188-disss)");
+    testSplit("[Impren. Disss]");
+    testSplit("[Impren. 188-disss]");
+    testSplit("{Impren. Disss}");
+    testSplit("{Impren. 188-disss}");
+    testSplit("(Impren. Disss. Ioo)");
+    testSplit("(Impren. Disss. Ioo. A. B. Garcia)");
+    testSplit("Impren. \n", "Disss");
+    testSplit("(Impren. \n", "Disss)");
 
     // Exception to abbreviations
     testSplit("Ell és el número u. ", "Jo el dos.");
@@ -104,10 +153,16 @@ public class CatalanSentenceTokenizerTest {
     testSplit("Són d'1 m. ", "Han estat condicionades.");
     testSplit("Hi vivien 50 h. ", "Després el poble va créixer.");
     testSplit("L'acte serà a les 15.30 h. de la vesprada.");
+    testSplit("De 9:00 a 17:00 h. (aproximadament).");
+    testSplit("Aquesta és la resolució No. 2 de les Corts.");
     
     //Error: missing space. It is not split in order to trigger other errors. 
     testSplit("s'hi enfrontà quan G.Oueddei n'esdevingué líder");
     testSplit("el jesuïta alemany J.E. Nithard");
+
+    testSplit("PERNIL DOLÇ\nBACON\nPEPERONI\nPEBROT VERD\nOLIVES");
+
+    testSplit("El framework .NET o ASP.NET o Microsoft.Net");
   }
 
   private void testSplit(final String... sentences) {

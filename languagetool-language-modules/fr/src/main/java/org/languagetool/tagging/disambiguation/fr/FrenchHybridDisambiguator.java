@@ -19,34 +19,50 @@
 
 package org.languagetool.tagging.disambiguation.fr;
 
-import java.io.IOException;
-
+import org.jetbrains.annotations.Nullable;
 import org.languagetool.AnalyzedSentence;
+import org.languagetool.JLanguageTool;
 import org.languagetool.language.French;
 import org.languagetool.tagging.disambiguation.AbstractDisambiguator;
 import org.languagetool.tagging.disambiguation.Disambiguator;
 import org.languagetool.tagging.disambiguation.MultiWordChunker;
 import org.languagetool.tagging.disambiguation.rules.XmlRuleDisambiguator;
 
+import java.io.IOException;
+
 /**
  * Hybrid chunker-disambiguator for French
  * 
- * @author Marcin Miłkowski
+ * @author Jaume Ortolà
  */
 
 public class FrenchHybridDisambiguator extends AbstractDisambiguator {
 
-  private final Disambiguator chunker = new MultiWordChunker("/fr/multiwords.txt");
-  private final Disambiguator disambiguator = new XmlRuleDisambiguator(new French());
+  private final MultiWordChunker chunker = MultiWordChunker.getInstance("/fr/multiwords.txt", true, true, false);
+  private final Disambiguator disambiguator = new XmlRuleDisambiguator(French.getInstance(), true);
+  private final MultiWordChunker chunkerGlobal = MultiWordChunker.getInstance("/spelling_global.txt", false, true, false,
+    MultiWordChunker.tagForNotAddingTags);
+
+  public FrenchHybridDisambiguator() {
+    chunker.setRemovePreviousTags(true);
+    chunkerGlobal.setIgnoreSpelling(true);
+  }
+
+  @Override
+  public AnalyzedSentence disambiguate(AnalyzedSentence input) throws IOException {
+    return disambiguate(input, null);
+  }
 
   /**
    * Calls two disambiguator classes: (1) a chunker; (2) a rule-based
    * disambiguator.
    */
   @Override
-  public final AnalyzedSentence disambiguate(AnalyzedSentence input)
-      throws IOException {
-    return disambiguator.disambiguate(chunker.disambiguate(input));
+  public AnalyzedSentence disambiguate(AnalyzedSentence input,
+                                       @Nullable JLanguageTool.CheckCancelledCallback checkCanceled) throws IOException {
+    return disambiguator.disambiguate(chunker.disambiguate(chunkerGlobal.disambiguate(input, checkCanceled),
+      checkCanceled), checkCanceled);
   }
+
 
 }

@@ -21,13 +21,14 @@ package org.languagetool.rules.ca;
 import java.io.IOException;
 import java.util.ResourceBundle;
 
+import org.languagetool.Language;
 import org.languagetool.rules.ITSIssueType;
 import org.languagetool.rules.WrongWordInContextRule;
 
 public class CatalanWrongWordInContextRule extends WrongWordInContextRule {
   
-  public CatalanWrongWordInContextRule(final ResourceBundle messages) throws IOException {
-    super(messages);
+  public CatalanWrongWordInContextRule(ResourceBundle messages, Language lang) throws IOException {
+    super(messages, lang);
     setLocQualityIssueType(ITSIssueType.Grammar);
     setMatchLemmmas();
   }
@@ -44,7 +45,7 @@ public class CatalanWrongWordInContextRule extends WrongWordInContextRule {
   
   @Override
   public String getDescription() {
-    return "Confusió segons el context (infligir/infringir, etc.)";
+    return "Confusió segons el context: $match";
   }
   
   @Override
@@ -54,7 +55,7 @@ public class CatalanWrongWordInContextRule extends WrongWordInContextRule {
   
   @Override
   protected String getMessageString() {
-    return "¿Volíeu dir <suggestion>$SUGGESTION</suggestion> en lloc de '$WRONGWORD'?";
+    return "¿Volíeu dir <suggestion>$SUGGESTION</suggestion> en lloc de \"$WRONGWORD\"?";
   }
   
   @Override
@@ -64,7 +65,7 @@ public class CatalanWrongWordInContextRule extends WrongWordInContextRule {
   
   @Override
   protected String getLongMessageString() {
-    return "¿Volíeu dir <suggestion>$SUGGESTION</suggestion> (= $EXPLANATION_SUGGESTION) en lloc de '$WRONGWORD' (= $EXPLANATION_WRONGWORD)?";
+    return "¿Volíeu dir <suggestion>$SUGGESTION</suggestion> ($EXPLANATION_SUGGESTION) en lloc de \"$WRONGWORD\" ($EXPLANATION_WRONGWORD)?";
   }
 
 }

@@ -47,13 +47,13 @@ final class StartupTimePerformanceTest {
     long totalTime = 0;
     for (int i = 0; i < RUNS; i++) {
       long startTime = System.currentTimeMillis();
-      MultiThreadedJLanguageTool langTool = new MultiThreadedJLanguageTool(language);
-      List<RuleMatch> matches = langTool.check("");
+      MultiThreadedJLanguageTool lt = new MultiThreadedJLanguageTool(language);
+      List<RuleMatch> matches = lt.check("");
       if (matches.size() > 0) {
         throw new RuntimeException("Got matches on empty input for " + language + ": " + matches);
       }
       long runTime = System.currentTimeMillis() - startTime;
-      langTool.shutdown();
+      lt.shutdown();
       if (i >= SKIP) {
         totalTime += runTime;
       }
@@ -65,7 +65,7 @@ final class StartupTimePerformanceTest {
   public static void main(String[] args) throws IOException {
     StartupTimePerformanceTest test = new StartupTimePerformanceTest();
     test.run();
-    //test.run(new GermanyGerman());
+    //test.run(GermanyGerman.getInstance());
   }
 
 }

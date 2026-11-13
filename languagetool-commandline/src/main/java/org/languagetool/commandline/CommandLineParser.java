@@ -18,6 +18,7 @@
  */
 package org.languagetool.commandline;
 
+import org.languagetool.JLanguageTool;
 import org.languagetool.Language;
 import org.languagetool.Languages;
 
@@ -31,7 +32,7 @@ import java.util.Arrays;
 class CommandLineParser {
 
   CommandLineOptions parseOptions(String[] args) {
-    if (args.length < 1 || args.length > 12) {
+    if (args.length < 1 || args.length > 14) {
       throw new WrongParameterNumberException();
     }
     CommandLineOptions options = new CommandLineOptions();
@@ -48,6 +49,17 @@ class CommandLineParser {
         options.setVerbose(true);
       } else if (args[i].equals("--line-by-line")) {
         options.setLineByLine(true);
+      } else if (args[i].equals("--enable-temp-off")) {
+        options.setEnableTempOff(true);
+      } else if (args[i].equals("--clean-overlapping")) {
+        options.setCleanOverlapping(true);
+      } else if (args[i].equals("--level")) {
+        String level = args[++i];
+        try {
+          options.setLevel(JLanguageTool.Level.valueOf(level));
+        } catch (IllegalArgumentException e) {
+          throw new IllegalArgumentException("Unknown level '" + level + "' - currently, only 'PICKY' is supported");
+        }
       } else if (args[i].equals("-t") || args[i].equals("--taggeronly")) {
         options.setTaggerOnly(true);
         if (options.isListUnknown()) {
@@ -93,12 +105,6 @@ class CommandLineParser {
       } else if (args[i].equals("--languagemodel")) {
         checkArguments("--languagemodel", i, args);
         options.setLanguageModel(new File(args[++i]));
-      } else if (args[i].equals("--word2vecmodel")) {
-        checkArguments("--word2vecmodel", i, args);
-        options.setWord2VecModel(new File(args[++i]));
-      } else if (args[i].equals("--neuralnetworkmodel")) {
-        checkArguments("--neuralnetworkmodel", i, args);
-        options.setNeuralNetworkModel(new File(args[++i]));
       } else if (args[i].equals("--fasttextmodel")) {
         checkArguments("--fasttextmodel", i, args);
         options.setFasttextModel(new File(args[++i]));
@@ -141,27 +147,16 @@ class CommandLineParser {
         if (options.isListUnknown()) {
           throw new IllegalArgumentException("You cannot list unknown words in JSON output format");
         }
-      } else if (args[i].equals("--api")) {
-        options.setXmlFormat();
-        if (options.isApplySuggestions()) {
-          throw new IllegalArgumentException("XML API format makes no sense for automatic application of suggestions");
-        }
       } else if (args[i].equals("-a") || args[i].equals("--apply")) {
         options.setApplySuggestions(true);
         if (options.isTaggerOnly()) {
           throw new IllegalArgumentException("You cannot apply suggestions when tagging only");
-        }
-        if (options.isXmlFormat()) {
-          throw new IllegalArgumentException("XML API format makes no sense for automatic application of suggestions");
         }
         if (options.isJsonFormat()) {
           throw new IllegalArgumentException("JSON output format makes no sense for automatic application of suggestions");
         }
       } else if (args[i].equals("-p") || args[i].equals("--profile")) {
         options.setProfile(true);
-        if (options.isXmlFormat()) {
-          throw new IllegalArgumentException("XML API format makes no sense for profiling");
-        }
         if (options.isJsonFormat()) {
           throw new IllegalArgumentException("JSON output format makes no sense for profiling");
         }
@@ -186,10 +181,6 @@ class CommandLineParser {
     printUsage(System.out);
   }
 
-  /*
-   * NOTE: please keep http://wiki.languagetool.org/command-line-options
-   * up-to-date if you add an option
-   */
   void printUsage(PrintStream stream) {
     stream.println("Usage: java -jar languagetool-commandline.jar [OPTION]... FILE\n"
             + " FILE                      plain text file to be checked\n"
@@ -212,8 +203,7 @@ class CommandLineParser {
             + "  -u, --list-unknown       also print a summary of words from the input that LanguageTool doesn't know\n"
             + "  -b2, --bitext            check bilingual texts with a tab-separated input file,\n"
             + "                           see http://languagetool.wikidot.com/checking-translations-bilingual-texts\n"
-            + "  --api                    print results as XML (deprecated, please use --json or the JSON API in server mode)\n"
-            + "  --json                   print results as JSON\n"
+            + "  --json                   print results as JSON (see https://languagetool.org/http-api/#!/default/post_check)\n"
             + "  -p, --profile            print performance measurements\n"
             + "  -v, --verbose            print text analysis (sentences, part-of-speech tags) to STDERR\n"
             + "  --version                print LanguageTool version number and exit\n"
@@ -226,14 +216,15 @@ class CommandLineParser {
             + "  --bitextrules  FILE      use external bitext XML rule file (useful only in bitext mode)\n"
             + "  --languagemodel DIR      a directory with e.g. 'en' sub directory (i.e. a language code) that contains\n"
             + "                           '1grams'...'3grams' sub directories with Lucene indexes with\n"
-            + "                           ngram occurrence counts; activates the confusion rule if supported\n"
-            + "  --word2vecmodel DIR      a directory with e.g. 'en' sub directory (i.e. a language code) that contains\n"
-            + "                           final_embeddings.txt and dictionary.txt; activates neural network based rules\n"
-            + "  --neuralnetworkmodel DIR a base directory for various saved neural network models\n"
+            + "                           ngram occurrence counts; activates the confusion rule if supported;\n"
+            + "                           see https://dev.languagetool.org/finding-errors-using-n-gram-data\n"
             + "  --fasttextmodel FILE     fasttext language detection model (optional), see https://fasttext.cc/docs/en/language-identification.html\n"
             + "  --fasttextbinary FILE    fasttext executable (optional), see https://fasttext.cc/docs/en/support.html\n"
-            + "  --xmlfilter              remove XML/HTML elements from input before checking (deprecated)\n"
-            + "  --line-by-line           work on file line by line (for development, e.g. inside an IDE)"
+            + "  --xmlfilter              [deprecated] remove XML/HTML elements from input before checking\n"
+            + "  --line-by-line           work on file line by line (for development, e.g. inside an IDE)\n"
+            + "  --enable-temp-off        enable all temp_off rules (for testing and development)\n"
+            + "  --clean-overlapping      clean overlapping matches (show only the highest priority match)\n"
+            + "  --level level            enable the given level (currently only 'PICKY')"
     );
   }
 

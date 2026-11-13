@@ -75,20 +75,23 @@ public abstract class AbstractUnitConversionRule extends Rule {
 
   protected static final Unit<Temperature> FAHRENHEIT = CELSIUS.multiply(5.0/9.0).shift(-32);
   // limit size of matched number to (possibly) avoid hangups
+  // we need a different regex for including a word boundary (\b), instead of just prepending that
+  // because otherwise negative numbers aren't correctly recognized
   protected static final String NUMBER_REGEX = "(-?[0-9]{1,32}[0-9,.]{0,32})";
+  protected static final String NUMBER_REGEX_WITH_BOUNDARY = "(-?\\b[0-9]{1,32}[0-9,.]{0,32})";
 
-  protected final Pattern numberRangePart = Pattern.compile("\\b" + NUMBER_REGEX + "$");
+  protected final Pattern numberRangePart = Pattern.compile(NUMBER_REGEX_WITH_BOUNDARY + "$");
   
   private static final double DELTA = 1e-2;
   private static final double ROUNDING_DELTA = 0.05;
   private static final int MAX_SUGGESTIONS = 5;
   private static final int WHITESPACE_LIMIT = 5;
 
-  protected Map<Pattern, Unit> unitPatterns = new HashMap<>();
+  protected Map<Pattern, Unit> unitPatterns = new LinkedHashMap<>();  // use LinkedHashMap for stable iteration order
 
   // for patterns that require a custom number parsing function
   protected Map<Pattern, Map.Entry<Unit, Function<MatchResult, Double>>> specialPatterns = new HashMap<>();
-  protected Map<Unit, List<String>>  unitSymbols = new HashMap<>();
+  protected Map<Unit, List<String>> unitSymbols = new HashMap<>();
   // for recognizing conversions made by this rule or the user
   protected List<Pattern> convertedPatterns = new ArrayList<>();
   // units to use for conversions
@@ -100,6 +103,15 @@ public abstract class AbstractUnitConversionRule extends Rule {
     CHECK_UNKNOWN_UNIT,
     UNIT_MISMATCH
   }
+
+  private final static List<Pattern> antiPatterns = Arrays.asList(
+          Pattern.compile("\\s?\\d+'\\d\\d\\d\\s?"),   // "100'000", thousands separator in de-CH
+          Pattern.compile("\\d+[-‐–]\\d+"),   // "3-5 pounds"
+          Pattern.compile("\\d+/\\d+"),   // "1/4 mile"
+          Pattern.compile("\\d+:\\d+"),   // "A 2:1 cup"
+          Pattern.compile("Pfund Sterling"),   // "1.800 Pfund Sterling" (German)
+          Pattern.compile("\\d+⁄\\d+")    // "1⁄4 cup" (it's not the standard slash)
+  );
 
   private URL buildURLForExplanation(String original) {
     try {
@@ -127,11 +139,11 @@ public abstract class AbstractUnitConversionRule extends Rule {
   protected String getMessage(Message message) {
     switch(message) {
       case CHECK:
-        return "This conversion doesn't seem right. Do you want to correct it automatically?";
+        return "This unit conversion doesn't seem right. Do you want to correct it automatically?";
       case SUGGESTION:
         return "Writing for an international audience? Consider adding the metric equivalent.";
       case CHECK_UNKNOWN_UNIT:
-        return "This conversion doesn't seem right, unable to recognize the used unit.";
+        return "This unit conversion doesn't seem right, unable to recognize the used unit.";
       case UNIT_MISMATCH:
         return "These units don't seem to be compatible.";
       default:
@@ -145,7 +157,7 @@ public abstract class AbstractUnitConversionRule extends Rule {
   protected String getShortMessage(Message message) {
     switch(message) {
       case CHECK:
-        return "Incorrect conversion. Correct it?";
+        return "Incorrect unit conversion. Correct it?";
       case SUGGESTION:
         return "Add metric equivalent?";
       case CHECK_UNKNOWN_UNIT:
@@ -184,7 +196,7 @@ public abstract class AbstractUnitConversionRule extends Rule {
    */
   protected void addUnit(String pattern, Unit base, String symbol, double factor, boolean metric) {
     Unit unit = base.multiply(factor);
-    unitPatterns.put(Pattern.compile("\\b" + NUMBER_REGEX + "\\s{0," + WHITESPACE_LIMIT + "}" + pattern + "\\b"), unit);
+    unitPatterns.put(Pattern.compile(NUMBER_REGEX_WITH_BOUNDARY + "[\\s\u00A0]{0," + WHITESPACE_LIMIT + "}" + pattern + "\\b", Pattern.UNICODE_CHARACTER_CLASS), unit);
     unitSymbols.putIfAbsent(unit, new ArrayList<>());
     unitSymbols.get(unit).add(symbol);
     if (metric && !metricUnits.contains(unit)) {
@@ -193,14 +205,15 @@ public abstract class AbstractUnitConversionRule extends Rule {
   }
 
   protected AbstractUnitConversionRule(ResourceBundle messages) {
-    setCategory(Categories.SEMANTICS.getCategory(messages));
+    setCategory(Categories.STYLE.getCategory(messages));
+    setLocQualityIssueType(ITSIssueType.Style);
 
     addUnit("kg", KILOGRAM, "kg", 1e0, true);
     addUnit("g", KILOGRAM, "g", 1e-3, true);
     addUnit("t", KILOGRAM, "t", 1e3, true);
 
     addUnit("lb", POUND, "lb", 1, false);
-    addUnit("oz", OUNCE, "oz", 1, false);
+    //addUnit("oz", OUNCE, "oz", 1, false); -- probably not useful, see https://github.com/languagetooler-gmbh/languagetool-premium/issues/4560
 
     addUnit("mi", MILE, "mi", 1, false);
     addUnit("yd", YARD, "yd", 1, false);
@@ -214,7 +227,7 @@ public abstract class AbstractUnitConversionRule extends Rule {
 
     addUnit("km", METRE, "km", 1e3, true);
     addUnit("m", METRE, "m",   1e0, true);
-    addUnit("dm", METRE, "dm", 1e-1,  false/*true*/); // Metric, but not commonly used
+    //addUnit("dm", METRE, "dm", 1e-1,  /*true*/); // Metric, but not commonly used
     addUnit("cm", METRE, "cm", 1e-2, true);
     addUnit("mm", METRE, "mm", 1e-3, true);
     addUnit("µm", METRE, "µm", 1e-6, true);
@@ -224,7 +237,7 @@ public abstract class AbstractUnitConversionRule extends Rule {
     addUnit("ha", SQUARE_METRE, "ha", 1e4, true);
     addUnit("a", SQUARE_METRE, "a", 1e2, true);
     addUnit("km(?:\\^2|2|²)", SQUARE_METRE, "km²", 1e6, true);
-    addUnit("dm(?:\\^2|2|²)", SQUARE_METRE, "dm²", 1e-2,  false/*true*/); // Metric, but not commonly used
+    //addUnit("dm(?:\\^2|2|²)", SQUARE_METRE, "dm²", 1e-2,  false/*true*/); // Metric, but not commonly used
     addUnit("cm(?:\\^2|2|²)", SQUARE_METRE, "cm²", 1e-4, true);
     addUnit("mm(?:\\^2|2|²)", SQUARE_METRE, "mm²", 1e-6, true);
     addUnit("µm(?:\\^2|2|²)", SQUARE_METRE, "µm²", 1e-12, true);
@@ -242,7 +255,7 @@ public abstract class AbstractUnitConversionRule extends Rule {
 
     addUnit("m(?:\\^3|3|³)", CUBIC_METRE, "m³", 1, true);
     addUnit("km(?:\\^3|3|³)", CUBIC_METRE, "km³", 1e9, true);
-    addUnit("dm(?:\\^3|3|³)", CUBIC_METRE, "dm³", 1e-3,  false/*true*/); // Metric, but not commonly used
+    //addUnit("dm(?:\\^3|3|³)", CUBIC_METRE, "dm³", 1e-3,  false/*true*/); // Metric, but not commonly used
     addUnit("cm(?:\\^3|3|³)", CUBIC_METRE, "cm³", 1e-6, true);
     addUnit("mm(?:\\^3|3|³)", CUBIC_METRE, "mm³", 1e-9, true);
     addUnit("µm(?:\\^3|3|³)", CUBIC_METRE, "µm³", 1e-18, true);
@@ -260,9 +273,8 @@ public abstract class AbstractUnitConversionRule extends Rule {
     addUnit("l", LITRE, "l", 1, true);
     addUnit("ml", LITRE, "ml", 1e-3, true);
 
-
-    addUnit( "°F", FAHRENHEIT, "°F", 1, false);
-    addUnit( "°C", CELSIUS, "°C", 1, true);
+    addUnit("°F", FAHRENHEIT, "°F", 1, false);
+    addUnit("°C", CELSIUS, "°C", 1, true);
 
     convertedPatterns.add(Pattern.compile("\\s*\\((?:ca. )?" + NUMBER_REGEX + "\\s*([^)]+)\\s*\\)"));
 
@@ -403,14 +415,12 @@ public abstract class AbstractUnitConversionRule extends Rule {
     if (!hyphenInNumber) {
       return false;
     }
-
     String textBefore = sentence.getText().substring(0, matcher.start());
-    boolean endsWithNumberRangePart = numberRangePart.matcher(textBefore).find();
-
-    return endsWithNumberRangePart;
+    return numberRangePart.matcher(textBefore).find();
   }
 
-  private void tryConversion(AnalyzedSentence sentence, List<RuleMatch> matches, Pattern unitPattern, Double customValue, Unit customUnit, Matcher unitMatcher, List<Map.Entry<Integer, Integer>> ignoreRanges) {
+  private void tryConversion(AnalyzedSentence sentence, List<RuleMatch> matches, Pattern unitPattern, Double customValue,
+                             Unit customUnit, Matcher unitMatcher, List<Map.Entry<Integer, Integer>> ignoreRanges) {
     Map.Entry<Integer, Integer> range = new AbstractMap.SimpleImmutableEntry<>(
       unitMatcher.start(), unitMatcher.end());
     ignoreRanges.add(range);
@@ -472,9 +482,19 @@ public abstract class AbstractUnitConversionRule extends Rule {
         .findFirst();
       if (convertedUnitPattern.isPresent()) { // known unit used for conversion
         Unit convertedUnit = unitPatterns.get(convertedUnitPattern.get());
+        // If the unit before and after conversion is the same, e.g. "22.3 cm (20.4 cm)", assume users either:
+        // 1. know what they're doing; or
+        // 2. there's a more complex expression at play here, which we can't parse
+        if (unit.equals(convertedUnit)) {
+          return;
+        }
         Double convertedValueInText;
         try {
           convertedValueInText = getNumberFormat().parse(convertedMatcher.group(1)).doubleValue();
+          if (convertedMatcher.group().trim().matches("\\(\\d+ (feet|ft) \\d+ inch\\)")) {
+            // e.g. "(2 ft 6 inch)" would be interpreted as just "2 ft", given a wrong suggestion
+            return;
+          }
         } catch (ParseException e) {
           return;
         }
@@ -579,7 +599,25 @@ public abstract class AbstractUnitConversionRule extends Rule {
         other == null ? match :
         match.getToPos() > other.getToPos() ? match : other);
     }
-    return matchesByStart.values().toArray(new RuleMatch[0]);
+    if (matches.size() > 0) {
+      removeAntiPatternMatches(sentence, matchesByStart);
+    }
+    return matchesByStart.values().toArray(RuleMatch.EMPTY_ARRAY);
   }
-  
+
+  private void removeAntiPatternMatches(AnalyzedSentence sentence, Map<Integer, RuleMatch> matchesByStart) {
+    for (Pattern antiPattern : antiPatterns) {
+      String text = sentence.getText();
+      Matcher matcher = antiPattern.matcher(text);
+      int pos = 0;
+      while (pos < text.length() && matcher.find(pos)) {
+        matchesByStart.entrySet().removeIf(entry ->
+                matcher.start() <= entry.getValue().getFromPos() && matcher.end() >= entry.getValue().getFromPos() ||
+                matcher.start() <= entry.getValue().getToPos() && matcher.end() >= entry.getValue().getToPos()
+        );
+        pos = matcher.end() + 1;
+      }
+    }
+  }
+
 }

@@ -1431,8 +1431,6 @@ beställa
 besökte
 äpplet
 absolut
-a
-10
 yngre
 vita
 villkor
@@ -1646,7 +1644,6 @@ an
 alternativ
 allvar
 acceptera
-20
 volymen
 vilda
 viktig
@@ -1761,7 +1758,6 @@ fantastiskt
 fånga
 fåglarna
 facebook
-e
 dubbelt
 druckit
 drömmer
@@ -2008,7 +2004,6 @@ tidning
 tidig
 tårta
 tak
-t
 sväng
 styrka
 studerat
@@ -2187,9 +2182,6 @@ ann
 ämne
 alltså
 allesammans
-6
-30
-000
 yoghurt
 vred
 volleyboll
@@ -2514,9 +2506,7 @@ allra
 äldsta
 aggressiv
 ägare
-ä
 å
-2
 yr
 vuxna
 vuxit
@@ -3211,7 +3201,6 @@ okänd
 oförskämd
 odlar
 oändliga
-o
 nötkött
 nöjda
 noggrant
@@ -3353,7 +3342,6 @@ information
 inbrott
 inbjudna
 illamående
-ikea
 idioten
 husvagn
 hunnit
@@ -3567,14 +3555,7 @@ algeriet
 afrika
 adopterad
 absorberar
-Å
-800
-3
-200
-1950
-19
-15
-100
+#Å
 zoot
 zoo
 yokohama
@@ -4070,7 +4051,6 @@ maj
 måfå
 mådde
 macka
-m
 lyssnat
 lyckats
 lyckan
@@ -4514,7 +4494,6 @@ bäddar
 bada
 bäcken
 ba
-b
 avundsjuk
 avstår
 avspänd
@@ -4602,16 +4581,6 @@ adjö
 äcklad
 äckel
 accepterar
-915
-90
-80
-70
-5
-40
-1912
-16
-13
-1
 yxa
 ytterdörren
 ytlig
@@ -4667,7 +4636,6 @@ venus
 vegetariskt
 vegetarisk
 vegansk
-vd
 växterna
 växt
 växelkursen
@@ -5470,7 +5438,6 @@ pådyvla
 paddlade
 packa
 påbörja
-p
 oxen
 oxe
 ovisshet
@@ -6000,7 +5967,6 @@ kaktus
 kakorna
 kakogawa
 kafé
-k
 jupiter
 julskinka
 jullovet
@@ -6491,7 +6457,6 @@ faktura
 fågelungarna
 fader
 fabrik
-f
 explosion
 experimentet
 exklusiv
@@ -6640,7 +6605,6 @@ centrum
 cdn
 carol
 carlos
-c
 byggas
 burmesiska
 burarna
@@ -7035,27 +6999,6 @@ abstinens
 absorberade
 Åbo
 abbedissan
-à
-50
-49
-45
-43
-4
-3d
-26
-25
-2015
-2000
-1998
-1989
-1960
-1900
-18
-1492
-14
-120
-12
-1000
 zürich
 zoologiska
 zooaffär
@@ -7088,7 +7031,6 @@ yngst
 yatzy
 yachten
 yacht
-x
 wwwlang
 work
 windows
@@ -9577,7 +9519,6 @@ racket
 rack
 rabattkupong
 rabatten
-r
 quinoa
 quidditch
 quatre

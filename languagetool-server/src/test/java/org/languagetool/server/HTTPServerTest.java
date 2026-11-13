@@ -20,18 +20,27 @@ package org.languagetool.server;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
+import org.languagetool.JLanguageTool;
 import org.languagetool.Language;
+import org.languagetool.Languages;
+import org.languagetool.ToneTag;
 import org.languagetool.language.*;
 import org.languagetool.tools.StringTools;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.ParserConfigurationException;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.*;
@@ -51,11 +60,12 @@ public class HTTPServerTest {
 
   @Test
   public void testHTTPServer() throws Exception {
-    HTTPServer server = new HTTPServer(new HTTPServerConfig(HTTPTools.getDefaultPort(), true));
+    HTTPServer server = new HTTPServer(new HTTPServerConfig(HTTPTestTools.getDefaultPort(), true));
     assertFalse(server.isRunning());
     try {
       server.run();
       assertTrue(server.isRunning());
+      runTranslatedMessageTest();
       runTestsV2();
       runDataTests();
     } finally {
@@ -63,11 +73,74 @@ public class HTTPServerTest {
       assertFalse(server.isRunning());
     }
   }
+  
+  @Test
+  @Ignore()
+  public void testRandomPortHttpServer() {
+      HTTPServerConfig config = new HTTPServerConfig(0, true);
+      config.minPort = 8081;
+      config.maxPort = 8082;
+      HTTPServer server1 = new HTTPServer(config);
+      HTTPServer server2 = new HTTPServer(config);
+      assertFalse(server1.isRunning());
+      assertFalse(server2.isRunning());
+      
+      server1.run();
+      assertTrue(server1.isRunning());
+      server2.run();
+      assertTrue(server2.isRunning());
+      
+      assertThrows(PortBindingException.class, () -> {
+        new HTTPServer(config);
+      });
+      server1.stop();
+      server2.stop();
+      assertFalse(server1.isRunning());
+      assertFalse(server2.isRunning());
+  }
+
+  @Test
+  @Ignore("feature turned off for now")
+  public void translationSuggestions() throws Exception {
+    File configFile = File.createTempFile("translationSuggestions", "txt");
+    configFile.deleteOnExit();
+
+    File beolingus = new File("../languagetool-standalone/src/test/resources/beolingus_test.txt");
+    assertTrue(beolingus.exists());
+    Files.write(configFile.toPath(), Collections.singletonList("beolingusFile=" + beolingus.getAbsolutePath().replace('\\', '/')));  // path works under Windows and Linux
+
+    HTTPServer server = new HTTPServer(new HTTPServerConfig(new String[]{
+      "--port", String.valueOf(HTTPTestTools.getDefaultPort()),
+      "--config", configFile.getPath()
+    }));
+    server.run();
+    try {
+      String resultWithTranslation = checkV2(AmericanEnglish.getInstance(), GermanyGerman.getInstance(), "Please let us meet in my Haus");
+      assertTrue(resultWithTranslation, resultWithTranslation.contains("house"));
+    } finally {
+      server.stop();
+      assertFalse(server.isRunning());
+    }
+  }
+
+  void runTranslatedMessageTest() throws IOException {
+    String result1 = checkV2(Languages.getLanguageForShortCode("fr"), "C'est unx.");
+    assertTrue(result1.contains("Faute de frappe possible trouvée"));
+    assertFalse(result1.contains("Possible spelling mistake found"));
+
+    String result2 = checkV2(Languages.getLanguageForShortCode("es"), "unx");
+    assertTrue(result2.contains("Se ha encontrado un posible error ortográfico."));
+    assertFalse(result2.contains("Possible spelling mistake found"));
+
+    String result3 = checkV2(Languages.getLanguageForShortCode("nl"), "unx");
+    assertTrue(result3.contains("Er is een mogelijke spelfout gevonden."));
+    assertFalse(result3.contains("Possible spelling mistake found"));
+  }
 
   void runTestsV2() throws IOException, SAXException, ParserConfigurationException {
     // no error:
     String emptyResultPattern = ".*\"matches\":\\[\\].*";
-    German german = new GermanyGerman();
+    German german = GermanyGerman.getInstance();
     String result1 = checkV2(german, "");
     assertTrue("Got " + result1 + ", expected " + emptyResultPattern, result1.matches(emptyResultPattern));
     String result2 = checkV2(german, "Ein kleiner Test");
@@ -93,7 +166,7 @@ public class HTTPServerTest {
     // test http POST
     assertTrue(checkByPOST(new Romanian(), "greșit greșit").contains("greșit"));
     // test supported language listing
-    URL url = new URL("http://localhost:" + HTTPTools.getDefaultPort() + "/v2/languages");
+    URL url = new URL("http://localhost:" + HTTPTestTools.getDefaultPort() + "/v2/languages");
     String languagesJson = StringTools.streamToString((InputStream) url.getContent(), "UTF-8");
     if (!languagesJson.contains("Romanian") || !languagesJson.contains("English")) {
       fail("Error getting supported languages: " + languagesJson);
@@ -107,8 +180,8 @@ public class HTTPServerTest {
     // tests for mother tongue (copy from link {@link FalseFriendRuleTest})
     //assertTrue(checkV2(english, german, "My handy is broken.").contains("EN_FOR_DE_SPEAKERS_FALSE_FRIENDS"));  // only works with ngrams
     assertFalse(checkV2(english, german, "We will berate you").contains("BERATE"));  // not active anymore now that we have EN_FOR_DE_SPEAKERS_FALSE_FRIENDS
-    assertTrue(checkV2(german, english, "Man sollte ihn nicht so beraten.").contains("BERATE"));
-    assertTrue(checkV2(polish, english, "To jest frywolne.").contains("FRIVOLOUS"));
+    assertTrue(plainTextCheck("/v2/check", german, english, "Man sollte ihn nicht so beraten.", "&level=picky").contains("BERATE"));
+    assertTrue(plainTextCheck("/v2/check", polish, english, "To jest frywolne.", "&level=picky").contains("FRIVOLOUS"));
       
     //test for no changed if no options set
     String[] nothing = {};
@@ -117,8 +190,8 @@ public class HTTPServerTest {
     
     //disabling
     String[] disableAvsAn = {"EN_A_VS_AN"};
-    assertTrue(!checkWithOptionsV2(
-            english, german, "This is an test", nothing, disableAvsAn, false).contains("an test"));
+    assertFalse(checkWithOptionsV2(
+      english, german, "This is an test", nothing, disableAvsAn, false).contains("an test"));
 
     //enabling
     assertTrue(checkWithOptionsV2(
@@ -127,8 +200,8 @@ public class HTTPServerTest {
     assertTrue(checkWithOptionsV2(
             english, german, "We will will do so", disableAvsAn, nothing, false).contains("ENGLISH_WORD_REPEAT_RULE"));
     //..unless explicitly stated.
-    assertTrue(!checkWithOptionsV2(
-        english, german, "We will berate you", disableAvsAn, nothing, true).contains("BERATE"));
+    assertFalse(checkWithOptionsV2(
+      english, german, "We will berate you", disableAvsAn, nothing, true).contains("BERATE"));
     
     
     //test if two rules get enabled as well
@@ -163,10 +236,157 @@ public class HTTPServerTest {
 
     String res = check("text", "/v2/check", english, null, "A text.", "&sourceLanguage=de-DE&sourceText=Text");
     assertTrue(res.contains("DIFFERENT_PUNCTUATION"));   // bitext rule actually active
+
+    String allToneTagRulesMatchingSentence = "We have a Formal-Clarity-Match, a No-Tone-Needed-Match, a Confident-Academic-Scientific-Match, a Confident-Academic-Match match, a Picky-Clarity-Confident-Academic-Match, a Picky-Clarity-Confident-Academic-Scientific-Match, a Persuasive-Objective-Match Persuasive-Objective-Informal-Match, Persuasive-Goal-Specific-Match, and a Persuasive-Not-Goal-Specific-Match.";
+
+    Language xxlang = Languages.getLanguageForShortCode("xx");
+    String test1 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation");
+    assertTrue(test1.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test1.contains("NO_TONE_RULE"));
+    assertTrue(test1.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test1.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test1.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test1.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test1.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertTrue(test1.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test1.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertTrue(test1.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+
+    String test2 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=");
+    assertTrue(test2.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test2.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertTrue(test2.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test2.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test2.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test2.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test2.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertTrue(test2.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test2.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertTrue(test2.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test3 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=clarity");
+    assertTrue(test3.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test3.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertFalse(test3.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test3.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test3.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test3.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test3.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertFalse(test3.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test3.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertFalse(test3.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test4 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=academic");
+    assertFalse(test4.contains("Formal_Clarity_TONE_RULE")); //Clarity is enabled by default if no toneTag is specified
+    assertTrue(test4.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match everyt ime
+    assertTrue(test4.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test4.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test4.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test4.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test4.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertFalse(test4.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test4.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertFalse(test4.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test5 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=scientific");
+    assertFalse(test5.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test5.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertTrue(test5.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test5.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test5.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test5.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test5.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertFalse(test5.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test5.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertFalse(test5.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test6 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=academic&level=picky");
+    assertFalse(test6.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test6.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertTrue(test6.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test6.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertTrue(test6.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertTrue(test6.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test6.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertFalse(test6.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test6.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertFalse(test6.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test7 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=scientific&level=picky");
+    assertFalse(test7.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test7.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertTrue(test7.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test7.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test7.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertTrue(test7.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test7.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertFalse(test7.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test7.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertFalse(test7.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test8 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=scientific,NO_TONE_RULE&level=picky");
+    assertFalse(test8.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test8.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertTrue(test8.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test8.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test8.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertTrue(test8.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test8.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertFalse(test8.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test8.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertFalse(test8.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test9 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=persuasive");
+    assertFalse(test9.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test9.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertFalse(test9.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test9.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test9.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test9.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test9.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertTrue(test9.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertTrue(test9.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertTrue(test9.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test10 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=informal");
+    assertFalse(test10.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test10.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertFalse(test10.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test10.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test10.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test10.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test10.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertTrue(test10.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test10.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertFalse(test10.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test11 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=" + ToneTag.ALL_TONE_RULES.name());
+    assertTrue(test11.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test11.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertTrue(test11.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test11.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test11.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test11.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertTrue(test11.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertTrue(test11.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertTrue(test11.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertTrue(test11.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
+    
+    String test12 = checkV2(xxlang, allToneTagRulesMatchingSentence, "&disabledRules=test_unification_with_negation&toneTags=" + ToneTag.NO_TONE_RULE.name() + "&level=picky");
+    assertFalse(test12.contains("Formal_Clarity_TONE_RULE"));
+    assertTrue(test12.contains("NO_TONE_RULE")); //No-Tone-Needed-Match should match every time
+    assertFalse(test12.contains("CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test12.contains("CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test12.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_TONE_RULE"));
+    assertFalse(test12.contains("PICKY-CLARITY_CONFIDENT_ACADEMIC_SCIENTIFIC_TONE_RULE"));
+    assertFalse(test12.contains("PERSUASIVE_OBJECTIVE_TONE_RULE"));
+    assertFalse(test12.contains("PERSUASIVE_OBJECTIVE_INFORMAL_TONE_RULE"));
+    assertFalse(test12.contains("PERSUASIVE_GOAL_SPECIFIC_TONE_RULE"));
+    assertFalse(test12.contains("PERSUASIVE_NOT_GOAL_SPECIFIC_TONE_RULE"));
   }
 
   private void runDataTests() throws IOException {
-    English english = new AmericanEnglish();
+    English english = AmericanEnglish.getInstance();
     assertTrue(dataTextCheck(english, null,
             "{\"text\": \"This is an test.\"}", "").contains("EN_A_VS_AN"));
     assertTrue(dataTextCheck(english, null,
@@ -247,17 +467,21 @@ public class HTTPServerTest {
   }
 
   @Test
-  public void testTimeout() {
-    HTTPServerConfig config = new HTTPServerConfig(HTTPTools.getDefaultPort(), false);
-    config.setMaxCheckTimeMillis(1);
+  public void testTimeout() throws IOException {
+    German lang = GermanyGerman.getInstance();
+    // avoid rule <clinit> being interrupted by timeout, resulting in NCDFEs in the following tests
+    lang.getRelevantRules(JLanguageTool.getMessageBundle(), null, null, Collections.emptyList());
+
+    HTTPServerConfig config = new HTTPServerConfig(HTTPTestTools.getDefaultPort(), false);
+    config.setMaxCheckTimeMillisAnonymous(1);
     HTTPServer server = new HTTPServer(config, false);
     try {
       server.run();
       try {
         System.out.println("=== Testing timeout now, please ignore the following exception ===");
         long t = System.currentTimeMillis();
-        checkV2(new GermanyGerman(), "Einq Tesz miit fieln Fehlan, desshalb sehee laagnsam bee dr Rechtschriebpürfung. "+
-                                     "hir stet noc mer text mt nochh meh feheln. vielleict brucht es soagr nohc mehrr, damt es klapt");
+        checkV2(lang, "Einq Tesz miit fieln Fehlan, desshalb sehee laagnsam bee dr Rechtschriebpürfung. " +
+                      "hir stet noc mer text mt nochh meh feheln. vielleict brucht es soagr nohc mehrr, damt es klapt");
         fail("Check was expected to be stopped because it took too long (> 1ms), it took " +
                 (System.currentTimeMillis()-t + "ms when measured from client side"));
       } catch (IOException expected) {
@@ -272,11 +496,11 @@ public class HTTPServerTest {
 
   @Test
   public void testHealthcheck() throws Exception {
-    HTTPServerConfig config = new HTTPServerConfig(HTTPTools.getDefaultPort(), false);
+    HTTPServerConfig config = new HTTPServerConfig(HTTPTestTools.getDefaultPort(), false);
     HTTPServer server = new HTTPServer(config, false);
     try {
       server.run();
-      URL url = new URL("http://localhost:<PORT>/v2/healthcheck".replace("<PORT>", String.valueOf(HTTPTools.getDefaultPort())));
+      URL url = new URL("http://localhost:<PORT>/v2/healthcheck".replace("<PORT>", String.valueOf(HTTPTestTools.getDefaultPort())));
       InputStream stream = (InputStream)url.getContent();
       String response = StringTools.streamToString(stream, "UTF-8");
       assertThat(response, is("OK"));
@@ -287,7 +511,7 @@ public class HTTPServerTest {
 
   @Test
   public void testAccessDenied() throws Exception {
-    HTTPServer server = new HTTPServer(new HTTPServerConfig(HTTPTools.getDefaultPort()), false, new HashSet<>());
+    HTTPServer server = new HTTPServer(new HTTPServerConfig(HTTPTestTools.getDefaultPort()), false, new HashSet<>());
     try {
       server.run();
       try {
@@ -312,16 +536,67 @@ public class HTTPServerTest {
       server.stop();
     }
   }
+
+  @Test
+  public void testRequestLimit() throws Exception {
+    HTTPServerConfig config = new HTTPServerConfig(HTTPTestTools.getDefaultPort());
+    String secret = "secret";
+    config.setRequestLimit(1);
+    config.setRequestLimitPeriodInSeconds(600);
+    config.setRequestLimitAccessToken(secret);
+    HTTPServer server = new HTTPServer(config);
+    URL url = new URL("http://localhost:" + HTTPTestTools.getDefaultPort() + "/v2/check");
+    String data = "language=en&text=test";
+    try {
+      server.run();
+      try {
+        HTTPTestTools.checkAtUrlByPost(url, data, new HashMap<>());
+      } catch (IOException e) {
+        fail("First request should pass request limit");
+      }
+      try {
+        System.out.println("=== Testing request limit now, please ignore the following exception ===");
+        HTTPTestTools.checkAtUrlByPost(url, data, new HashMap<>());
+        fail("Second request shouldn't pass request limit");
+      } catch (IOException expected) {
+        if (!expected.toString().contains(" 429 ")) {
+          fail("Expected exception with error 429, got: " + expected);
+        }
+      }
+      try {
+        Map<String, String> headers = new HashMap<>();
+        headers.put(LanguageToolHttpHandler.REQUEST_LIMIT_ACCESS_TOKEN_HEADER, secret);
+        HTTPTestTools.checkAtUrlByPost(url, data, headers);
+      } catch (IOException expected) {
+        fail("Request with token should pass request limit");
+      }
+
+      try {
+        System.out.println("=== Testing request limit now, please ignore the following exception ===");
+        Map<String, String> headers = new HashMap<>();
+        headers.put(LanguageToolHttpHandler.REQUEST_LIMIT_ACCESS_TOKEN_HEADER, secret + "foobar");
+        HTTPTestTools.checkAtUrlByPost(url, data, headers);
+        fail("Request with wrong token shouldn't pass request limit");
+      } catch (IOException expected) {
+        if (!expected.toString().contains(" 429 ")) {
+          fail("Expected exception with error 429, got: " + expected);
+        }
+      }
+    } finally {
+      server.stop();
+    }
+  }
+  
   
   @Test
   public void testEnabledOnlyParameter() throws Exception {
-    HTTPServer server = new HTTPServer(new HTTPServerConfig(HTTPTools.getDefaultPort()), false);
+    HTTPServer server = new HTTPServer(new HTTPServerConfig(HTTPTestTools.getDefaultPort()), false);
     try {
       server.run();
       try {
         System.out.println("=== Testing 'enabledOnly parameter' now, please ignore the following exception ===");
-        URL url = new URL("http://localhost:" + HTTPTools.getDefaultPort() + "/?text=foo&language=en-US&disabled=EN_A_VS_AN&enabledOnly=yes");
-        HTTPTools.checkAtUrl(url);
+        URL url = new URL("http://localhost:" + HTTPTestTools.getDefaultPort() + "/?text=foo&language=en-US&disabled=EN_A_VS_AN&enabledOnly=yes");
+        HTTPTestTools.checkAtUrl(url);
         fail();
       } catch (IOException expected) {
         if (!expected.toString().contains(" 400 ")) {
@@ -335,13 +610,13 @@ public class HTTPServerTest {
 
   @Test
   public void testServerUrlSetting() throws Exception {
-    HTTPServerConfig config = new HTTPServerConfig(HTTPTools.getDefaultPort());
+    HTTPServerConfig config = new HTTPServerConfig(HTTPTestTools.getDefaultPort());
     String prefix = "/languagetool-api/";
     config.setServerURL(prefix);
     HTTPServer server = new HTTPServer(config, false);
     try {
       server.run();
-      HTTPTools.checkAtUrl(new URL("http://localhost:" + HTTPTools.getDefaultPort() + prefix + "v2/check?text=Test&language=en"));
+      HTTPTestTools.checkAtUrl(new URL("http://localhost:" + HTTPTestTools.getDefaultPort() + prefix + "v2/check?text=Test&language=en"));
     } finally {
       server.stop();
     }
@@ -349,13 +624,13 @@ public class HTTPServerTest {
 
   @Test
   public void testMissingLanguageParameter() throws Exception {
-    HTTPServer server = new HTTPServer(new HTTPServerConfig(HTTPTools.getDefaultPort()), false);
+    HTTPServer server = new HTTPServer(new HTTPServerConfig(HTTPTestTools.getDefaultPort()), false);
     try {
       server.run();
       try {
         System.out.println("=== Testing 'missing language parameter' now, please ignore the following exception ===");
-        URL url = new URL("http://localhost:" + HTTPTools.getDefaultPort() + "/?text=foo");
-        HTTPTools.checkAtUrl(url);
+        URL url = new URL("http://localhost:" + HTTPTestTools.getDefaultPort() + "/?text=foo");
+        HTTPTestTools.checkAtUrl(url);
         fail();
       } catch (IOException expected) {
         if (!expected.toString().contains(" 400 ")) {
@@ -396,14 +671,14 @@ public class HTTPServerTest {
   }
 
   private String check(String typeName, String urlPrefix, Language lang, Language motherTongue, String text, String parameters) throws IOException {
-    String urlOptions = urlPrefix + "?language=" + (lang == null ? "auto" : lang.getShortCode());
+    String urlOptions = urlPrefix + "?language=" + (lang == null ? "auto" : lang.getShortCodeWithCountryAndVariant());
     urlOptions += "&disabledRules=HUNSPELL_RULE&" + typeName + "=" + URLEncoder.encode(text, "UTF-8"); // latin1 is not enough for languages like polish, romanian, etc
     if (motherTongue != null) {
       urlOptions += "&motherTongue=" + motherTongue.getShortCode();
     }
     urlOptions += parameters;
-    URL url = new URL("http://localhost:" + HTTPTools.getDefaultPort() + urlOptions);
-    return HTTPTools.checkAtUrl(url);
+    URL url = new URL("http://localhost:" + HTTPTestTools.getDefaultPort() + urlOptions);
+    return HTTPTestTools.checkAtUrl(url);
   }
 
   private String checkWithOptionsV2(Language lang, Language motherTongue, String text,
@@ -422,8 +697,8 @@ public class HTTPServerTest {
     if (useEnabledOnly) {
       urlOptions += "&enabledOnly=yes";
     }
-    URL url = new URL("http://localhost:" + HTTPTools.getDefaultPort() + urlOptions);
-    return HTTPTools.checkAtUrl(url);
+    URL url = new URL("http://localhost:" + HTTPTestTools.getDefaultPort() + urlOptions);
+    return HTTPTestTools.checkAtUrl(url);
   }
 
   /**
@@ -438,9 +713,9 @@ public class HTTPServerTest {
    */
   String checkByPOST(String langCode, String text) throws IOException {
     String postData = "language=" + langCode + "&text=" + URLEncoder.encode(text, "UTF-8"); // latin1 is not enough for languages like Polish, Romanian, etc
-    URL url = new URL(LOAD_TEST_URL.replace("<PORT>", String.valueOf(HTTPTools.getDefaultPort())));
+    URL url = new URL(LOAD_TEST_URL.replace("<PORT>", String.valueOf(HTTPTestTools.getDefaultPort())));
     try {
-      return HTTPTools.checkAtUrlByPost(url, postData);
+      return HTTPTestTools.checkAtUrlByPost(url, postData);
     } catch (IOException e) {
       if (text.length() > MAX_LENGTH) {
         // this is expected, log it anyway:

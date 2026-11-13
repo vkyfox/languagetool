@@ -1691,7 +1691,6 @@ charakter
 werfen
 typ
 schuldig
-o
 links
 hoffen
 fotos
@@ -1821,7 +1820,6 @@ soweit
 male
 halbe
 gegenwart
-e
 zerstört
 verbessern
 rennen
@@ -2016,7 +2014,6 @@ interessieren
 hob
 blaue
 aussieht
-tom –
 teile
 schlägt
 mitten
@@ -2185,7 +2182,6 @@ interessante
 hinterlassen
 hängen
 bewegung
-a
 zählt
 woran
 vorstellung
@@ -2327,7 +2323,6 @@ amerikanische
 zumindest
 weisen
 verspätung
-u
 schlimm
 repariert
 peter
@@ -3350,7 +3345,6 @@ beobachten
 begegnen
 bedingungen
 backen
-b
 aussage
 wunderschön
 wirken
@@ -3472,7 +3466,6 @@ verwandten
 vergebens
 unwissenheit
 Überall
-t
 sowieso
 sonderlich
 sitze
@@ -3802,7 +3795,6 @@ richtiger
 rennt
 reif
 öffentlich
-maria —
 mahlzeit
 kostete
 kapitel
@@ -4014,7 +4006,6 @@ arbeitslos
 antworte
 angegriffen
 abhalten
-230 uhr
 zuzuhören
 volle
 vieler
@@ -4194,7 +4185,6 @@ schaffst
 saft
 rechtsanwalt
 poesie
-nicht –
 nahrungsmittel
 minister
 meeres
@@ -4514,7 +4504,6 @@ erhöht
 ereignete
 endgültig
 ebenfalls
-c
 brieftasche
 braten
 bewältigen
@@ -4988,7 +4977,6 @@ alice
 zweiter
 zuneigung
 yumi
-x
 wunderschöne
 widersprechen
 wichtigkeit
@@ -5598,7 +5586,6 @@ klopft
 kilometern
 jährlich
 jagd
-ist –
 interessanten
 informiert
 hirn
@@ -5833,7 +5820,6 @@ getanzt
 gespräche
 gespenst
 geschätzt
-geschäftsführer
 geschäftlich
 gerissen
 genoss
@@ -6537,7 +6523,6 @@ einsame
 einkaufszentrum
 eingerichtet
 ehemaligen
-du –
 dschungel
 drüber
 daraufhin
@@ -6860,7 +6845,6 @@ donau
 dichtung
 diamant
 david
-d
 chor
 braunen
 brasilianer
@@ -7133,7 +7117,6 @@ sparsam
 sonderbar
 sicherste
 seltene
-sein dass
 sehne
 schülerin
 schritten
@@ -7182,7 +7165,6 @@ kandidat
 kämpfe
 james
 intuition
-i
 herzinfarkt
 herausforderungen
 grundsatz
@@ -7771,7 +7753,6 @@ melanie
 manne
 manchem
 mahl
-m
 lobte
 lieblingsfarbe
 liebevoll
@@ -8340,7 +8321,6 @@ gesetzen
 geschützt
 geschrien
 geschick
-gesagt —
 geringe
 geprägt
 genesen
@@ -8526,7 +8506,6 @@ siehe
 siegt
 sichtweise
 selbstgespräche
-sein —
 schrieben
 schnauze
 schmerzhaft
@@ -8698,7 +8677,6 @@ beängstigend
 bauchschmerzen
 badeanzug
 bäckt
-aus –
 auswählen
 außergewöhnliche
 ausnahmen
@@ -8831,7 +8809,6 @@ schachspielen
 saufen
 saubere
 sato
-s
 rüstung
 romeo
 rollstuhl
@@ -9041,7 +9018,6 @@ zuallererst
 zigarren
 zeugnis
 zahnpasta
-z
 wundervolle
 wunderschönes
 wilhelm
@@ -9241,7 +9217,6 @@ heft
 handtücher
 handelns
 halber
-h
 grundlagen
 großgezogen
 gewöhnlicher
@@ -9312,8 +9287,6 @@ durchschnittlich
 droge
 dritter
 draht
-dich —
-da –
 darlehen
 damm
 dahintergekommen
@@ -9606,7 +9579,6 @@ hervorrufen
 herauf
 henry
 heimgehen
-hat –
 halsschmerzen
 halloween
 grüßt
@@ -9652,10 +9624,8 @@ fehlten
 fehlst
 fahrzeuge
 fackel
-f
 exakt
 eures
-essen –
 erwecken
 erstmals
 erstickt
@@ -9757,8 +9727,6 @@ ablauf
 5000
 28
 2011
-𝑘
-— ich
 zuversichtlich
 zurückgelassen
 zunehmendem
@@ -9903,7 +9871,6 @@ pelz
 partys
 parkte
 parat
-p
 oliver
 objekte
 notwendigerweise
@@ -9915,7 +9882,6 @@ naoko
 naher
 nachtigall
 nachgehen
-n
 muße
 murmeltier
 morgensonne
@@ -10005,12 +9971,10 @@ geehrter
 grüezi
 griezi
 grüazi
-griezi
 griaß
 moinsen
 optimierung
 prozesse
-meinst
 traumfrau
 erstattung
 bewirtungskosten
@@ -10029,9 +9993,11 @@ salü
 grüessech
 geil
 tach
-rabatt
 kräuter
 umsatzsteuer
 mehrwertsteuer
 kampagne
 installieren
+ag
+gmbh
+seminare

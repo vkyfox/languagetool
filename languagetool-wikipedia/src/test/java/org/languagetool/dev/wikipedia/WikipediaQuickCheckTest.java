@@ -18,18 +18,18 @@
  */
 package org.languagetool.dev.wikipedia;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.languagetool.language.GermanyGerman;
 
 import java.io.IOException;
 import java.net.URL;
 import java.util.List;
 
-import org.junit.Test;
-import org.languagetool.language.GermanyGerman;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.*;
 
+@Ignore
 public class WikipediaQuickCheckTest {
 
   // only for interactive use, as it accesses a remote API
@@ -64,7 +64,7 @@ public class WikipediaQuickCheckTest {
             "Das Komma ist richtig, wegen dem Leerzeichen.";
     MediaWikiContent wikiContent = new MediaWikiContent(markup, "2012-11-11T20:00:00");
     ErrorMarker errorMarker = new ErrorMarker("<err>", "</err>");
-    MarkupAwareWikipediaResult result = check.checkWikipediaMarkup(new URL("http://fake-url.org"), wikiContent, new GermanyGerman(), errorMarker);
+    MarkupAwareWikipediaResult result = check.checkWikipediaMarkup(new URL("http://fake-url.org"), wikiContent, GermanyGerman.getInstance(), errorMarker);
     assertThat(result.getLastEditTimestamp(), is("2012-11-11T20:00:00"));
     List<AppliedRuleMatch> appliedMatches = result.getAppliedRuleMatches();
     // even though this error has no suggestion, there's a (pseudo) correction:
@@ -73,9 +73,9 @@ public class WikipediaQuickCheckTest {
     assertThat(firstAppliedMatch.getRuleMatchApplications().size(), is(1));
     RuleMatchApplication ruleMatchApplication = firstAppliedMatch.getRuleMatchApplications().get(0);
     assertTrue("Got: " + ruleMatchApplication.getTextWithCorrection(),
-            ruleMatchApplication.getTextWithCorrection().contains("<err>wegen dem</err> Leerzeichen."));
-    assertThat(ruleMatchApplication.getOriginalErrorContext(12), is("st richtig, <err>wegen dem</err> Leerz"));
-    assertThat(ruleMatchApplication.getCorrectedErrorContext(12), is("st richtig, <err>wegen dem</err> Leerz"));
+            ruleMatchApplication.getTextWithCorrection().contains("<err>wegen des Leerzeichens.</err>"));
+    assertThat(ruleMatchApplication.getOriginalErrorContext(12), is("st richtig, <err>wegen dem Leerzeichen.</err>"));
+    assertThat(ruleMatchApplication.getCorrectedErrorContext(12), is("st richtig, <err>wegen des Leerzeichens.</err>"));
   }
 
   @Test

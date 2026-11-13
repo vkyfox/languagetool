@@ -20,6 +20,7 @@ package org.languagetool.tagging.de;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.languagetool.AnalyzedToken;
 import org.languagetool.AnalyzedTokenReadings;
@@ -29,21 +30,22 @@ import org.languagetool.AnalyzedTokenReadings;
  */
 public class SwissGermanTagger extends GermanTagger {
 
+  private static final Pattern SS_PATTERN = Pattern.compile("ss", Pattern.LITERAL);
+
   /* (non-Javadoc)
    * @see org.languagetool.tagging.de.GermanTagger#tag(java.util.List, boolean)
    */
   @Override
   public List<AnalyzedTokenReadings> tag(List<String> sentenceTokens, boolean ignoreCase) throws IOException { 
     List<AnalyzedTokenReadings> tokens = super.tag(sentenceTokens, ignoreCase);
-    for (int i = 0; i < tokens.size(); i++) {
-      AnalyzedTokenReadings reading = tokens.get(i);
-      if (reading != null && 
-          reading.getToken() != null &&
-          reading.getToken().contains("ss") && 
-          !reading.isTagged()) {
-        AnalyzedTokenReadings replacementReading = lookup(reading.getToken().replace("ss", "ß"));
-        if(replacementReading != null) {
-          for(AnalyzedToken at : replacementReading.getReadings()) {
+    for (AnalyzedTokenReadings reading : tokens) {
+      if (reading != null &&
+        reading.getToken() != null &&
+        reading.getToken().contains("ss") &&
+        !reading.isTagged()) {
+        AnalyzedTokenReadings replacementReading = lookup(SS_PATTERN.matcher(reading.getToken()).replaceAll("ß"));
+        if (replacementReading != null) {
+          for (AnalyzedToken at : replacementReading.getReadings()) {
             reading.addReading(new AnalyzedToken(reading.getToken(), at.getPOSTag(), at.getLemma()), "SwissGermanTagger");
           }
         }

@@ -50,6 +50,10 @@ public abstract class AbstractWordCoherencyRule extends TextLevelRule {
    * Get the message shown to the user if the rule matches.
    */
   protected abstract String getMessage(String word1, String word2);
+
+  protected String getShortMessage() {
+    return null;
+  };
   
   public AbstractWordCoherencyRule(ResourceBundle messages) throws IOException {
     super.setCategory(Categories.MISC.getCategory(messages));
@@ -78,12 +82,15 @@ public abstract class AbstractWordCoherencyRule extends TextLevelRule {
               String msg = getMessage(token, otherSpelling);
               RuleMatch ruleMatch = new RuleMatch(this, sentence, fromPos, toPos, msg);
               String marked = sentence.getText().substring(tmpToken.getStartPos(), tmpToken.getEndPos());
-              String replacement = marked.replaceFirst("(?i)" + token, otherSpelling);
+              String replacement = createReplacement(marked, token, otherSpelling, tmpToken);
               if (StringTools.startsWithUppercase(tmpToken.getToken())) {
                 replacement = StringTools.uppercaseFirstChar(replacement);
               }
-              ruleMatch.setSuggestedReplacement(replacement);
-              ruleMatches.add(ruleMatch);
+              if (!marked.equalsIgnoreCase(replacement)) {   // see https://github.com/languagetool-org/languagetool/issues/3493
+                ruleMatch.setSuggestedReplacement(replacement);
+                ruleMatches.add(ruleMatch);
+              }
+              ruleMatch.setShortMessage(getShortMessage());
               break;
             } else if (getWordMap().containsKey(token)) {
               Set<String> shouldNotAppearSet = getWordMap().get(token);
@@ -94,7 +101,7 @@ public abstract class AbstractWordCoherencyRule extends TextLevelRule {
           }
         }
       }
-      pos += sentence.getText().length();
+      pos += sentence.getCorrectedTextLength();
     }
     return toRuleMatchArray(ruleMatches);
   }
@@ -102,6 +109,10 @@ public abstract class AbstractWordCoherencyRule extends TextLevelRule {
   @Override
   public int minToCheckParagraph() {
     return -1;
+  }
+
+  protected String createReplacement(String marked, String token, String otherSpelling, AnalyzedTokenReadings tmpToken) {
+    return  marked.replaceFirst("(?i)" + token, otherSpelling);
   }
 
 }

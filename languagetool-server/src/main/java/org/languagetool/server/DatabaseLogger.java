@@ -84,7 +84,7 @@ class DatabaseLogger {
             batchSize++;
             session.insert(entry.getMappingIdentifier(), entry.getMapping());
             DatabaseLogEntry followup = entry.followup();
-            if (followup != null) { // followup statements need to be inserted directly afterwards, dependant on e.g. generated primary keys
+            if (followup != null) { // followup statements need to be inserted directly afterwards, dependent on e.g. generated primary keys
               session.insert(followup.getMappingIdentifier(), followup.getMapping());
               batchSize++;
             }
@@ -140,19 +140,29 @@ class DatabaseLogger {
     }
   }
 
+  /**
+   * For testing; wait until queue is empty.
+   */
+  public void flush() {
+    try {
+      while (messages.peek() != null) {
+          Thread.sleep(100);
+      }
+      Thread.sleep(SQL_BATCH_WAITING_TIME + 5000);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   void createTestTables() {
     createTestTables(false);
   }
 
   void createTestTables(boolean mysql) {
     try (SqlSession session = sessionFactory.openSession(true)) {
-      String[] statements = {"org.languagetool.server.LogMapper.createRuleMatches",
+      String[] statements = {
         "org.languagetool.server.LogMapper.createCheckLog",
-        "org.languagetool.server.LogMapper.createMiscLog",
         "org.languagetool.server.LogMapper.createPings",
-        "org.languagetool.server.LogMapper.createAccessLimits",
-        "org.languagetool.server.LogMapper.createCheckError",
-        "org.languagetool.server.LogMapper.createCacheStats",
         "org.languagetool.server.LogMapper.createServers",
         "org.languagetool.server.LogMapper.createClients"};
       for (String statement : statements) {
@@ -167,13 +177,8 @@ class DatabaseLogger {
 
   void dropTestTables() {
     try (SqlSession session = sessionFactory.openSession(true)) {
-      session.delete("org.languagetool.server.LogMapper.dropRuleMatches");
       session.delete("org.languagetool.server.LogMapper.dropCheckLog");
-      session.delete("org.languagetool.server.LogMapper.dropMiscLog");
       session.delete("org.languagetool.server.LogMapper.dropPings");
-      session.delete("org.languagetool.server.LogMapper.dropAccessLimits");
-      session.delete("org.languagetool.server.LogMapper.dropCheckError");
-      session.delete("org.languagetool.server.LogMapper.dropCacheStats");
       session.delete("org.languagetool.server.LogMapper.dropServers");
       session.delete("org.languagetool.server.LogMapper.dropClients");
     }

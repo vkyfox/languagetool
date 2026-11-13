@@ -18,13 +18,13 @@
  */
 package org.languagetool.rules.pt;
 
+import org.languagetool.Language;
 import org.languagetool.rules.AbstractSimpleReplaceRule;
 import org.languagetool.rules.Example;
 import org.languagetool.rules.Categories;
 import org.languagetool.rules.ITSIssueType;
 import org.languagetool.tools.Tools;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,21 +45,22 @@ public class PortugueseAgreementReplaceRule extends AbstractSimpleReplaceRule {
   private static final Locale PT_LOCALE = new Locale("pt");
 
   @Override
-  protected Map<String, List<String>> getWrongWords() {
+  public Map<String, List<String>> getWrongWords() {
     return wrongWords;
   }
 
-  public PortugueseAgreementReplaceRule(ResourceBundle messages) throws IOException {
-    super(messages);
+  public PortugueseAgreementReplaceRule(ResourceBundle messages, Language language) {
+    super(messages, language);
     super.setCategory(Categories.TYPOS.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Misspelling);
     // setDefaultOff();
     addExamplePair(Example.wrong("<marker>abstracto</marker>"),
                    Example.fixed("<marker>abstrato</marker>"));
+    this.useSubRuleSpecificIds();
   }
 
   @Override
-  public final String getId() {
+  public String getId() {
     return PORTUGUESE_AGREEMENT_REPLACE_RULE;
   }
 
@@ -75,7 +76,7 @@ public class PortugueseAgreementReplaceRule extends AbstractSimpleReplaceRule {
   
   @Override
   public String getMessage(String tokenStr, List<String> replacements) {
-    return tokenStr + " é uma forma do antigo acordo ortográfico. No novo acordo ortográfico, a palavra escreve-se assim: "
+    return "'" + tokenStr + "' é uma forma do antigo acordo ortográfico. No novo acordo ortográfico, a palavra escreve-se assim: "
         + String.join(", ", replacements) + ".";
   }
 

@@ -18,18 +18,16 @@
  */
 package org.languagetool.rules;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.ResourceBundle;
+import java.io.IOException;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.AnalyzedToken;
-import org.languagetool.AnalyzedTokenReadings;
-import org.languagetool.JLanguageTool;
+import org.jetbrains.annotations.Nullable;
+import org.languagetool.*;
+import org.languagetool.synthesis.Synthesizer;
 import org.languagetool.tools.StringTools;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A rule that matches words which should not be used and suggests
@@ -41,12 +39,28 @@ import org.languagetool.tools.StringTools;
 public abstract class AbstractSimpleReplaceRule extends Rule {
 
   protected boolean ignoreTaggedWords = false;
-  private boolean checkLemmas = true;
+  protected boolean subRuleSpecificIds;
 
-  protected abstract Map<String, List<String>> getWrongWords();
+  private static final Logger logger = LoggerFactory.getLogger(AbstractSimpleReplaceRule.class);
+  private boolean checkLemmas = true;
+  private final Language language;
+
+  public abstract Map<String, List<String>> getWrongWords();
 
   protected static Map<String, List<String>> loadFromPath(String path) {
     return new SimpleReplaceDataLoader().loadWords(path);
+  }
+
+  /**
+   * @since 5.0
+   */
+  protected static Map<String, List<String>> loadFromPath(String... paths) {
+    SimpleReplaceDataLoader loader = new SimpleReplaceDataLoader();
+    Map<String, List<String>> map = new HashMap<>();
+    for (String path : paths) {
+      map.putAll(loader.loadWords(path));
+    }
+    return map;
   }
 
   /**
@@ -75,7 +89,9 @@ public abstract class AbstractSimpleReplaceRule extends Rule {
     ignoreTaggedWords = true;
   }
 
-  public AbstractSimpleReplaceRule(ResourceBundle messages) {
+  public AbstractSimpleReplaceRule(ResourceBundle messages, Language language) {
+    super(messages);
+    this.language = language;
     super.setCategory(Categories.MISC.getCategory(messages));
   }
 
@@ -103,7 +119,7 @@ public abstract class AbstractSimpleReplaceRule extends Rule {
   }
 
   @Override
-  public RuleMatch[] match(AnalyzedSentence sentence) {
+  public RuleMatch[] match(AnalyzedSentence sentence) throws IOException {
     List<RuleMatch> ruleMatches = new ArrayList<>();
     AnalyzedTokenReadings[] tokens = sentence.getTokensWithoutWhitespace();
     for (AnalyzedTokenReadings tokenReadings : tokens) {
@@ -111,21 +127,23 @@ public abstract class AbstractSimpleReplaceRule extends Rule {
       if( JLanguageTool.SENTENCE_START_TAGNAME.equals(tokenReadings.getAnalyzedToken(0).getPOSTag()) ||
           tokenReadings.isImmunized() ||        //this rule is used mostly for spelling, so ignore both immunized
           tokenReadings.isIgnoredBySpeller() || //and speller-ignorable rules
+          isTokenException(tokenReadings) ||
           (ignoreTaggedWords && isTagged(tokenReadings))
       ) {
         continue;
       }
       List<RuleMatch> matchesForToken = findMatches(tokenReadings, sentence);
-      ruleMatches.addAll( matchesForToken );
+      ruleMatches.addAll(matchesForToken);
     }
     return toRuleMatchArray(ruleMatches);
   }
 
-  protected List<RuleMatch> findMatches(AnalyzedTokenReadings tokenReadings, AnalyzedSentence sentence) {
+  protected List<RuleMatch> findMatches(AnalyzedTokenReadings tokenReadings, AnalyzedSentence sentence) throws IOException {
     List<RuleMatch> ruleMatches = new ArrayList<>();
 
     String originalTokenStr = tokenReadings.getToken();
     String tokenString = cleanup(originalTokenStr);
+    boolean isAllUppercase = StringTools.isAllUppercase(originalTokenStr);
 
     // try first with the original word, then with the all lower-case version
     List<String> possibleReplacements = getWrongWords().get(originalTokenStr);
@@ -144,21 +162,41 @@ public abstract class AbstractSimpleReplaceRule extends Rule {
         }
       }
 
-      for (String lemma: lemmas) {
+      for (String lemma : lemmas) {
         List<String> replacements = getWrongWords().get(lemma);
         if (replacements != null) {
-          possibleReplacements.addAll(replacements);
+          Synthesizer synth = getSynthesizer();
+          if (synth != null) {
+            for (String replacementLemma : replacements) {
+              for (AnalyzedToken at : tokenReadings.getReadings()) {
+                if (at.getLemma() == null) {
+                  logger.warn("at.getLemma() == null for " + at + ", replacementLemma: " + replacementLemma);
+                }
+                AnalyzedToken newAt = new AnalyzedToken(at.getLemma(), at.getPOSTag(), replacementLemma);
+                String[] s = synth.synthesize(newAt, at.getPOSTag());
+                possibleReplacements.addAll(Arrays.asList(s));
+              }
+            }
+          } else {
+            possibleReplacements.addAll(replacements);
+          }
         }
       }
-
       possibleReplacements = possibleReplacements.stream().distinct().collect(Collectors.toList());
     }
 
     if (possibleReplacements != null && possibleReplacements.size() > 0) {
-      List<String> replacements = new ArrayList<>(possibleReplacements);
+      List<String> replacements = new ArrayList<>();
+      if (isAllUppercase) {
+        for (String s: possibleReplacements) {
+          replacements.add(s.toUpperCase());
+        }
+      } else {
+        replacements = new ArrayList<>(possibleReplacements);  
+      }
       replacements.remove(originalTokenStr);
       if (replacements.size() > 0) {
-        RuleMatch potentialRuleMatch = createRuleMatch(tokenReadings, replacements, sentence);
+        RuleMatch potentialRuleMatch = createRuleMatch(tokenReadings, replacements, sentence, originalTokenStr);
         ruleMatches.add(potentialRuleMatch);
       }
     }
@@ -175,13 +213,22 @@ public abstract class AbstractSimpleReplaceRule extends Rule {
   }
 
   protected RuleMatch createRuleMatch(AnalyzedTokenReadings tokenReadings,
-                                      List<String> replacements, AnalyzedSentence sentence) {
+                                      List<String> replacements, AnalyzedSentence sentence, String originalTokenStr) {
     String tokenString = tokenReadings.getToken();
     int pos = tokenReadings.getStartPos();
+    
+    RuleMatch potentialRuleMatch = null;
 
-    RuleMatch potentialRuleMatch = new RuleMatch(this, sentence, pos, pos
+    if (subRuleSpecificIds) {
+      String id = StringTools.toId(getId() + "_" + originalTokenStr, language);
+      String desc = getDescription().replace("$match", originalTokenStr);
+      SpecificIdRule specificIdRule = new SpecificIdRule(id, desc, isPremium(), getCategory(), getLocQualityIssueType(), getTags());
+      potentialRuleMatch = new RuleMatch(specificIdRule, sentence, pos, pos
         + tokenString.length(), getMessage(tokenString, replacements), getShort());
-
+    } else {
+      potentialRuleMatch = new RuleMatch(this, sentence, pos, pos
+        + tokenString.length(), getMessage(tokenString, replacements), getShort());
+    }
     if (!isCaseSensitive() && StringTools.startsWithUppercase(tokenString)) {
       for (int i = 0; i < replacements.size(); i++) {
         replacements.set(i, StringTools.uppercaseFirstChar(replacements.get(i)));
@@ -208,4 +255,32 @@ public abstract class AbstractSimpleReplaceRule extends Rule {
     this.checkLemmas = checkLemmas;
   }
 
+  /**
+   * Synthesizer to generate inflected suggestions
+   * @since 5.1
+   */
+  @Nullable
+  public Synthesizer getSynthesizer() {
+    return null;
+  }
+
+  /*
+   * @since 5.2
+   */
+  protected boolean isTokenException(AnalyzedTokenReadings atr) {
+    return false;
+  }
+  
+  /**
+   * If this is set, each replacement pair will have its own rule ID, making rule deactivations more specific.
+   * @since 5.5
+   */
+  public void useSubRuleSpecificIds() {
+    subRuleSpecificIds = true;
+  }
+
+  public Language getLanguage() {
+    return language;
+  }
+    
 }

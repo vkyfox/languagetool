@@ -18,30 +18,27 @@
  */
 package org.languagetool;
 
+import org.hamcrest.CoreMatchers;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.languagetool.language.*;
 import org.languagetool.markup.AnnotatedText;
 import org.languagetool.markup.AnnotatedTextBuilder;
-import org.languagetool.rules.CategoryId;
-import org.languagetool.rules.Rule;
-import org.languagetool.rules.RuleMatch;
-import org.languagetool.rules.TextLevelRule;
+import org.languagetool.rules.*;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
-import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.*;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.*;
 
 public class JLanguageToolTest {
 
-  private static final English english = new English();
+  private static final Language english = Languages.getLanguageForShortCode("en");
 
   @Test
   public void testGetAllActiveRules() {
@@ -60,7 +57,7 @@ public class JLanguageToolTest {
 
   @Test
   public void testIsPremium() {
-    assertFalse(JLanguageTool.isPremiumVersion());
+    assertFalse(Premium.isPremiumVersion());
   }
 
   @Test
@@ -101,13 +98,13 @@ public class JLanguageToolTest {
 
   @Test
   public void testGetMessageBundle() {
-    ResourceBundle bundle1 = JLanguageTool.getMessageBundle(new GermanyGerman());
+    ResourceBundle bundle1 = JLanguageTool.getMessageBundle(GermanyGerman.getInstance());
     assertThat(bundle1.getString("de"), is("Deutsch"));
 
     ResourceBundle bundle2 = JLanguageTool.getMessageBundle(english);
     assertThat(bundle2.getString("de"), is("German"));
 
-    ResourceBundle bundle3 = JLanguageTool.getMessageBundle(new AmericanEnglish());
+    ResourceBundle bundle3 = JLanguageTool.getMessageBundle(AmericanEnglish.getInstance());
     assertThat(bundle3.getString("de"), is("German"));
   }
 
@@ -216,8 +213,9 @@ public class JLanguageToolTest {
     assertThat(ltEnglish.check("This is an test").size(), is(1));
     assertThat(cache.hitCount(), is(2L));
 
-    JLanguageTool ltGerman = new JLanguageTool(new GermanyGerman(), null, cache);
-    assertTrue(ltGerman.check("This is an test").size() >= 3);
+    JLanguageTool ltGerman = new JLanguageTool(GermanyGerman.getInstance(), null, cache);
+    // only one error because English words are ignored
+    assertTrue(ltGerman.check("This is an test.").size() >= 1);
     assertThat(cache.hitCount(), is(2L));
 
     assertThat(ltEnglish.check("This is an test").size(), is(1));
@@ -245,11 +243,11 @@ public class JLanguageToolTest {
   @Test
   public void testCacheWithTextLevelRules() throws IOException {
     ResultCache cache = new ResultCache(1000);
-    JLanguageTool ltNoCache = new JLanguageTool(new GermanyGerman(), null);
+    JLanguageTool ltNoCache = new JLanguageTool(GermanyGerman.getInstance(), null);
     assertThat(ltNoCache.check("Ein Delfin. Noch ein Delfin.").size(), is(0));
     assertThat(ltNoCache.check("Ein Delfin. Noch ein Delphin.").size(), is(1));
 
-    JLanguageTool ltWithCache = new JLanguageTool(new GermanyGerman(), null, cache);
+    JLanguageTool ltWithCache = new JLanguageTool(GermanyGerman.getInstance(), null, cache);
     assertThat(ltWithCache.check("Ein Delfin. Noch ein Delfin.").size(), is(0));
     assertThat(cache.hitCount(), is(0L));
     assertThat(ltWithCache.check("Ein Delfin. Noch ein Delphin.").size(), is(1));
@@ -260,6 +258,117 @@ public class JLanguageToolTest {
     assertThat(cache.hitCount(), is(8L));
     assertThat(ltWithCache.check("Ein Delphin. Noch ein Delphin.").size(), is(0));   // try again - no state is kept
     assertThat(cache.hitCount(), is(12L));
+  }
+
+  class InternalRule extends Rule{
+    @Override
+    public String getId() {
+      return "INTERNAL_RULE";
+    }
+    @Override
+    public String getDescription() {
+      return "Internal rule";
+    }
+    @Override
+    public RuleMatch[] match(AnalyzedSentence sentence) throws IOException {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  @Test
+  public void testDisableInternalRule() throws IOException {
+    JLanguageTool lt = new JLanguageTool(new Demo(), null);
+    lt.addRule(new DemoRule() {
+      @Override
+      public RuleMatch[] match(AnalyzedSentence sentence) throws IOException {
+        return toRuleMatchArray(Arrays.stream(super.match(sentence)).map(match ->
+          new RuleMatch(new InternalRule(), sentence, match.getFromPos(), match.getToPos(), match.getMessage())
+        ).collect(Collectors.toList()));
+      }
+    });
+    List<RuleMatch> matches;
+    List<Rule> rules;
+
+    String text = "demo";
+    matches = lt.check(text);
+    rules = matches.stream().map(RuleMatch::getRule).collect(Collectors.toList());
+    assertThat(rules, is(not(hasItem(CoreMatchers.isA(DemoRule.class)))));
+    assertThat(rules, is(hasItem(CoreMatchers.isA(InternalRule.class))));
+
+    // disabling implementing rule works
+    lt.disableRule(new DemoRule().getId());
+    matches = lt.check(text);
+    assertThat(matches.size(), is(0));
+
+    // reset
+    lt.enableRule(new DemoRule().getId());
+    matches = lt.check(text);
+    assertThat(matches.size(), is(not(0)));
+
+    // disabling match rule works
+    lt.disableRule(new InternalRule().getId());
+    matches = lt.check(text);
+    assertThat(matches.size(), is(0));
+
+  }
+
+  class TestRule extends Rule{
+    private final int subId;
+
+    public TestRule(int subId) {
+      this.subId = subId;
+    }
+
+    @Override
+    public RuleMatch[] match(AnalyzedSentence sentence) throws IOException {
+      return toRuleMatchArray(Collections.emptyList());
+    }
+
+    @Override
+    public String getFullId() {
+      return String.format("TEST_RULE[%d]", subId);
+    }
+
+    @Override
+    public String getDescription() {
+      return "Test rule";
+    }
+
+    @Override
+    public String getId() {
+      return "TEST_RULE";
+    }
+  }
+
+  @Test
+  public void testDisableFullId() {
+    List<Rule> activeRules;
+    JLanguageTool lt = new JLanguageTool(new Demo(), null);
+    Rule testRule1 = new TestRule(1), testRule2 = new TestRule(2);
+    // preconditions / sanity checks
+    assertEquals("ruleID equal", testRule1.getId(), testRule2.getId());
+    assertNotEquals("fullRuleID not equal", testRule1.getFullId(), testRule2.getFullId());
+    assertNotEquals("rule objects not equal", testRule1, testRule2);
+
+    lt.addRule(testRule1);
+    lt.addRule(testRule2);
+
+    activeRules = lt.getAllActiveRules();
+    assertTrue("added rules are active", activeRules.contains(testRule1));
+    assertTrue("added rules are active", activeRules.contains(testRule2));
+
+    // disable rule TEST_RULE -> both TEST_RULE[1] and TEST_RULE[2] should be disabled
+    lt.disableRule(testRule1.getId());
+    activeRules = lt.getAllActiveRules();
+    assertFalse("rules are disabled", activeRules.contains(testRule1));
+    assertFalse("rules are disabled", activeRules.contains(testRule2));
+
+    // enable TEST_RULE, disable TEST_RULE[1] -> only TEST_RULE[2] active
+    lt.enableRule(testRule1.getId());
+    lt.disableRule(testRule1.getFullId());
+    activeRules = lt.getAllActiveRules();
+    assertFalse("rule disabled by full ID", activeRules.contains(testRule1));
+    assertTrue("rule enabled by partial ID ", activeRules.contains(testRule2));
   }
 
   private class IgnoreInterval {
@@ -315,8 +424,8 @@ public class JLanguageToolTest {
   @Ignore
   public void testRuleMessagesForSpellingErrors() throws Exception {
     JLanguageTool lt = new JLanguageTool(english);
-    //JLanguageTool lt = new JLanguageTool(new GermanyGerman());
-    //JLanguageTool lt = new JLanguageTool(new Russian());
+    //JLanguageTool lt = new JLanguageTool(GermanyGerman.getInstance());
+    //JLanguageTool lt = new JLanguageTool(Russian.getInstance());
     String[] rulesDisabled = {
             // en:
             "EN_QUOTES", "UPPERCASE_SENTENCE_START", "WHITESPACE_RULE",
@@ -350,16 +459,203 @@ public class JLanguageToolTest {
             continue matches;
           }
         }
-        System.out.println(String.format("Rule: %s\nMessage: %s\nMatch:\n%s: %s",
-                rule.getId(), message, ruleMatch.getRule().getId(), ruleMatch.getMessage()));
-        System.out.println(String.format("Error in [%d,%d]: \"%s\"", ruleMatch.getFromPos(),
-                ruleMatch.getToPos(), message.substring(ruleMatch.getFromPos(), ruleMatch.getToPos())));
+        System.out.printf("Rule: %s\nMessage: %s\nMatch:\n%s: %s%n",
+                rule.getId(), message, ruleMatch.getRule().getId(), ruleMatch.getMessage());
+        System.out.printf("Error in [%d,%d]: \"%s\"%n", ruleMatch.getFromPos(),
+                ruleMatch.getToPos(), message.substring(ruleMatch.getFromPos(), ruleMatch.getToPos()));
         System.out.println("-------");
         matchesCounter++;
       }
     }
     System.out.println("Total matches:" + matchesCounter);
     assertThat(matchesCounter, is(0));
+  }
+
+  @Test
+  public void testIgnoringEnglishWordsInSpanish() throws IOException {
+    Language lang = Spanish.getInstance();
+    JLanguageTool lt = new JLanguageTool(lang);
+    // No error for unclosed exclamation marks ¡!
+    List<RuleMatch> matches = lt.check("This is fantastic!");
+    assertEquals(0, matches.size());
+    matches = lt.check("The exhibition will feature a combination of new work as well as previously exhibited pieces.");
+    assertEquals(0, matches.size());
+
+    matches = lt.check("El president nos informa de la situación.");
+    assertEquals(1, matches.size());
+    assertEquals("presidente", matches.get(0).getSuggestedReplacements().get(0));
+  }
+
+  @Test
+  public void testIgnoringEnglishWordsInCatalan() throws IOException {
+    Language lang = Catalan.getInstance();
+    JLanguageTool lt = new JLanguageTool(lang);
+    List<RuleMatch> matches = lt.check("To do this");
+    assertEquals(0, matches.size());
+    matches = lt.check("I'm good at this");
+    assertEquals(0, matches.size());
+    lt.check("The Live Anthology");
+    assertEquals(0, matches.size());
+    matches = lt.check("The Ecology of Post-Cultural Revolution Frontier Art és el títol d'un llibre");
+    assertEquals(0, matches.size());
+    matches = lt.check("This is a good thing és una frase en anglès sense faltez.");
+    assertEquals(1, matches.size());
+    matches = lt.check("The Great Dictator és una pel·lícula de Chaplin.");
+    assertEquals(0, matches.size());
+    matches = lt.check("Llegirem una part de The Handmaid's Tale.");
+    assertEquals(0, matches.size());
+    matches = lt.check("The dit una cosa");
+    assertEquals(1, matches.size());
+    assertEquals("T'he", matches.get(0).getSuggestedReplacements().get(0));
+    matches = lt.check("I am the goalkeeper.");
+    assertEquals(0, matches.size());
+    matches = lt.check("I'm the goalkeeper.");
+    assertEquals(0, matches.size());
+    matches = lt.check("Me'n vaig a Malaga.");
+    assertEquals(1, matches.size());
+    matches = lt.check("Me'n vaig a Malaga of Spain.");
+    assertEquals(0, matches.size());
+    matches = lt.check("a l´area de");
+    assertEquals(2, matches.size());
+    matches = lt.check("el interest: 98,850.00 euros");
+    assertEquals(3, matches.size());
+    matches = lt.check("En aquest video I en aquestes");
+    assertEquals(1, matches.size());
+    matches = lt.check("De l'India i del Pakistan.");
+    assertEquals(1, matches.size());
+    matches = lt.check("My son is tall.");
+    assertEquals(0, matches.size());
+    matches = lt.check("The event was successful.");
+    assertEquals(0, matches.size());
+    matches = lt.check("Things To Know Before You Come.");
+    assertEquals(0, matches.size());
+
+    matches = lt.check("This is the community manager.");
+    assertEquals(0, matches.size());
+
+    matches = lt.check("Aquest és el community manager.");
+    assertEquals(1, matches.size());
+  }
+
+  @Test
+  public void testIgnoringEnglishWordsInDutch() throws IOException {
+    Language lang = new Dutch();
+    JLanguageTool lt = new JLanguageTool(lang);
+    List<RuleMatch> matches = lt.check("This for that was een goede film.");
+    assertEquals(0, matches.size());
+    matches = lt.check("We got this!");
+    assertEquals(0, matches.size());
+    // add more tests
+  }
+
+  @Test
+  public void testIgnoringEnglishWordsInFrench() throws IOException {
+    Language lang = French.getInstance();
+    JLanguageTool lt = new JLanguageTool(lang);
+    
+    List<RuleMatch> matches = lt.check("Elle a fait le montage des deux clips sur After effect");
+    assertEquals(1, matches.size());
+    assertEquals("[After Effects]", matches.get(0).getSuggestedReplacements().toString());
+
+    matches = lt.check("House of Entrepreneurship");
+    assertEquals(0, matches.size());
+  }
+
+  @Test
+  public void testIgnoringEnglishWordsInGermanyGerman() throws IOException {
+    Language lang = GermanyGerman.getInstance();
+    JLanguageTool lt = new JLanguageTool(lang);
+
+    List<RuleMatch> matches = lt.check("Ich weiß nicht, ob today passt.");
+    assertEquals(1, matches.size());
+
+    matches = lt.check("Komm schon, let us do this!");
+    assertEquals(0, matches.size());
+  }
+
+  @Test
+  public void testIgnoreEnglishWordsInPortuguese() throws IOException {
+    JLanguageTool lt = new JLanguageTool(BrazilianPortuguese.getInstance());
+    lt.disableRules(lt.getAllRules().stream().map(Rule::getId).collect(Collectors.toList()));
+    lt.enableRule("MORFOLOGIK_RULE_PT_BR");
+    lt.enableRule("PT_BARBARISMS_REPLACE");
+    String[] noErrorSentences = new String[]{
+      "Ontem vi A New Hope pela primeira vez.",
+      "Ela gosta de The Empire Strikes Back.",
+      "Mas prefiro The Return of the Jedi.",
+      "E quanto a The Phantom Menace, melhor nada dizer.",
+      "Aqui adoramos Whose line is it Anyway.",
+      "Por enquanto, só How I Met Your Mother.",  // already a multi-token spelling entry
+      "Aí ele disse: I am become death, destroyer of worlds.", // intervening punctuation
+      "O filme Don't Look Up.",  // contractions
+      "Só escrevem que we've told them we won't do it.",  // contractions
+      "Esta palavra existe: the precariousness.",  // "-ness" suffix
+      "Os melhores livros about business practices.",
+      "O filme se chama No Country For Old Men.",  // "no"
+      "Acho que era Driving Miss Daisy.",
+      "Ele disse Luke I am your father.",
+      "Ou teria sido Luke I am looking for your father?",  // "for"
+      "Algo mais estranho: I am providing for Mother, talvez?",  // "for"
+      "Mas mandou mensagem que she is waiting for your brother.",  // "for"
+      "Em português é Conduzindo a Miss Daisy, não é?",  // "a"
+      "A organização Law Enforcement Agent Protection (Leap).",  // single-word parenthetical
+      "Mais sucessos seguiram, com os álbuns \"Ghetto Dictionary: The Art of War\"",  // ghetto
+      "Costumava assistir a Queer As Folk",  // "as"
+      "Sempre gostei muito de As If",  // "as"; cf. "As Endeavour" below
+      "Mas The Endeavour, por outro lado, detesto.",  // cf. "As Endeavour" below
+      "A instituição Children's Hospital.",  // possessive "'s"
+      "O filme não se chama Good, Bad, Ugly.",  // only intervening commas, all common words
+      "O livro se chama Bad, Grisly Murders.",  // intervening commas, last one relies on tagging (not common)
+      "Ele estava lendo Astrology Acrobatics.",  // -logy
+      "Seu grupo de Democracy Saviours.",  // -cracy
+      "Acho que ele era somewhat overzealous.",  // over-
+      "Sempre me pareceu um tremendous underachiever.",  // under-
+      // Making sure disambiguation works properly per recent FPs
+      "A Abaddon Books, subsidiária e editora dos livros.",
+      "Smokers in Airplanes é o segundo álbum do artista brasileiro.",
+      "Obteve um doutorado em física pela American University.",
+      "O American Sociological Review é um jornal acadêmico bimensal.",
+      "Código do Bletchley Park na Inglaterra.",
+      "Sobre Batman, Broken City (apesar do Coringa).",
+      "Birmingham City Football Club.",
+      "Narra, segundo o historiador americano Will Durant, uma das maiores aventuras da história humana.",
+      "Duas décadas mais tarde, os Gipsy Kings incorporaram aquilo.",
+      "Valente teve três irmãos, um dos quais, Silvio Francesco, também esteve no show business.",
+      "O lema do estado de Nova Hampshire é Livre Free or Die",
+      // English-language toponyms that may not be in the PT speller, but we can verify that they're valid
+      // based on proximity with state/province/county names.
+      // Note that this does not fact-check whether the toponym actually belongs in the state/province/whatever :p
+      "Aconteceu na cidade de Victor Harbor, Austrália Meridional.",  // just comma, and PT name of state
+      "Aconteceu no distrito de Tamworth, no condado de Staffordshire.",  // "no condado de"
+      "A pequena cidade de Bethany Beach, em Delaware.",  // "em"
+      "O vilarejo de Goose Bay, na província de Terra Nova e Labrador.",  // "na província de"
+      "Morava, na época, em Keene, estado de Nova Hampshire.",  // "estado de"
+      "O episódio se chamava Do Something.",  // uppercase "Do" followed by English, assume it's a title; cf. "do Castle" below
+      "Ele escreveu: in San Diego, California we were at our best.",  // "California" in proper English context
+      "O prêmio The Academy of Science Fiction & Fantasy."  // english tag must carry across ampersand
+    };
+    for (String sentence : noErrorSentences) {
+      List<RuleMatch> matches = lt.check(sentence);
+      assert matches.isEmpty() : "Unexpected match in: " + sentence;
+    }
+    HashMap<String, String> errorSentences = new HashMap<>();
+    errorSentences.put("Foi uma melhora substantial.", "substancial");  // single word
+    // match the suffix, but 'whateverness' is not tagged in English, so it's a spelling error
+    errorSentences.put("Esta palavra não existe: the whateverness.", "lhe");
+    errorSentences.put("A comunidade do ghetto de Veneza.", "gueto");  // in isolation, it is not tagged with _english_ignore_
+    // because "as" is blocked and "Endeavour" is not in the list of 'common' English words, we don't tag with _english_ignore_
+    errorSentences.put("Acho que se chamava As Endeavour.", "EndeavourOS");
+    errorSentences.put("Clique settings e veja o que acontece.", "sétimas");  // "settings" is isolated; "clique" is English but specifically blocked
+    errorSentences.put("Point Loma High School em San Diego, California.", "Califórnia");  // "California" must be corrected, but cf. "California above"
+    errorSentences.put("Ele foi foi descartado por Carroll, mas os proprietários não gostaram.", "Carrol");  // "mas" must be blocked
+    errorSentences.put("Não é bem como imaginei baseada na descrição do Castle.", "Castel");  // lowercase "do" must be blocked; cf. "Do Something" above
+    errorSentences.put("Onde está a Cat?", "Cat.");  // "a" must be blocked
+    errorSentences.put("E se for business?", "Business");  // "for" blocks, not preceded by English *and* lowercase (i.e. not in English context, and not likely to be title)
+    for (Map.Entry<String, String> entry : errorSentences.entrySet()) {
+      List<RuleMatch> matches = lt.check(entry.getKey());
+      assert !matches.isEmpty();
+      assertEquals(entry.getValue(), matches.get(0).getSuggestedReplacements().get(0));
+    }
   }
 
 }

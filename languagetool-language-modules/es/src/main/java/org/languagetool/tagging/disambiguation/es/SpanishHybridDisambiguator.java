@@ -1,6 +1,6 @@
-/* LanguageTool, a natural language style checker
+/* LanguageTool, a natural language style checker 
  * Copyright (C) 2007 Daniel Naber (http://www.danielnaber.de)
- *
+ * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -19,34 +19,47 @@
 
 package org.languagetool.tagging.disambiguation.es;
 
-import java.io.IOException;
-
+import org.jetbrains.annotations.Nullable;
 import org.languagetool.AnalyzedSentence;
-import org.languagetool.language.Spanish;
+import org.languagetool.JLanguageTool;
+import org.languagetool.Language;
 import org.languagetool.tagging.disambiguation.AbstractDisambiguator;
 import org.languagetool.tagging.disambiguation.Disambiguator;
 import org.languagetool.tagging.disambiguation.MultiWordChunker;
 import org.languagetool.tagging.disambiguation.rules.XmlRuleDisambiguator;
 
+import java.io.IOException;
+
 /**
  * Hybrid chunker-disambiguator for Spanish
- *
- * @author Marcin Miłkowski
+ * 
+ * @author Jaume Ortolà
  */
 public class SpanishHybridDisambiguator extends AbstractDisambiguator {
 
-    private final Disambiguator chunker = new MultiWordChunker("/es/multiwords.txt");
-    private final Disambiguator disambiguator = new XmlRuleDisambiguator(new Spanish());
+  private final MultiWordChunker chunker = MultiWordChunker.getInstance("/es/multiwords.txt", true, true, false);
+  private final Disambiguator chunkerGlobal = MultiWordChunker.getInstance("/spelling_global.txt", false, true, false, "NPCN000");
+  private final Disambiguator disambiguator;
 
-    /**
-     * Calls two disambiguator classes: (1) a chunker; (2) a rule-based
-     * disambiguator.
-     */
-    @Override
-    public final AnalyzedSentence disambiguate(AnalyzedSentence input)
-            throws IOException {
-        return disambiguator.disambiguate(chunker.disambiguate(input));
-    }
+  public SpanishHybridDisambiguator(Language lang) {
+    disambiguator = new XmlRuleDisambiguator(lang, true);
+    chunker.setRemovePreviousTags(true);
+  }
 
+  @Override
+  public AnalyzedSentence disambiguate(AnalyzedSentence input) throws IOException {
+    return disambiguate(input, null);
+  }
+
+  /**
+   * Calls two disambiguator classes: (1) a chunker; (2) a rule-based
+   * disambiguator.
+   */
+  @Override
+  public AnalyzedSentence disambiguate(AnalyzedSentence input,
+                                       @Nullable JLanguageTool.CheckCancelledCallback checkCanceled) throws IOException {
+    return disambiguator.disambiguate(chunker.disambiguate(chunkerGlobal.disambiguate(input, checkCanceled),
+      checkCanceled), checkCanceled);
+  }
 
 }

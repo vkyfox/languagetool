@@ -19,14 +19,13 @@
 package org.languagetool.rules;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.ResourceBundle;
+import java.util.*;
+import java.util.regex.Pattern;
 
 import org.languagetool.AnalyzedSentence;
 import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.Language;
+import org.languagetool.Tag;
 import org.languagetool.tokenizers.WordTokenizer;
 import org.languagetool.tools.Tools;
 
@@ -39,7 +38,8 @@ public class PunctuationMarkAtParagraphEnd extends TextLevelRule {
 
   private final static String[] PUNCTUATION_MARKS = {".", "!", "?", ":", ",", ";"};
   private final static String[] QUOTATION_MARKS = {"„", "»", "«", "\"", "”", "″", "’", "‚", "‘", "›", "‹", "′", "'"};
-  
+  private final static Pattern P_NUMERIC = Pattern.compile("[0-9.]+");
+  private final static int MAX_URL_LENGTH = 30; // Do not add punctuation after long URLs
   private final Language lang;
 
   /**
@@ -50,6 +50,7 @@ public class PunctuationMarkAtParagraphEnd extends TextLevelRule {
     this.lang = Objects.requireNonNull(lang);
     super.setCategory(Categories.PUNCTUATION.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Grammar);
+    setTags(Collections.singletonList(Tag.picky));
     if (!defaultActive) {
       setDefaultOff();
     }
@@ -68,7 +69,18 @@ public class PunctuationMarkAtParagraphEnd extends TextLevelRule {
   public String getDescription() {
     return messages.getString("punctuation_mark_paragraph_end_desc");
   }
-  
+
+  /**
+   * Language-specific hook to ignore whole paragraphs that do not end with a
+   * punctuation mark, e.g. cross-reference lines like "Annex: ..." or
+   * "Article principal: ...". The first sentence of the paragraph is passed in.
+   * By default no paragraph is ignored.
+   * @since 6.9
+   */
+  protected boolean isIgnoredParagraph(AnalyzedSentence firstSentenceInParagraph) {
+    return false;
+  }
+
   private static boolean stringEqualsAny(String token, String[] any) {
     for (String s : any) {
       if (token.equals(s)) {
@@ -89,6 +101,10 @@ public class PunctuationMarkAtParagraphEnd extends TextLevelRule {
   private static boolean isWord(AnalyzedTokenReadings tk) {
     return Character.isLetter(tk.getToken().charAt(0));
   }
+  
+  private static boolean isNumeric(String s) {
+   return P_NUMERIC.matcher(s.trim()).matches();
+  }
 
   @Override
   public RuleMatch[] match(List<AnalyzedSentence> sentences) throws IOException {
@@ -103,8 +119,16 @@ public class PunctuationMarkAtParagraphEnd extends TextLevelRule {
         if (tokens.length > 2) {
           isFirstWord = (isWord(tokens[1]) && !isPunctuationMark(tokens[2]))
                 || (tokens.length > 3 && isQuotationMark(tokens[1]) && isWord(tokens[2]) && !isPunctuationMark(tokens[3]));
+          // ignore sentences like "2.2.2. This is an item" (two sentences, first sentence only numbers)
+          boolean ignoreSentence = false;
+          if (n == 1 && isNumeric(sentences.get(0).getText())) {
+            ignoreSentence = true;
+          }
+          if (n > 0 && isNumeric(sentences.get(n - 1).getText())) {
+            ignoreSentence = true;
+          }
           // paragraphs containing less than two sentences (e.g. headlines, listings) are excluded from rule
-          if (n - lastPara > 1 && isFirstWord) {
+          if (n - lastPara > 1 && isFirstWord && !ignoreSentence && !isIgnoredParagraph(sentences.get(lastPara + 1))) {
             int lastNWToken = tokens.length - 1;
             while (tokens[lastNWToken].isLinebreak()) {
               lastNWToken--;
@@ -116,15 +140,19 @@ public class PunctuationMarkAtParagraphEnd extends TextLevelRule {
               pos += sentence.getText().length();
               continue;
             }
+            String lastToken = tokens[lastNWToken].getToken();
+            if (lastToken.length() > MAX_URL_LENGTH && lastToken.toLowerCase().startsWith("http") || lastToken.toLowerCase().startsWith("ftp")) {
+              continue;
+            }
             if (isWord(tokens[lastNWToken]) 
-                || (isQuotationMark(tokens[lastNWToken]) && isWord(tokens[lastNWToken - 1]))) {
+                || (isQuotationMark(tokens[lastNWToken]) && isWord(tokens[lastNWToken-1]))) {
               int fromPos = pos + tokens[lastNWToken].getStartPos();
               int toPos = pos + tokens[lastNWToken].getEndPos();
               RuleMatch ruleMatch = new RuleMatch(this, sentence, fromPos, toPos, 
                   messages.getString("punctuation_mark_paragraph_end_msg"));
               List<String> replacements = new ArrayList<>();
-              for (String PUNCTUATION_MARK : PUNCTUATION_MARKS) {
-                replacements.add(tokens[lastNWToken].getToken() + PUNCTUATION_MARK);
+              for (String mark : PUNCTUATION_MARKS) {
+                replacements.add(tokens[lastNWToken].getToken() + mark);
               }
               ruleMatch.setSuggestedReplacements(replacements);
               ruleMatches.add(ruleMatch);
@@ -133,7 +161,7 @@ public class PunctuationMarkAtParagraphEnd extends TextLevelRule {
         }
         lastPara = n;
       }
-      pos += sentence.getText().length();
+      pos += sentence.getCorrectedTextLength();
     }
     return toRuleMatchArray(ruleMatches);
   }

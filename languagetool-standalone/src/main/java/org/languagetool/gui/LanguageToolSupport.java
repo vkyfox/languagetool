@@ -20,12 +20,9 @@ package org.languagetool.gui;
 
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nullable;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
-import org.languagetool.Languages;
-import org.languagetool.MultiThreadedJLanguageTool;
-import org.languagetool.UserConfig;
-import org.languagetool.language.LanguageIdentifier;
+import org.languagetool.*;
+import org.languagetool.language.identifier.LanguageIdentifier;
+import org.languagetool.language.identifier.LanguageIdentifierService;
 import org.languagetool.rules.*;
 
 import javax.swing.*;
@@ -40,8 +37,8 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -105,7 +102,7 @@ class LanguageToolSupport {
     ruleMatches = new ArrayList<>();
     documentSpans = new ArrayList<>();    
     this.undo = support;
-    this.langIdentifier = new LanguageIdentifier();
+    this.langIdentifier = LanguageIdentifierService.INSTANCE.getDefaultLanguageIdentifier(0, null, null, null);
     init();
   }
 
@@ -257,7 +254,6 @@ class LanguageToolSupport {
       languageTool.setCleanOverlappingMatches(false);
       Tools.configureFromRules(languageTool, config);
       activateLanguageModelRules(language);
-      activateWord2VecModelRules(language);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -281,21 +277,6 @@ class LanguageToolSupport {
     }
   }
 
-  private void activateWord2VecModelRules(Language language) {
-    if (config.getWord2VecDirectory() != null) {
-      File word2vecDir = new File(config.getWord2VecDirectory(), language.getShortCode());
-      if (word2vecDir.exists()) {
-        try {
-          languageTool.activateWord2VecModelRules(config.getWord2VecDirectory());
-        } catch (Exception e) {
-          JOptionPane.showMessageDialog(null, "Error while loading word2vec model.\n" + e.getMessage());
-        }
-      } else {
-        System.err.println("Not loading word2vec data, directory does not exist: " + word2vecDir);
-      }
-    }
-  }
-
   private void init() {
     try {
       config = new Configuration(new File(System.getProperty("user.home")), CONFIG_FILE, null);
@@ -308,7 +289,7 @@ class LanguageToolSupport {
         defaultLanguage = Languages.getLanguageForLocale(Locale.getDefault());
     }
 
-    /**
+    /*
      * Warm-up: we have a lot of lazy init in LT, which causes the first check to
      * be very slow (several seconds) for languages with a lot of data and a lot of
      * rules. We just assume that the default language is the language that the user
@@ -848,11 +829,10 @@ class LanguageToolSupport {
       try {
         if (span.start < span.end) { //to avoid the BadLocationException
           ITSIssueType issueType = span.rule.getLocQualityIssueType();
-          Color ulColor = config.getUnderlineColor(span.rule.getCategory().getName());
+          Color ulColor = config.getUnderlineColor(span.rule.getCategory().getName(), span.rule.getId());
           Color colorForIssueType = getConfig().getErrorColors().get(issueType);
-          Color bgColor = colorForIssueType != null ? colorForIssueType : null;
           Color underlineColor = ITSIssueType.Misspelling == span.rule.getLocQualityIssueType() ? Color.red : ulColor;
-          HighlightPainter painter = new HighlightPainter(bgColor, underlineColor);
+          HighlightPainter painter = new HighlightPainter(colorForIssueType, underlineColor);
           h.addHighlight(span.start, span.end, painter);
         }
       } catch (BadLocationException ex) {

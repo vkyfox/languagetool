@@ -26,33 +26,35 @@ import org.languagetool.rules.ITSIssueType;
 import org.languagetool.tools.Tools;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
 import java.net.URL;
 
 /**
- * A rule that matches words which are complex and suggests easier to understand alternatives. 
+ * A rule that matches words which require specific diacritics (e.g, {@code a la} instead of {@code à la}).
  *
  * @author Tiago F. Santos 
  * @since 4.8
  */
 public class EnglishDiacriticsRule extends AbstractSimpleReplaceRule2 {
 
-  public static final String EN_DIACRITICS_REPLACE = "EN_DIACRITICS_REPLACE";
+  public static final String EN_DIACRITICS_REPLACE = "EN_DIACRITICS_REPLACE_ORTHOGRAPHY";
 
   private static final String FILE_NAME = "/en/diacritics.txt";
   private static final Locale EN_LOCALE = new Locale("en");  // locale used on case-conversion
 
   @Override
-  public final String getFileName() {
-    return FILE_NAME;
+  public final List<String> getFileNames() {
+    return Collections.singletonList(FILE_NAME);
   }
 
   public EnglishDiacriticsRule(ResourceBundle messages) throws IOException {
     super(messages, new English());
-    // setDefaultOff();
-    super.setCategory(Categories.TYPOS.getCategory(messages));
+    useSubRuleSpecificIds();
+    setCategory(Categories.TYPOS.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Misspelling);
     addExamplePair(Example.wrong("<marker>blase</marker>"),
                    Example.fixed("<marker>blasé</marker>"));
@@ -65,7 +67,7 @@ public class EnglishDiacriticsRule extends AbstractSimpleReplaceRule2 {
 
   @Override
   public String getDescription() {
-    return "Words with diacritics";
+    return "Suggest diacritics for '$match'";
   }
 
   @Override
@@ -74,8 +76,8 @@ public class EnglishDiacriticsRule extends AbstractSimpleReplaceRule2 {
   }
 
   @Override
-  public String getSuggestion() {
-    return "'$match' is an imported foreign expression, which originally has a diacritic. Consider using $suggestions";
+  public String getMessage() {
+    return "'$match' is an imported foreign name or expression, which originally has a diacritic.";
   }
 
   @Override

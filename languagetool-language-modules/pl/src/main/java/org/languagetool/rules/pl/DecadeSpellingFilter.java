@@ -24,6 +24,7 @@ import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.rules.RuleMatch;
 import org.languagetool.rules.patterns.RuleFilter;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -32,10 +33,10 @@ import java.util.Map;
  */
 public class DecadeSpellingFilter extends RuleFilter {
 
-  private static int[]    numbers = { 1000,  900,  500,  400,  100,   90,
+  private static final int[]    numbers = { 1000,  900,  500,  400,  100,   90,
       50,   40,   10,    9,    5,    4,    1 };
 
-  private static String[] letters = { "M",  "CM",  "D",  "CD", "C",  "XC",
+  private static final String[] letters = { "M",  "CM",  "D",  "CD", "C",  "XC",
       "L",  "XL",  "X",  "IX", "V",  "IV", "I" };
 
   /**
@@ -44,21 +45,20 @@ public class DecadeSpellingFilter extends RuleFilter {
    * @return the String using the number.
    */
   private String getRomanNumber(int num) {
-    String roman = "";  // The roman numeral.
-    int N = num;        // N represents the part of num that still has
-    //   to be converted to Roman numeral representation.
+    StringBuilder roman = new StringBuilder();
+    int n = num;    // n represents the part of num that still has to be converted to Roman numeral representation
     for (int i = 0; i < numbers.length; i++) {
-      while (N >= numbers[i]) {
-        roman += letters[i];
-        N -= numbers[i];
+      while (n >= numbers[i]) {
+        roman.append(letters[i]);
+        n -= numbers[i];
       }
     }
-    return roman;
+    return roman.toString();
   }
 
   @Nullable
   @Override
-  public RuleMatch acceptRuleMatch(RuleMatch match, Map<String, String> arguments, int patternTokenPos, AnalyzedTokenReadings[] patternTokens) {
+  public RuleMatch acceptRuleMatch(RuleMatch match, Map<String, String> arguments, int patternTokenPos, AnalyzedTokenReadings[] patternTokens, List<Integer> tokenPositions) {
     try {
       String decade = arguments.get("lata").substring(2);
       String century = arguments.get("lata").substring(0, 2);
@@ -66,8 +66,8 @@ public class DecadeSpellingFilter extends RuleFilter {
       String message = match.getMessage()
           .replace("{dekada}", decade)
           .replace("{wiek}", getRomanNumber(cent + 1));
-      RuleMatch ruleMatch = new RuleMatch(match.getRule(), match.getSentence(), match.getFromPos(), match.getToPos(), message, match.getShortMessage(),
-              match.getFromPos() == 0, null);
+      RuleMatch ruleMatch = new RuleMatch(match.getRule(), match.getSentence(), match.getFromPos(), match.getToPos(), match.getPatternFromPos(), match.getPatternToPos(),
+              message, match.getShortMessage(), match.getFromPos() == 0, null);
       ruleMatch.setType(match.getType());
       return ruleMatch;
     } catch (IllegalArgumentException ignore) {

@@ -21,9 +21,13 @@ package org.languagetool;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.Weigher;
+import org.jetbrains.annotations.NotNull;
 import org.languagetool.rules.RuleMatch;
+import org.languagetool.tools.Cache.CacheUtils;
+import org.languagetool.tools.Cache.ProtoResultCache;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -39,7 +43,12 @@ import java.util.concurrent.TimeUnit;
  */
 public class ResultCache {
 
-  private final Cache<InputSentence, List<RuleMatch>> matchesCache;
+  /**
+   * rules can fail individually, results can be partial ->
+   * store list if success (can be empty), null -> failure/not checked
+   */
+  private final Cache<InputSentence, Map<String, List<RuleMatch>>> remoteMatchesCache;
+  private final Cache<InputSentence, List<ProtoResultCache.CachedResultMatch>> matchesCache;
   private final Cache<SimpleInputSentence, AnalyzedSentence> sentenceCache;
 
   /**
@@ -48,6 +57,7 @@ public class ResultCache {
    */
   public ResultCache(long maxSize) {
     this(maxSize, 5, TimeUnit.MINUTES);
+
   }
 
   /**
@@ -63,6 +73,11 @@ public class ResultCache {
             recordStats().
             expireAfterAccess(expireAfter, timeUnit).
             build();
+    remoteMatchesCache = CacheBuilder.newBuilder().
+            maximumWeight(maxSize/2).weigher(new RemoteMatchesWeigher()).
+            recordStats().
+            expireAfterAccess(expireAfter, timeUnit).
+            build();
     sentenceCache = CacheBuilder.newBuilder().
             maximumWeight(maxSize/2).weigher(new SentenceWeigher()).
             recordStats().
@@ -70,19 +85,28 @@ public class ResultCache {
             build();
   }
   
-  class MatchesWeigher implements Weigher<InputSentence, List<RuleMatch>> {
+  static class MatchesWeigher implements Weigher<InputSentence, List<ProtoResultCache.CachedResultMatch>> {
     @Override
-    public int weigh(InputSentence sentence, List<RuleMatch> matches) {
+    public int weigh(InputSentence sentence, List<ProtoResultCache.CachedResultMatch> matches) {
       // this is just a rough guesstimate so that the cacheSize given by the user
       // is very roughly the number of average sentences the cache can keep:
-      return sentence.getText().length() / 75 + matches.size();
+      return 1 + sentence.getAnalyzedSentence().getText().length() / 75 + matches.size();
     }
   }
-  
-  class SentenceWeigher implements Weigher<SimpleInputSentence, AnalyzedSentence> {
+
+  static class RemoteMatchesWeigher implements Weigher<InputSentence, Map<String, List<RuleMatch>>> {
     @Override
-    public int weigh(SimpleInputSentence sentence, AnalyzedSentence analyzedSentence) {
-      return sentence.getText().length() / 75;
+    public int weigh(InputSentence sentence, @NotNull Map<String, List<RuleMatch>> matches) {
+      // this is just a rough guesstimate so that the cacheSize given by the user
+      // is very roughly the number of average sentences the cache can keep:
+      return 1 + sentence.getAnalyzedSentence().getText().length() / 75;
+    }
+  }
+
+  static class SentenceWeigher implements Weigher<SimpleInputSentence, AnalyzedSentence> {
+    @Override
+    public int weigh(SimpleInputSentence sentence, @NotNull AnalyzedSentence analyzedSentence) {
+      return 1 + sentence.getText().length() / 75;
     }
   }
   
@@ -98,16 +122,18 @@ public class ResultCache {
     return matchesCache.stats().hitCount() + sentenceCache.stats().hitCount();
   }
 
-  public List<RuleMatch> getIfPresent(InputSentence key) {
-    return matchesCache.getIfPresent(key);
+  public List<RuleMatch> getIfPresent(@NotNull InputSentence key) {
+    List<ProtoResultCache.CachedResultMatch> serializedMatches = matchesCache.getIfPresent(key);
+    return serializedMatches != null ? serializedMatches.stream().map(match -> CacheUtils.deserializeResultMatch(match, key.getAnalyzedSentence())).toList() : null;
   }
 
   public AnalyzedSentence getIfPresent(SimpleInputSentence key) {
     return sentenceCache.getIfPresent(key);
   }
 
-  public void put(InputSentence key, List<RuleMatch> sentenceMatches) {
-    matchesCache.put(key, sentenceMatches);
+  public void put(@NotNull InputSentence key, @NotNull List<RuleMatch> sentenceMatches) {
+    List<ProtoResultCache.CachedResultMatch> serializedMatches = sentenceMatches.stream().map(CacheUtils::serializeResultMatch).toList();
+    matchesCache.put(key, serializedMatches);
   }
 
   public void put(SimpleInputSentence key, AnalyzedSentence aSentence) {
@@ -115,8 +141,13 @@ public class ResultCache {
   }
 
   /** @since 4.1 */
-  public Cache<InputSentence, List<RuleMatch>> getMatchesCache() {
+  public Cache<InputSentence, List<ProtoResultCache.CachedResultMatch>> getMatchesCache() {
     return matchesCache;
+  }
+
+  /** @since 5.0 */
+  public Cache<InputSentence, Map<String, List<RuleMatch>>> getRemoteMatchesCache() {
+    return remoteMatchesCache;
   }
 
   /** @since 4.1 */

@@ -18,18 +18,14 @@
  */
 package org.languagetool.language;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
-import org.languagetool.UserConfig;
-import org.languagetool.databroker.ResourceDataBroker;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.languagetool.*;
+import org.languagetool.broker.ResourceDataBroker;
 import org.languagetool.rules.*;
 import org.languagetool.rules.sk.CompoundRule;
 import org.languagetool.rules.sk.MorfologikSlovakSpellerRule;
+import org.languagetool.rules.spelling.SpellingCheckRule;
 import org.languagetool.synthesis.Synthesizer;
 import org.languagetool.synthesis.sk.SlovakSynthesizer;
 import org.languagetool.tagging.Tagger;
@@ -37,15 +33,14 @@ import org.languagetool.tagging.sk.SlovakTagger;
 import org.languagetool.tokenizers.SRXSentenceTokenizer;
 import org.languagetool.tokenizers.SentenceTokenizer;
 
+import java.io.IOException;
+import java.util.*;
+
 public class Slovak extends Language {
 
   private static final List<String> RULE_FILES = Arrays.asList(
     "grammar-typography.xml"
   );
-
-  private Tagger tagger;
-  private SentenceTokenizer sentenceTokenizer;
-  private Synthesizer synthesizer;
 
   @Override
   public String getName() {
@@ -62,28 +57,21 @@ public class Slovak extends Language {
     return new String[]{"SK"};
   }
 
+  @NotNull
   @Override
-  public Tagger getTagger() {
-    if (tagger == null) {
-      tagger = new SlovakTagger();
-    }
-    return tagger;
+  public Tagger createDefaultTagger() {
+    return new SlovakTagger();
+  }
+
+  @Nullable
+  @Override
+  public Synthesizer createDefaultSynthesizer() {
+    return SlovakSynthesizer.INSTANCE;
   }
 
   @Override
-  public Synthesizer getSynthesizer() {
-    if (synthesizer == null) {
-      synthesizer = new SlovakSynthesizer(this);
-    }
-    return synthesizer;
-  }
-  
-  @Override
-  public SentenceTokenizer getSentenceTokenizer() {
-    if (sentenceTokenizer == null) {
-      sentenceTokenizer = new SRXSentenceTokenizer(this);
-    }
-    return sentenceTokenizer;
+  public SentenceTokenizer createDefaultSentenceTokenizer() {
+    return new SRXSentenceTokenizer(this);
   }
   
   @Override
@@ -105,7 +93,7 @@ public class Slovak extends Language {
             new WordRepeatRule(messages, this),
             new MultipleWhitespaceRule(messages, this),
             // specific to Slovak:
-            new CompoundRule(messages),
+            new CompoundRule(messages, this, userConfig),
             new MorfologikSlovakSpellerRule(messages, this, userConfig, altLanguages)
             //new SlovakVesRule(messages)
     );
@@ -122,4 +110,9 @@ public class Slovak extends Language {
     return ruleFileNames;
   }
 
+  @Nullable
+  @Override
+  protected SpellingCheckRule createDefaultSpellingRule(ResourceBundle messages) throws IOException {
+    return new MorfologikSlovakSpellerRule(messages, this, null, null);
+  }
 }

@@ -18,36 +18,35 @@
  */
 package org.languagetool.language;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.languagetool.Language;
 import org.languagetool.LanguageMaintainedState;
+import org.languagetool.LanguageWithModel;
 import org.languagetool.UserConfig;
 import org.languagetool.languagemodel.LanguageModel;
 import org.languagetool.rules.*;
 import org.languagetool.rules.it.ItalianConfusionProbabilityRule;
 import org.languagetool.rules.it.ItalianWordRepeatRule;
 import org.languagetool.rules.it.MorfologikItalianSpellerRule;
-
+import org.languagetool.rules.spelling.SpellingCheckRule;
+import org.languagetool.synthesis.Synthesizer;
+import org.languagetool.synthesis.it.ItalianSynthesizer;
 import org.languagetool.tagging.Tagger;
+import org.languagetool.tagging.disambiguation.Disambiguator;
+import org.languagetool.tagging.disambiguation.rules.it.ItalianRuleDisambiguator;
 import org.languagetool.tagging.it.ItalianTagger;
 import org.languagetool.tokenizers.SRXSentenceTokenizer;
 import org.languagetool.tokenizers.SentenceTokenizer;
 
-import org.languagetool.tagging.disambiguation.Disambiguator;
-import org.languagetool.tagging.disambiguation.rules.it.ItalianRuleDisambiguator;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.ResourceBundle;
 
-public class Italian extends Language implements AutoCloseable {
+public class Italian extends LanguageWithModel {
 
-  private Tagger tagger;
-  private SentenceTokenizer sentenceTokenizer;
-  private LanguageModel languageModel;
-  private Disambiguator disambiguator;
-  
   @Override
   public String getName() {
     return "Italian";
@@ -63,20 +62,15 @@ public class Italian extends Language implements AutoCloseable {
     return new String[]{"IT", "CH"};
   }
 
+  @NotNull
   @Override
-  public Tagger getTagger() {
-    if (tagger == null) {
-      tagger = new ItalianTagger();
-    }
-    return tagger;
+  public Tagger createDefaultTagger() {
+    return new ItalianTagger();
   }
 
   @Override
-  public SentenceTokenizer getSentenceTokenizer() {
-    if (sentenceTokenizer == null) {
-      sentenceTokenizer = new SRXSentenceTokenizer(this);
-    }
-    return sentenceTokenizer;
+  public SentenceTokenizer createDefaultSentenceTokenizer() {
+    return new SRXSentenceTokenizer(this);
   }
 
   @Override
@@ -103,36 +97,21 @@ public class Italian extends Language implements AutoCloseable {
 
   /** @since 3.1 */
   @Override
-  public synchronized LanguageModel getLanguageModel(File indexDir) throws IOException {
-    languageModel = initLanguageModel(indexDir, languageModel);
-    return languageModel;
-  }
-
-  /** @since 3.1 */
-  @Override
   public List<Rule> getRelevantLanguageModelRules(ResourceBundle messages, LanguageModel languageModel, UserConfig userConfig) throws IOException {
-    return Arrays.asList(
-            new ItalianConfusionProbabilityRule(messages, languageModel, this)
+    return Collections.singletonList(
+      new ItalianConfusionProbabilityRule(messages, languageModel, this)
     );
   }
 
-  /**
-   * Closes the language model, if any. 
-   * @since 3.1
-   */
   @Override
-  public void close() throws Exception {
-    if (languageModel != null) {
-      languageModel.close();
-    }
+  public Disambiguator createDefaultDisambiguator() {
+    return new ItalianRuleDisambiguator();
   }
-
+  
+  @Nullable
   @Override
-  public final Disambiguator getDisambiguator() {
-    if (disambiguator == null) {
-      disambiguator = new ItalianRuleDisambiguator();
-    }
-    return disambiguator;
+  public Synthesizer createDefaultSynthesizer() {
+    return ItalianSynthesizer.INSTANCE;
   }
 
   @Override
@@ -140,4 +119,9 @@ public class Italian extends Language implements AutoCloseable {
     return LanguageMaintainedState.ActivelyMaintained;
   }
 
+  @Nullable
+  @Override
+  protected SpellingCheckRule createDefaultSpellingRule(ResourceBundle messages) throws IOException {
+    return new MorfologikItalianSpellerRule(messages, this, null, null);
+  }
 }

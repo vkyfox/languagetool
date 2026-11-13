@@ -18,22 +18,22 @@
  */
 package org.languagetool.rules.ga;
 
+import org.languagetool.Language;
+import org.languagetool.UserConfig;
+import org.languagetool.rules.*;
+
 import java.io.IOException;
 import java.util.ResourceBundle;
-
-import org.languagetool.rules.AbstractCompoundRule;
-import org.languagetool.rules.CompoundRuleData;
-import org.languagetool.rules.Example;
 
 /**
  * Checks that compounds (if in the list) are not written as separate words.
  */
 public final class CompoundRule extends AbstractCompoundRule {
 
-  private static final CompoundRuleData compoundData = new CompoundRuleData("/ga/compounds.txt");
+  private static volatile CompoundRuleData compoundData;
 
-  public CompoundRule(ResourceBundle messages) throws IOException {
-    super(messages,
+  public CompoundRule(ResourceBundle messages, Language lang, UserConfig userConfig) throws IOException {
+    super(messages, lang, userConfig,
             "Litrítear an focal seo le fleiscín de ghnáth.",
             "Litrítear an focal seo mar fhocal amháin de ghnáth.",
             "Litrítear an nath seo mar fhocal amháin nó le fleiscín.",
@@ -53,8 +53,18 @@ public final class CompoundRule extends AbstractCompoundRule {
   }
 
   @Override
-  protected CompoundRuleData getCompoundRuleData() {
-    return compoundData;
+  public CompoundRuleData getCompoundRuleData() {
+    CompoundRuleData data = compoundData;
+    if (data == null) {
+      synchronized (CompoundRule.class) {
+        data = compoundData;
+        if (data == null) {
+          compoundData = data = new CompoundRuleData("/ga/compounds.txt");
+        }
+      }
+    }
+
+    return data;
   }
 
 }

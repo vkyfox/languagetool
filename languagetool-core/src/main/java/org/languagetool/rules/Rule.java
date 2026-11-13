@@ -18,14 +18,17 @@
  */
 package org.languagetool.rules;
 
-import java.io.IOException;
-import java.net.URL;
-import java.util.*;
-
+import com.google.common.base.Suppliers;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.languagetool.*;
 import org.languagetool.rules.patterns.PatternToken;
 import org.languagetool.tagging.disambiguation.rules.DisambiguationPatternRule;
+
+import java.io.IOException;
+import java.net.URL;
+import java.util.*;
+import java.util.function.Supplier;
 
 /**
  * Abstract rule class. A Rule describes a language error and can test whether a
@@ -38,23 +41,59 @@ import org.languagetool.tagging.disambiguation.rules.DisambiguationPatternRule;
  * make sure that their initialization works fast. For example, if a rule needs
  * to load data from disk, it should store it in a static variable to make sure
  * the loading happens only once.
- * 
+ *
+ * Rules also need to make sure their {@code match()} code is stateless, i.e. that
+ * its results are not influenced by previous calls to {@code match()} (this is relevant
+ * if pipeline caching is used).
+ *
  * @author Daniel Naber
  */
 public abstract class Rule {
 
+  private static final Category MISC = new Category(CategoryIds.MISC, "Miscellaneous");
+
   protected final ResourceBundle messages;
 
-  private List<CorrectExample> correctExamples = new ArrayList<>();
-  private List<IncorrectExample> incorrectExamples = new ArrayList<>();
-  private List<ErrorTriggeringExample> errorTriggeringExamples = new ArrayList<>();
+  @Nullable
+  private List<Tag> tags;
+  
+  @Nullable
+  private List<ToneTag> toneTags;
+
+  private boolean isGoalSpecific = false;
+  private List<CorrectExample> correctExamples;
+  private List<IncorrectExample> incorrectExamples;
+  private List<ErrorTriggeringExample> errorTriggeringExamples;
   private ITSIssueType locQualityIssueType = ITSIssueType.Uncategorized;
   private Category category;
   private URL url;
+  private boolean isPremium;
   private boolean defaultOff;
   private boolean defaultTempOff;
   private boolean officeDefaultOn = false;
   private boolean officeDefaultOff = false;
+  private boolean includedInHiddenMatches = true;
+  private int minPrevMatches = 0; // minimum number of previous matches to show the rule
+  private int distanceTokens = -1; // distance (number of tokens) between matches to consider a repetition
+  private int priority = 0;
+  
+  private static final Set<String> ERRORS_THAT_CAN_BE_CORRECTED_ALL_AT_ONCE = Set.of(
+    "FALSCHES_ANFUEHRUNGSZEICHEN",
+    "TYPOGRAFISCHE_ANFUEHRUNGSZEICHEN",
+    "TYPOGRAFISCHE_ANFUEHRUNGSZEICHEN_CH",
+    "TYPOGRAFISCHE_ANFUEHRUNGSZEICHEN_2",
+    "TYPOGRAFISCHE_APOSTROPHE",
+    "EN_QUOTES",
+    "WRONG_APOSTROPHE",
+    "PARAGRAF_LEERZEICHEN",
+    "CONSISTENCYRULE_JE_F",
+    "CONSISTENCYRULE_JE_M",
+    "COMILLAS_TIPOGRAFICAS",
+    "COMETES_TIPOGRAFIQUES",
+    "TYPOGRAFISCHE_AANHALINGSTEKENS",
+    "PT_SMART_QUOTES",
+    "GL_SMART_QUOTES"
+    );
 
   public Rule() {
     this(null);
@@ -68,7 +107,7 @@ public abstract class Rule {
     if (messages != null) {
       setCategory(Categories.MISC.getCategory(messages));  // the default, sub classes may overwrite this
     } else {
-      setCategory(new Category(CategoryIds.MISC, "Miscellaneous"));
+      setCategory(MISC);
     }
   }
 
@@ -81,14 +120,36 @@ public abstract class Rule {
   public abstract String getId();
 
   /**
-   * Same as {@link #getId()} for Java rules. For XML rules, this can contain a numbers
+   * Same as {@link #getId()} for Java rules. For XML rules, this can contain a number
    * that identifies the subrule of a rule group.
    * @since 4.9
    */
   public String getFullId() {
-    return getId();
+    if (getSubId() != null) {
+      return getId() + "[" + getSubId() + "]";
+    } else {
+      return getId();
+    }
   }
-  
+
+  @Nullable
+  /**
+   * Optional, mostly used for XML rules (pulled from there to all rules for uniformity)
+   * @since 5.7
+   */
+  public String getSubId() {
+    return null;
+  }
+
+  @Nullable
+  /**
+   * Optional, mostly used for XML rules (pulled from there to all rules for uniformity)
+   * For XML rules, this returns the file that this rule was loaded from
+   */
+  public String getSourceFile() {
+    return null;
+  }
+
   /**
    * A short description of the error this rule can detect, usually in the language of the text
    * that is checked.
@@ -99,8 +160,10 @@ public abstract class Rule {
    * Check whether the given sentence matches this error rule, i.e. whether it
    * contains the error detected by this rule. Note that the order in which
    * this method is called is not always guaranteed, i.e. the sentence order in the
-   * text may be different than the order in which you get the sentences (this may be the
+   * text may be different from the order in which you get the sentences (this may be the
    * case when LanguageTool is used as a LibreOffice/OpenOffice add-on, for example).
+   * In other words, implementations must be stateless, so that a previous call to
+   * this method has no influence on later calls.
    *
    * @param sentence a pre-analyzed sentence
    * @return an array of {@link RuleMatch} objects
@@ -116,7 +179,6 @@ public abstract class Rule {
    * Returns {@code -1} when the sentence needs to end to be sure there's a match.
    * @since 4.5
    */
-  @Experimental
   public int estimateContextForSureMatch() {
     return 0;
   }
@@ -133,43 +195,11 @@ public abstract class Rule {
   }
 
   /**
-   * Overwrite this to return true, if a value may be configured by option panel
-   * @since 4.2
+   * Overwrite this to return configurable options for option panel
+   * @since 6.5
    */
-  public boolean hasConfigurableValue() {
-    return false;
-  }
-
-  /**
-   * Overwrite this to get a default Integer value by option panel
-   * @since 4.1
-   */
-  public int getDefaultValue() {
-    return 0;
-  }
-
-  /**
-   * Overwrite this to define the minimum of a configurable value
-   * @since 4.2
-   */
-  public int getMinConfigurableValue() {
-    return 0;
-  }
-
-  /**
-   * Overwrite this to define the maximum of a configurable value
-   * @since 4.2
-   */
-  public int getMaxConfigurableValue() {
-    return 100;
-  }
-
-  /**
-   * Overwrite this to define the Text in the option panel for the configurable value
-   * @since 4.2
-   */
-  public String getConfigureText() {
-    return "";
+  public RuleOption[] getRuleOptions() {
+    return null;
   }
 
   /**
@@ -178,12 +208,14 @@ public abstract class Rule {
    * @since 3.1
    */
   protected AnalyzedSentence getSentenceWithImmunization(AnalyzedSentence sentence) {
-    if (!getAntiPatterns().isEmpty()) {
+    List<DisambiguationPatternRule> antiPatterns = getAntiPatterns();
+    if (!antiPatterns.isEmpty()) {
       //we need a copy of the sentence, not reference to the old one
       AnalyzedSentence immunizedSentence = sentence.copy(sentence);
-      for (DisambiguationPatternRule patternRule : getAntiPatterns()) {
+      //noinspection ForLoopReplaceableByForEach
+      for (int i = 0; i < antiPatterns.size(); i++) {
         try {
-          immunizedSentence = patternRule.replace(immunizedSentence);
+          immunizedSentence = antiPatterns.get(i).replace(immunizedSentence);
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
@@ -194,10 +226,11 @@ public abstract class Rule {
   }
 
   /**
-   * Helper for implementing {@link #getAntiPatterns()}.
+   * Helper for implementing {@link #getAntiPatterns()}. The result of this method should better be cached, please see
+   * {@link #cacheAntiPatterns} which does that.
    * @since 3.1
    */
-  protected List<DisambiguationPatternRule> makeAntiPatterns(List<List<PatternToken>> patternList, Language language) {
+  protected static List<DisambiguationPatternRule> makeAntiPatterns(List<List<PatternToken>> patternList, Language language) {
     List<DisambiguationPatternRule> rules = new ArrayList<>();
     for (List<PatternToken> patternTokens : patternList) {
       rules.add(new DisambiguationPatternRule("INTERNAL_ANTIPATTERN", "(no description)", language,
@@ -205,7 +238,16 @@ public abstract class Rule {
     }
     return rules;
   }
-  
+
+  /**
+   * @return a memoizing supplier that caches the result of {@link #makeAntiPatterns}. It makes sense
+   * to store the returned value, e.g. in a field.
+   * @since 5.2
+   */
+  protected static Supplier<List<DisambiguationPatternRule>> cacheAntiPatterns(Language language, List<List<PatternToken>> antiPatterns) {
+    return Suppliers.memoize(() -> makeAntiPatterns(antiPatterns, language));
+  }
+
   /**
    * Whether this rule can be used for text in the given language.
    * Since LanguageTool 2.6, this also works {@link org.languagetool.rules.patterns.PatternRule}s
@@ -238,7 +280,15 @@ public abstract class Rule {
   public boolean isDictionaryBasedSpellingRule() {
     return false;
   }
-  
+
+  /**
+   * Whether results from this rule should be filtered using the users' personal dictionary.
+   * @since 6.7
+   */
+  public boolean useDictionaryBasedFilterForMatches() {
+    return isDictionaryBasedSpellingRule();
+  }
+
   /**
    * Whether this rule should be forced to be used in LO/OO extension.
    * Rules that return {@code true} will be enabled always in LO/OO extension
@@ -253,28 +303,28 @@ public abstract class Rule {
    * Set the examples that are correct and thus do not trigger the rule.
    */
   public final void setCorrectExamples(List<CorrectExample> correctExamples) {
-    this.correctExamples = Objects.requireNonNull(correctExamples);
+    this.correctExamples = correctExamples.isEmpty() ? null : correctExamples;
   }
 
   /**
    * Get example sentences that are correct and thus will not match this rule.
    */
   public final List<CorrectExample> getCorrectExamples() {
-    return Collections.unmodifiableList(correctExamples);
+    return correctExamples == null ? Collections.emptyList() : Collections.unmodifiableList(correctExamples);
   }
 
   /**
    * Set the examples that are incorrect and thus do trigger the rule.
    */
   public final void setIncorrectExamples(List<IncorrectExample> incorrectExamples) {
-    this.incorrectExamples = Objects.requireNonNull(incorrectExamples);
+    this.incorrectExamples = incorrectExamples.isEmpty() ? null : incorrectExamples;
   }
 
   /**
    * Get example sentences that are incorrect and thus will match this rule.
    */
   public final List<IncorrectExample> getIncorrectExamples() {
-    return Collections.unmodifiableList(incorrectExamples);
+    return incorrectExamples == null ? Collections.emptyList() : Collections.unmodifiableList(incorrectExamples);
   }
 
   /**
@@ -282,7 +332,7 @@ public abstract class Rule {
    * @since 3.5
    */
   public final void setErrorTriggeringExamples(List<ErrorTriggeringExample> examples) {
-    this.errorTriggeringExamples = Objects.requireNonNull(examples);
+    this.errorTriggeringExamples = examples.isEmpty() ? null : examples;
   }
 
   /**
@@ -290,13 +340,14 @@ public abstract class Rule {
    * @since 3.5
    */
   public final List<ErrorTriggeringExample> getErrorTriggeringExamples() {
-    return Collections.unmodifiableList(this.errorTriggeringExamples);
+    return errorTriggeringExamples == null ? Collections.emptyList() : Collections.unmodifiableList(this.errorTriggeringExamples);
   }
 
   /**
    * @return a category (never null since LT 3.4)
    */
-  public final Category getCategory() {
+  @NotNull
+  public Category getCategory() {
     return category;
   }
 
@@ -305,7 +356,7 @@ public abstract class Rule {
   }
 
   protected final RuleMatch[] toRuleMatchArray(List<RuleMatch> ruleMatches) {
-    return ruleMatches.toArray(new RuleMatch[0]);
+    return ruleMatches.toArray(RuleMatch.EMPTY_ARRAY);
   }
 
   /**
@@ -404,9 +455,9 @@ public abstract class Rule {
    * >http://www.w3.org/International/multilingualweb/lt/drafts/its20/its20.html#lqissue-typevalues</a>.
    *
    * <p>Note that not all languages nor all rules actually map yet to a type yet. In those
-   * cases, <tt>uncategorized</tt> is returned.
+   * cases, <code>uncategorized</code> is returned.
    *
-   * @return the Localization Quality Issue Type - <tt>uncategorized</tt> if no type has been assigned
+   * @return the Localization Quality Issue Type - <code>uncategorized</code> if no type has been assigned
    * @since 2.5
    */
   public ITSIssueType getLocQualityIssueType() {
@@ -428,6 +479,12 @@ public abstract class Rule {
    * @since 2.5
    */
   protected void addExamplePair(IncorrectExample incorrectSentence, CorrectExample correctSentence) {
+    if (correctExamples == null) {
+      correctExamples = new ArrayList<>(0);
+    }
+    if (incorrectExamples == null) {
+      incorrectExamples = new ArrayList<>(0);
+    }
     String correctExample = correctSentence.getExample();
     int markerStart= correctExample.indexOf("<marker>");
     int markerEnd = correctExample.indexOf("</marker>");
@@ -446,9 +503,153 @@ public abstract class Rule {
    * @since 4.9
    */
   protected void setExamplePair(IncorrectExample incorrectSentence, CorrectExample correctSentence) {
-    incorrectExamples.clear();
-    correctExamples.clear();
+    if (incorrectExamples != null) {
+      incorrectExamples.clear();
+    }
+    if (correctSentence != null) {
+      correctExamples.clear();
+    }
     addExamplePair(incorrectSentence, correctSentence);
   }
 
+  /**
+   * @since 5.1
+   */
+  public void addTags(List<String> tags) {
+    if (tags.isEmpty()) return;
+
+    List<Tag> myTags = this.tags;
+    if (myTags == null) {
+      this.tags = myTags = new ArrayList<>();
+    }
+    for (String tag : tags) {
+      if (myTags.stream().noneMatch(k -> k.name().equals(tag))) {
+        myTags.add(Tag.valueOf(tag));
+      }
+    }
+  }
+
+  /**
+   * @since 5.1
+   */
+  public void setTags(List<Tag> tags) {
+    this.tags = tags.isEmpty() ? null : Objects.requireNonNull(tags);
+  }
+
+  /** @since 5.1 */
+  @NotNull
+  public List<Tag> getTags() {
+    return tags == null ? Collections.emptyList() : tags;
+  }
+
+  /** @since 5.1 */
+  public boolean hasTag(Tag tag) {
+    return tags != null && tags.contains(tag);
+  }
+  
+  /**
+   * @since 6.2
+   */
+  public void addToneTags(List<String> toneTags) {
+    if (toneTags == null || toneTags.isEmpty()) {
+      return;
+    }
+    List<ToneTag> tags = this.toneTags;
+    if (tags == null) {
+      this.toneTags = tags = new ArrayList<>();
+    }
+    for (String toneTag : toneTags) {
+      if (tags.stream().noneMatch(k -> k.name().equals(toneTag))) {
+        tags.add(ToneTag.valueOf(toneTag));
+      }
+    }
+  }
+
+  /**
+   * @since 6.2
+   */
+  public void setToneTags(List<ToneTag> toneTags) {
+    this.toneTags = toneTags.isEmpty() ? null : Objects.requireNonNull(toneTags);
+  }
+  
+  /**
+   * @since 6.2
+   */
+  @NotNull
+  public List<ToneTag> getToneTags() {
+    return this.toneTags == null ? Collections.emptyList() : this.toneTags;
+  }
+
+  /**
+   * @since 6.2
+   */
+  public boolean hasToneTag(ToneTag toneTag) {
+    return this.toneTags != null && this.toneTags.contains(toneTag);
+  }
+
+  public boolean isPremium() {
+    return isPremium;
+  }
+
+  public void setPremium(boolean premium) {
+    isPremium = premium;
+  }
+  
+  public void setMinPrevMatches(int i) {
+    minPrevMatches = i;
+  }
+  
+  public int getMinPrevMatches() {
+    return minPrevMatches;
+  }
+  
+  public void setDistanceTokens(int i) {
+    distanceTokens = i;
+  }
+  
+  public int getDistanceTokens() {
+    return distanceTokens;
+  }
+  
+  public boolean isGoalSpecific() {
+    return isGoalSpecific;
+  }
+
+  public void setGoalSpecific(boolean goalSpecific) {
+    isGoalSpecific = goalSpecific;
+  }
+
+  public int getPriority() {
+    return priority;
+  }
+
+  public void setPriority(int priority) {
+    this.priority = priority;
+  }
+
+  /**
+   * @since 6.5
+   * @return whether this rule should be run when hidden rules are enabled
+   * when Rule.isPremium is true and QueryParams.premium is false,
+   * this rule will only be run when both Rule.isIncludedInHiddenMatches and QueryParams.enableHiddenRules are true
+   * No effect otherwise
+   */
+  public boolean isIncludedInHiddenMatches() {
+    return includedInHiddenMatches;
+  }
+
+/**
+ * @since 6.5
+ * @param includedInHiddenMatches whether this rule should be run when hidden rules are enabled (if it's a Premium rule)
+ */
+  public void setIncludedInHiddenMatches(boolean includedInHiddenMatches) {
+    this.includedInHiddenMatches = includedInHiddenMatches;
+  }
+
+  /**
+   * @return Whether this rule supports the "correct all errors at once" feature, e.g., for typographic tweaks
+   */
+  public boolean isIncludedInErrorsCorrectedAllAtOnce() {
+    return ERRORS_THAT_CAN_BE_CORRECTED_ALL_AT_ONCE.contains(getId());
+  }
 }

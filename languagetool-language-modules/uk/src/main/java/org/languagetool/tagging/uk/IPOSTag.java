@@ -36,8 +36,9 @@ public enum IPOSTag {
   insert("insert"),
   abbr("abbr"),
   bad("bad"),
-  unknown("unknown"), 
-  onomat("onomat");
+//  unknown("unknown"), 
+  onomat("onomat"), 
+  hashtag("hashtag");
 
   private final String text;
 

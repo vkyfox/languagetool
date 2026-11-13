@@ -19,41 +19,42 @@
 package org.languagetool.language;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.ResourceBundle;
+import java.util.*;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.languagetool.Language;
+import org.languagetool.Languages;
 import org.languagetool.UserConfig;
-import org.languagetool.rules.CommaWhitespaceRule;
-import org.languagetool.rules.DoublePunctuationRule;
-import org.languagetool.rules.Example;
-import org.languagetool.rules.LongSentenceRule;
-import org.languagetool.rules.MultipleWhitespaceRule;
-import org.languagetool.rules.Rule;
-import org.languagetool.rules.UppercaseSentenceStartRule;
-import org.languagetool.rules.ca.AccentuationCheckRule;
-import org.languagetool.rules.ca.CatalanUnpairedBracketsRule;
-import org.languagetool.rules.ca.CatalanUnpairedExclamationMarksRule;
-import org.languagetool.rules.ca.CatalanUnpairedQuestionMarksRule;
-import org.languagetool.rules.ca.CatalanWordRepeatRule;
-import org.languagetool.rules.ca.CatalanWrongWordInContextDiacriticsRule;
-import org.languagetool.rules.ca.CatalanWrongWordInContextRule;
-import org.languagetool.rules.ca.ComplexAdjectiveConcordanceRule;
-import org.languagetool.rules.ca.MorfologikCatalanSpellerRule;
-import org.languagetool.rules.ca.ReflexiveVerbsRule;
-import org.languagetool.rules.ca.ReplaceOperationNamesRule;
-import org.languagetool.rules.ca.SimpleReplaceBalearicRule;
-import org.languagetool.rules.ca.SimpleReplaceDNVColloquialRule;
-import org.languagetool.rules.ca.SimpleReplaceDNVRule;
-import org.languagetool.rules.ca.SimpleReplaceDNVSecondaryRule;
-import org.languagetool.rules.ca.SimpleReplaceDiacriticsIEC;
-import org.languagetool.rules.ca.SimpleReplaceDiacriticsTraditional;
-import org.languagetool.rules.ca.SimpleReplaceRule;
-import org.languagetool.rules.ca.SimpleReplaceVerbsRule;
+import org.languagetool.rules.*;
+import org.languagetool.rules.ca.*;
+import org.languagetool.synthesis.Synthesizer;
+import org.languagetool.synthesis.ca.CatalanSynthesizer;
+import org.languagetool.tagging.Tagger;
+import org.languagetool.tagging.ca.CatalanTagger;
 
 public class ValencianCatalan extends Catalan {
+
+  private static final String LANGUAGE_SHORT_CODE = "ca-ES-valencia";
+
+  private static volatile Throwable instantiationTraceValecian;
+
+  public ValencianCatalan() {
+    super(true);
+    Throwable trace = instantiationTraceValecian;
+    if (trace != null) {
+      throw new RuntimeException("Language was already instantiated, see the cause stacktrace below.", trace);
+    }
+    instantiationTraceValecian = new Throwable();
+  }
+
+  public static @NotNull ValencianCatalan getInstance() {
+    Language language = Objects.requireNonNull(Languages.getLanguageForShortCode(LANGUAGE_SHORT_CODE));
+    if (language instanceof ValencianCatalan catalan) {
+      return catalan;
+    }
+    throw new RuntimeException("ValencianCatalan language expected, got " + language);
+  }
 
   @Override
   public String getName() {
@@ -70,53 +71,38 @@ public class ValencianCatalan extends Catalan {
     return "valencia";
   }
   
+  @NotNull
+  @Override
+  public Tagger createDefaultTagger() {
+    return CatalanTagger.INSTANCE_VAL;
+  }
+
+  @Nullable
+  @Override
+  public Synthesizer createDefaultSynthesizer() {
+    return CatalanSynthesizer.INSTANCE_VAL;
+  }
+
   @Override
   public List<Rule> getRelevantRules(ResourceBundle messages, UserConfig userConfig, Language motherTongue, List<Language> altLanguages) throws IOException {
-    return Arrays.asList(
-            new CommaWhitespaceRule(messages, 
-                Example.wrong("A parer seu<marker> ,</marker> no era veritat."),
-                Example.fixed("A parer seu<marker>,</marker> no era veritat.")),
-            new DoublePunctuationRule(messages),
-            new CatalanUnpairedBracketsRule(messages, this),
-            new UppercaseSentenceStartRule(messages, this,
-                Example.wrong("Preus de venda al públic. <marker>han</marker> pujat molt."),
-                Example.fixed("Preus de venda al públic. <marker>Han</marker> pujat molt.")),
-            new MultipleWhitespaceRule(messages, this),
-            new LongSentenceRule(messages, userConfig),
-            // specific to Catalan:
-            new CatalanWordRepeatRule(messages, this),
-            new MorfologikCatalanSpellerRule(messages, this, userConfig, altLanguages),
-            new CatalanUnpairedQuestionMarksRule(messages, this),
-            new CatalanUnpairedExclamationMarksRule(messages, this),
-            new AccentuationCheckRule(messages),
-            new ComplexAdjectiveConcordanceRule(messages),
-            new CatalanWrongWordInContextRule(messages),
-            new CatalanWrongWordInContextDiacriticsRule(messages),
-            new ReflexiveVerbsRule(messages),
-            new SimpleReplaceVerbsRule(messages, this),
-            new SimpleReplaceBalearicRule(messages),
-            new SimpleReplaceRule(messages),
-            new ReplaceOperationNamesRule(messages, this),
-            // Valencian DNV
-            new SimpleReplaceDNVRule(messages, this),
-            new SimpleReplaceDNVColloquialRule(messages, this),
-            new SimpleReplaceDNVSecondaryRule(messages, this),
-            new SimpleReplaceDiacriticsIEC(messages),
-            new SimpleReplaceDiacriticsTraditional(messages)
-    );
+    List<Rule> relevantRules = new ArrayList<>(super.getRelevantRules(messages, userConfig, motherTongue,altLanguages));
+    relevantRules.add(new WordCoherencyValencianRule(messages));
+    return relevantRules;
   }
 
   @Override
   public List<String> getDefaultEnabledRulesForVariant() {
     List<String> rules = Arrays.asList("EXIGEIX_VERBS_VALENCIANS", "EXIGEIX_ACCENTUACIO_VALENCIANA",
-        "EXIGEIX_POSSESSIUS_U", "EXIGEIX_VERBS_EIX", "EXIGEIX_VERBS_ISC", "PER_PER_A_INFINITIU", "FINS_EL_AVL");
+        "EXIGEIX_POSSESSIUS_U", "EXIGEIX_VERBS_EIX", "EXIGEIX_VERBS_ISC", "PER_PER_A_INFINITIU", "FINS_EL_AVL", "LES_HA_FETES");
     return Collections.unmodifiableList(rules);
   }
 
   @Override
   public List<String> getDefaultDisabledRulesForVariant() {
+    // Important: Java rules are not disabled here
     List<String> rules = Arrays.asList("EXIGEIX_VERBS_CENTRAL", "EXIGEIX_ACCENTUACIO_GENERAL", "EXIGEIX_POSSESSIUS_V",
-        "EVITA_PRONOMS_VALENCIANS", "EVITA_DEMOSTRATIUS_EIXE", "VOCABULARI_VALENCIA", "EXIGEIX_US", "FINS_EL_GENERAL");
+        "EVITA_PRONOMS_VALENCIANS", "EVITA_DEMOSTRATIUS_EIXE", "VOCABULARI_VALENCIA", "EXIGEIX_US", "FINS_EL_GENERAL", 
+        "EVITA_INFINITIUS_INDRE", "EVITA_DEMOSTRATIUS_ESTE", "CASTIC_CASTIG");
     return Collections.unmodifiableList(rules);
   }
   

@@ -91,6 +91,7 @@ public class WordTokenizerTest {
     assertEquals("foo| |http://www.flickr.com/123@N04/hallo#test| |bar", tokenize("foo http://www.flickr.com/123@N04/hallo#test bar"));
     assertEquals("foo| |http://www.youtube.com/watch?v=wDN_EYUvUq0| |bar", tokenize("foo http://www.youtube.com/watch?v=wDN_EYUvUq0 bar"));
     assertEquals("foo| |http://example.net/index.html?s=A54C6FE2%23info| |bar", tokenize("foo http://example.net/index.html?s=A54C6FE2%23info bar"));
+    assertEquals("foo| |https://writerduet.com/script/#V6922~***~branch=-MClu-LnPrTNz8oz_rJb| |bar", tokenize("foo https://writerduet.com/script/#V6922~***~branch=-MClu-LnPrTNz8oz_rJb bar"));
     assertEquals("foo| |https://joe:passwd@example.net:8080/index.html?action=x&session=A54C6FE2#info| |bar",
           tokenize("foo https://joe:passwd@example.net:8080/index.html?action=x&session=A54C6FE2#info bar"));
   }
@@ -123,6 +124,29 @@ public class WordTokenizerTest {
     assertEquals("foo| |http://| |bar", tokenize("foo http:// bar"));
     assertEquals("foo| |http://a| |bar", tokenize("foo http://a bar"));
     assertEquals("foo| |http://|?| |bar", tokenize("foo http://? bar"));
+  }
+
+  @Test
+  public void testCheckCurrencyExpression() {
+    assertTrue(wordTokenizer.isCurrencyExpression("US$45"));
+    assertTrue(wordTokenizer.isCurrencyExpression("5,000€"));
+    assertTrue(wordTokenizer.isCurrencyExpression("£1.50"));
+    assertTrue(wordTokenizer.isCurrencyExpression("R$1.999.99"));
+    assertFalse(wordTokenizer.isCurrencyExpression("US$"));
+    assertFalse(wordTokenizer.isCurrencyExpression("X€"));
+    assertFalse(wordTokenizer.isCurrencyExpression(".50£"));
+    assertFalse(wordTokenizer.isCurrencyExpression("5R$5"));
+  }
+
+  @Test
+  public void testSplitCurrencyExpression() {
+    assertArrayEquals(wordTokenizer.splitCurrencyExpression("US$45").toArray(), new String[]{"US$", "45"});
+    assertArrayEquals(wordTokenizer.splitCurrencyExpression("5,000€").toArray(), new String[]{"5,000", "€"});
+    assertArrayEquals(wordTokenizer.splitCurrencyExpression("£1.50").toArray(), new String[]{"£", "1.50"});
+    assertArrayEquals(wordTokenizer.splitCurrencyExpression("R$1.999.99").toArray(), new String[]{"R$", "1.999.99"});
+    // not currency expr
+    assertArrayEquals(wordTokenizer.splitCurrencyExpression("US$X").toArray(), new String[]{"US$X"});
+    assertArrayEquals(wordTokenizer.splitCurrencyExpression("foobar").toArray(), new String[]{"foobar"});
   }
 
   private String tokenize(String text) {

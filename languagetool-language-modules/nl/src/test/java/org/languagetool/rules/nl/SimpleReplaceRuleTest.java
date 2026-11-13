@@ -30,41 +30,37 @@ import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 
-/**
- */
 public class SimpleReplaceRuleTest {
 
   private SimpleReplaceRule rule;
-  private JLanguageTool langTool;
+  private JLanguageTool lt;
 
   @Before
   public void setUp() throws Exception {
     rule = new SimpleReplaceRule(TestTools.getMessages("nl"));
-    langTool = new JLanguageTool(new Dutch());
+    lt = new JLanguageTool(new Dutch());
   }
 
   @Test
   public void testRule() throws IOException {
     // correct sentences:
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("all right")).length);
-
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("all right")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("De Kudde eigenschappen")).length);  // no match b/c case-sensitivity
+    // edit by R. Baars 19-11-2022 to make routine case sensitive
     // incorrect sentences:
-    checkSimpleReplaceRule("ofzo", "of zo");
-  }
+    checkSimpleReplaceRule("klaa", "Klaar");
 
-  /**
-   * Check if a specific replace rule applies.
-   *
-   * @param sentence the sentence containing the incorrect/misspelled word.
-   * @param word the word that is correct (the suggested replacement).
-   */
-  private void checkSimpleReplaceRule(String sentence, String word) throws IOException {
-    final RuleMatch[] matches = rule.match(langTool.getAnalyzedSentence(sentence));
-    assertEquals("Invalid matches.length while checking sentence: "
-        + sentence, 1, matches.length);
+    //checkSimpleReplaceRule("Kudde eigenschappen.", "Kudde-eigenschappen");
+    checkSimpleReplaceRule("een BTW nummer", "btw-nummer");
+    checkSimpleReplaceRule("kleurweergave eigenschappen.", "Kleurweergave-eigenschappen");
+    checkSimpleReplaceRule("De kleurweergave eigenschappen.", "kleurweergave-eigenschappen");
+  }
+  private void checkSimpleReplaceRule(String sentence, String suggestion) throws IOException {
+    RuleMatch[] matches = rule.match(lt.getAnalyzedSentence(sentence));
+    assertEquals("Invalid matches.length while checking sentence: " + sentence, 1, matches.length);
     assertEquals("Invalid replacement count wile checking sentence: "
         + sentence, 1, matches[0].getSuggestedReplacements().size());
     assertEquals("Invalid suggested replacement while checking sentence: "
-        + sentence, word, matches[0].getSuggestedReplacements().get(0));
+        + sentence, suggestion, matches[0].getSuggestedReplacements().get(0));
   }
 }

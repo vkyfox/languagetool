@@ -34,13 +34,15 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>{@code no}: an integer of the matching 'token' position to be considered. Starts with 1.</li>
  *   <li>{@code regexp}: the regular expression to specify the part of the token to be considered.
- *       For example, <tt>(?:in|un)(.*)</tt> will consider the part of the token that comes after 'in' or 'un'.
+ *       For example, <code>(?:in|un)(.*)</code> will consider the part of the token that comes after 'in' or 'un'.
  *       Note that always the first group is considered, so if you need more parenthesis you need to use
- *       non-capturing groups <tt>(?:...)</tt>, as in the example.</li>
- *   <li>{@code postag_regexp}: a regular expression to match the POS tag of the part of the word, e.g. <tt>VB.?</tt>
+ *       non-capturing groups <code>(?:...)</code>, as in the example.</li>
+ *   <li>{@code postag_regexp}: a regular expression to match the POS tag of the part of the word, e.g. <code>VB.?</code>
  *       to match any verb in English.</li>
  *   <li>{@code negate_postag}: if value is yes, then the regexp is negated (not negated if not specified).</li>
  *   <li>{@code two_groups_regexp}: if value is yes, then the regexp must contain 2 groups (if not specified - 1 groups).</li>
+ *   <li>{@code prefix}: a string with prefix that is added to token (since 5.0).</li>
+ *   <li>{@code suffix}: a string with suffix that is added to token (since 5.0).</li>
  * </ul>
  * @since 2.8
  */
@@ -50,7 +52,7 @@ public abstract class PartialPosTagFilter extends RuleFilter {
   protected abstract List<AnalyzedTokenReadings> tag(String token);
 
   @Override
-  public RuleMatch acceptRuleMatch(RuleMatch match, Map<String, String> args, int patternTokenPos, AnalyzedTokenReadings[] patternTokens) {
+  public RuleMatch acceptRuleMatch(RuleMatch match, Map<String, String> args, int patternTokenPos, AnalyzedTokenReadings[] patternTokens, List<Integer> tokenPositions) {
     if (!(args.containsKey("no") && args.containsKey("regexp") && args.containsKey("postag_regexp"))) {
       throw new RuntimeException("Set 'no', 'regexp' and 'postag_regexp' for filter " + PartialPosTagFilter.class.getSimpleName());
     }
@@ -59,7 +61,21 @@ public abstract class PartialPosTagFilter extends RuleFilter {
     String requiredTagRegexp = args.get("postag_regexp");
     boolean negatePos = args.containsKey("negate_pos");
     boolean two_groups_regexp = args.containsKey("two_groups_regexp");
-    String token = patternTokens[tokenPos - 1].getToken();
+
+      String prefix = "";
+      String suffix = "";
+
+      if (args.containsKey("prefix")) {
+          prefix = args.get("prefix");
+      };
+
+      if (args.containsKey("suffix")) {
+          suffix = args.get("suffix");
+      };
+
+     
+    String token = prefix + patternTokens[tokenPos - 1].getToken() + suffix;
+    
     Matcher matcher = pattern.matcher(token);
     if ((matcher.groupCount() != 1) && !(two_groups_regexp)) {
       throw new RuntimeException("Got " + matcher.groupCount() + " groups for regex '" + pattern.pattern() + "', expected 1");

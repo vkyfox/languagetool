@@ -25,19 +25,23 @@ import org.languagetool.TestTools;
 import org.languagetool.UserConfig;
 
 public class LongSentenceRuleTest extends org.languagetool.rules.LongSentenceRuleTest {
+
   @Test
   public void testMatch() throws Exception {
     JLanguageTool lt = new JLanguageTool(Languages.getLanguageForShortCode("de-DE"));
-    
-    LongSentenceRule rule = new LongSentenceRule(TestTools.getMessages("de"), new UserConfig(), 6, true);
+    LongSentenceRule rule = new LongSentenceRule(TestTools.getMessages("de"), new UserConfig(), 6);
     
     assertNoMatch("Eins zwei drei vier fünf sechs.", rule, lt);
     //  Words after colon are treated like a separate sentence
     assertNoMatch("Ich zähle jetzt: \"Eins zwei drei vier fünf sechs.\"", rule, lt);
-    
-    assertMatch("Eins zwei drei vier fünf sechs sieben.", 31, 37, rule, lt);
-    assertMatch("Eins zwei drei vier fünf (sechs sieben) acht.", 32, 38, rule, lt);
-    assertMatch("Ich zähle jetzt: Eins zwei drei vier fünf sechs sieben.", 48, 54, rule, lt);
+    assertNoMatch("Peter, bist du bereit?” Er nickte nur.\n", rule, lt);
+    assertNoMatch("Peter, du bist bereit.” Er nickte nur.\n", rule, lt);
+    assertNoMatch("Eins zwei drei vier fünf (sechs sieben) acht.", rule, lt);
 
+    assertMatch("Eins zwei drei vier fünf sechs sieben.", 0, 38, rule, lt);
+    assertMatch("Eins zwei drei vier fünf (sechs sieben) acht neun.", 0, 50, rule, lt);
+    assertMatch("Ich zähle jetzt: Eins zwei drei vier fünf sechs sieben.", 0, 55, rule, lt);
+    assertMatch("Ein Satz. Eins zwei drei vier fünf sechs sieben.", 10, 48, rule, lt);
   }
+
 }

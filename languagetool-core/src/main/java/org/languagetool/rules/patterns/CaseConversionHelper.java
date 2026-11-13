@@ -63,8 +63,15 @@ public final class CaseConversionHelper {
       case ALLUPPER:
         token = token.toUpperCase(Locale.ENGLISH);
         break;
+      case FIRSTUPPER:
+        token = token.toLowerCase();
+        token = StringTools.uppercaseFirstChar(token, lang);
+        break;
       case ALLLOWER:
         token = token.toLowerCase();
+        break;
+      case NOTASHKEEL:
+        token = StringTools.removeTashkeel(token);
         break;
       default:
         break;

@@ -18,9 +18,6 @@
  */
 package org.languagetool.server;
 
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.exceptions.SignatureVerificationException;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.languagetool.markup.AnnotatedTextBuilder;
@@ -43,7 +40,7 @@ public class TextCheckerTest {
     params.put("text", "not used");
     params.put("language", "en");
     params.put("callback", "myCallback");
-    HTTPServerConfig config1 = new HTTPServerConfig(HTTPTools.getDefaultPort());
+    HTTPServerConfig config1 = new HTTPServerConfig(HTTPTestTools.getDefaultPort());
     TextChecker checker = new V2TextChecker(config1, false, null, new RequestCounter());
     FakeHttpExchange httpExchange = new FakeHttpExchange();
     checker.checkText(new AnnotatedTextBuilder().addText("some random text").build(), httpExchange, params, null, null);
@@ -56,8 +53,8 @@ public class TextCheckerTest {
     Map<String, String> params = new HashMap<>();
     params.put("text", "not used");
     params.put("language", "en");
-    HTTPServerConfig config1 = new HTTPServerConfig(HTTPTools.getDefaultPort());
-    config1.setMaxTextLength(10);
+    HTTPServerConfig config1 = new HTTPServerConfig(HTTPTestTools.getDefaultPort());
+    config1.setMaxTextLengthAnonymous(10);
     TextChecker checker = new V2TextChecker(config1, false, null, new RequestCounter());
     try {
       checker.checkText(new AnnotatedTextBuilder().addText("longer than 10 chars").build(), new FakeHttpExchange(), params, null, null);
@@ -76,19 +73,8 @@ public class TextCheckerTest {
     } catch (RuntimeException expected) {
       // server not configured to accept tokens
     }
-    try {
-      config1.secretTokenKey = "foobar";
-      checker.checkText(new AnnotatedTextBuilder().addText("longer than 10 chars").build(), new FakeHttpExchange(), params, null, null);
-      fail();
-    } catch (SignatureVerificationException ignore) {}
-
-    config1.secretTokenKey = "foobar";
-    // see test below for how to create a token:
-    params.put("token", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vZm9vYmFyIiwiaWF0IjoxNTA0ODU3NzAzLCJtYXhUZXh0TGVuZ3RoIjozMH0.2ijjMEhSyJPEc0fv91UtOJdQe8CMfo2U9dbXgHOkzr0");
-    checker.checkText(new AnnotatedTextBuilder().addText("longer than 10 chars").build(), new FakeHttpExchange(), params, null, null);
 
     try {
-      config1.secretTokenKey = "foobar";
       checker.checkText(new AnnotatedTextBuilder().addText("now it's even longer than 30 chars").build(), new FakeHttpExchange(), params, null, null);
       fail();
     } catch (TextTooLongException expected) {
@@ -97,36 +83,23 @@ public class TextCheckerTest {
   }
   
   @Test
-  @Ignore("use to create JWT test tokens for the other tests")
-  public void makeToken() throws UnsupportedEncodingException {
-    Algorithm algorithm = Algorithm.HMAC256("foobar");
-    String token = JWT.create()
-            .withIssuer("http://foobar")
-            .withIssuedAt(new Date())
-            .withClaim("maxTextLength", 30)
-            //.withExpiresAt(new Date());
-            .sign(algorithm);
-    System.out.println(token);
-  }
-
-  @Test
   public void testInvalidAltLanguages() throws Exception {
     Map<String, String> params = new HashMap<>();
     params.put("text", "not used");
     params.put("language", "en");
-    HTTPServerConfig config1 = new HTTPServerConfig(HTTPTools.getDefaultPort());
+    HTTPServerConfig config1 = new HTTPServerConfig(HTTPTestTools.getDefaultPort());
     TextChecker checker = new V2TextChecker(config1, false, null, new RequestCounter());
     try {
       params.put("altLanguages", "en");
       checker.checkText(new AnnotatedTextBuilder().addText("something").build(), new FakeHttpExchange(), params, null, null);
       fail();
-    } catch (IllegalArgumentException ignore) {
+    } catch (BadRequestException ignore) {
     }
     try {
       params.put("altLanguages", "xy");
       checker.checkText(new AnnotatedTextBuilder().addText("something").build(), new FakeHttpExchange(), params, null, null);
       fail();
-    } catch (IllegalArgumentException ignore) {
+    } catch (BadRequestException ignore) {
     }
     
     params.put("language", "en");

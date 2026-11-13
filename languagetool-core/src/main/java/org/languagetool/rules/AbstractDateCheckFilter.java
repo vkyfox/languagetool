@@ -19,6 +19,7 @@
 package org.languagetool.rules;
 
 import java.util.Calendar;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -27,6 +28,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.rules.patterns.RuleFilter;
 import org.languagetool.tools.StringTools;
+import org.languagetool.tools.Tools;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Accepts rule matches if a date doesn't match the accompanying weekday, e.g. if {@code Monday, 8 November 2003}
@@ -36,10 +40,12 @@ import org.languagetool.tools.StringTools;
  */
 public abstract class AbstractDateCheckFilter extends RuleFilter {
 
+  private static final Logger logger = LoggerFactory.getLogger(AbstractDateCheckFilter.class);
+
   // The day of the month may contain not only digits but also extra letters
   // such as"22nd" in English or "22-an" in Esperanto. The regexp extracts
   // the numerical part.
-  private static final Pattern DAY_OF_MONTH_PATTERN = Pattern.compile("(\\d+).*");
+  protected static final Pattern DAY_OF_MONTH_PATTERN = Pattern.compile("(\\d+).*");
 
   /**
    * Implement so that Sunday returns {@code 1}, Monday {@code 2} etc.
@@ -69,30 +75,41 @@ public abstract class AbstractDateCheckFilter extends RuleFilter {
   protected abstract Calendar getCalendar();
 
   /**
-   * @param args a map with values for {@code year}, {@code month}, {@code day} (day of month), {@code weekDay}
+   * @param args           a map with values for {@code year}, {@code month}, {@code day} (day of month), {@code weekDay}
    */
   @Override
-  public RuleMatch acceptRuleMatch(RuleMatch match, Map<String, String> args, int patternTokenPos, AnalyzedTokenReadings[] patternTokens) {
-    int dayOfWeekFromString = getDayOfWeek(getRequired("weekDay", args).replace("\u00AD", ""));  // replace soft hyphen
-    Calendar dateFromDate = getDate(args);
-    int dayOfWeekFromDate;
+  public RuleMatch acceptRuleMatch(RuleMatch match, Map<String, String> args, int patternTokenPos, AnalyzedTokenReadings[] patternTokens, List<Integer> tokenPositions) {
     try {
-      dayOfWeekFromDate = dateFromDate.get(Calendar.DAY_OF_WEEK);
-    } catch (IllegalArgumentException ignore) {
-      // happens with 'dates' like '32.8.2014' - those should be caught by a different rule
-      return null;
-    }
-    if (dayOfWeekFromString != dayOfWeekFromDate) {
-      Calendar calFromDateString = Calendar.getInstance();
-      calFromDateString.set(Calendar.DAY_OF_WEEK, dayOfWeekFromString);
-      String message = match.getMessage()
-              .replace("{realDay}", getDayOfWeek(dateFromDate))
-              .replace("{day}", getDayOfWeek(calFromDateString))
-              .replace("{currentYear}", Integer.toString(Calendar.getInstance().get(Calendar.YEAR)));
-      RuleMatch ruleMatch = new RuleMatch(match.getRule(), match.getSentence(), match.getFromPos(), match.getToPos(), message, match.getShortMessage());
-      ruleMatch.setType(match.getType());
-      return ruleMatch;
-    } else {
+      int dayOfWeekFromString = getDayOfWeek(getRequired("weekDay", args).replace("\u00AD", ""));  // replace soft hyphen
+      Calendar dateFromDate = getDate(args);
+      int dayOfWeekFromDate;
+      try {
+        dayOfWeekFromDate = dateFromDate.get(Calendar.DAY_OF_WEEK);
+      } catch (IllegalArgumentException ignore) {
+        // happens with 'dates' like '32.8.2014' - those should be caught by a different rule
+        return null;
+      }
+      if (dayOfWeekFromString != dayOfWeekFromDate) {
+        Calendar calFromDateString = Calendar.getInstance();
+        calFromDateString.set(Calendar.DAY_OF_WEEK, dayOfWeekFromString);
+        String message = match.getMessage()
+          .replace("{realDay}", getDayOfWeek(dateFromDate))
+          .replace("{day}", getDayOfWeek(calFromDateString))
+          .replace("{currentYear}", Integer.toString(Calendar.getInstance().get(Calendar.YEAR)));
+        RuleMatch ruleMatch = new RuleMatch(match.getRule(), match.getSentence(), match.getFromPos(), match.getToPos(), message, match.getShortMessage());
+        ruleMatch.setType(match.getType());
+        ruleMatch.setUrl(Tools.getUrl("https://www.timeanddate.com/calendar/?year=" + dateFromDate.get(Calendar.YEAR)));
+        return ruleMatch;
+      } else {
+        return null;
+      }
+    } catch (IllegalArgumentException e) {
+      throw e;
+    } catch (RuntimeException e) {
+      // this can happen with some special characters which the Java regex matches but which the Java code
+      // cannot map to days, e.g. German "Dıenstag" vs "Dienstag" (note the difference on the second character -
+      // the first word is not valid, but it should not crash LT):
+      logger.warn("Skipping potential match for " + match.getRule().getFullId(), e);
       return null;
     }
   }

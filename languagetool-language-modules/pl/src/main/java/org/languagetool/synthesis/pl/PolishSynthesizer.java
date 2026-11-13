@@ -18,6 +18,16 @@
  */
 package org.languagetool.synthesis.pl;
 
+import morfologik.stemming.DictionaryLookup;
+import morfologik.stemming.IStemmer;
+import morfologik.stemming.WordData;
+import org.languagetool.AnalyzedToken;
+import org.languagetool.JLanguageTool;
+import org.languagetool.Language;
+import org.languagetool.synthesis.BaseSynthesizer;
+import org.languagetool.synthesis.Synthesizer;
+import org.languagetool.synthesis.SynthesizerTools;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -27,17 +37,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
-
-import morfologik.stemming.DictionaryLookup;
-import morfologik.stemming.IStemmer;
-import morfologik.stemming.WordData;
-
-import org.languagetool.AnalyzedToken;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
-import org.languagetool.synthesis.BaseSynthesizer;
-import org.languagetool.synthesis.Synthesizer;
-import org.languagetool.synthesis.SynthesizerTools;
 
 /**
  * Polish word form synthesizer. Based on project Morfologik.
@@ -52,13 +51,22 @@ public class PolishSynthesizer extends BaseSynthesizer implements Synthesizer {
 
   private static final String POTENTIAL_NEGATION_TAG = ":aff";
   private static final String NEGATION_TAG = ":neg";
+  private static final Pattern NEGATION_TAG_PATTERN = Pattern.compile(NEGATION_TAG);
   private static final String COMP_TAG = "com";
   private static final String SUP_TAG = "sup";
+  private static final Pattern PATTERN = Pattern.compile(".*[a-z]\\.[a-z].*");
+  private static final Pattern DOT = Pattern.compile(".", Pattern.LITERAL);
 
   private List<String> possibleTags;
 
+  public static final PolishSynthesizer INSTANCE = new PolishSynthesizer();
+
+  /** @deprecated use {@link #INSTANCE} */
   public PolishSynthesizer(Language lang) {
-    super(RESOURCE_FILENAME, TAGS_FILE_NAME, lang);
+    this();
+  }
+  private PolishSynthesizer() {
+    super(RESOURCE_FILENAME, TAGS_FILE_NAME, "pl");
   }
 
   @Override
@@ -104,7 +112,7 @@ public class PolishSynthesizer extends BaseSynthesizer implements Synthesizer {
       }
 
       if (isNegated) {
-        posTag = posTag.replaceAll(NEGATION_TAG, POTENTIAL_NEGATION_TAG + "?");
+        posTag = posTag.replace(NEGATION_TAG, POTENTIAL_NEGATION_TAG + "?");
       }
 
       try {
@@ -141,8 +149,8 @@ public class PolishSynthesizer extends BaseSynthesizer implements Synthesizer {
       String[] tags = posTag.split(":");
       int pos = -1;
       for (int i = 0; i < tags.length; i++) {
-        if (tags[i].matches(".*[a-z]\\.[a-z].*")) {
-          tags[i] = "(.*" + tags[i].replace(".", ".*|.*") + ".*)";
+        if (PATTERN.matcher(tags[i]).matches()) {
+          tags[i] = "(.*" + DOT.matcher(tags[i]).replaceAll(".*|.*") + ".*)";
           pos = i;
         }
       }
@@ -166,7 +174,7 @@ public class PolishSynthesizer extends BaseSynthesizer implements Synthesizer {
     List<WordData> wordForms;
     if (isNegated) {
       wordForms = synthesizer.lookup(token.getLemma() + "|"
-          + posTag.replaceFirst(NEGATION_TAG, POTENTIAL_NEGATION_TAG));
+          + NEGATION_TAG_PATTERN.matcher(posTag).replaceFirst(POTENTIAL_NEGATION_TAG));
       if (wordForms != null) {                      
         for (WordData wd : wordForms) {
           forms.add("nie" + wd.getStem());

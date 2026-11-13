@@ -19,12 +19,8 @@
 package org.languagetool.rules.patterns;
 
 import org.apache.commons.lang3.StringUtils;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
-import org.languagetool.Languages;
-import org.languagetool.rules.Categories;
-import org.languagetool.rules.CorrectExample;
-import org.languagetool.rules.IncorrectExample;
+import org.languagetool.*;
+import org.languagetool.rules.*;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
@@ -45,6 +41,7 @@ class FalseFriendRuleHandler extends XMLRuleHandler {
   private final Map<String, List<String>> suggestionMap = new HashMap<>();  // rule ID -> list of translations
   private final List<String> suggestions = new ArrayList<>();
   private final List<StringBuilder> translations = new ArrayList<>();
+  private final String falseFriendHint;
 
   private boolean defaultOff;
   private Language language;
@@ -52,16 +49,21 @@ class FalseFriendRuleHandler extends XMLRuleHandler {
   private Language currentTranslationLanguage;
   private StringBuilder translation = new StringBuilder();
   private boolean inTranslation;
-  private String falseFriendHint;
+  private boolean inTestMode;
 
   FalseFriendRuleHandler(Language textLanguage, Language motherTongue, String falseFriendHint) {
-    englishMessages = ResourceBundle.getBundle(JLanguageTool.MESSAGE_BUNDLE, Languages.getLanguageForShortCode("en").getLocale());
-    messages = ResourceBundle.getBundle(JLanguageTool.MESSAGE_BUNDLE, motherTongue.getLocale());
+    this(textLanguage, motherTongue, falseFriendHint, false);
+  }
+
+  FalseFriendRuleHandler(Language textLanguage, Language motherTongue, String falseFriendHint, boolean inTestMode) {
+    englishMessages = ResourceBundleTools.getMessageBundle(Languages.getLanguageForShortCode("en-US"));
+    messages = ResourceBundleTools.getMessageBundle(motherTongue);
     formatter = new MessageFormat("");
     formatter.setLocale(motherTongue.getLocale());
     this.textLanguage = textLanguage;
     this.motherTongue = motherTongue;
     this.falseFriendHint = falseFriendHint;
+    this.inTestMode = inTestMode;
   }
 
   public Map<String, List<String>> getSuggestionMap() {
@@ -100,6 +102,9 @@ class FalseFriendRuleHandler extends XMLRuleHandler {
       if (Languages.isLanguageSupported(languageStr)) {
         Language tmpLang = Languages.getLanguageForShortCode(languageStr);
         currentTranslationLanguage = tmpLang;
+        if (inTestMode && currentTranslationLanguage == language) {
+          throw new RuntimeException("Translation language (" + currentTranslationLanguage + ") must not be the same as pattern language (" + language + ") for rule " + id);
+        }
         if (tmpLang.equalsConsiderVariantsIfSpecified(motherTongue)) {
           translationLanguage = tmpLang;
         }
@@ -155,7 +160,7 @@ class FalseFriendRuleHandler extends XMLRuleHandler {
         }
         break;
       case TOKEN:
-        finalizeTokens();
+        finalizeTokens(language.getUnifierConfiguration());
         break;
       case PATTERN:
         inPattern = false;
@@ -166,7 +171,7 @@ class FalseFriendRuleHandler extends XMLRuleHandler {
           translations.add(translation);
         }
         if (currentTranslationLanguage != null && currentTranslationLanguage.equalsConsiderVariantsIfSpecified(textLanguage)
-                && language.equalsConsiderVariantsIfSpecified(motherTongue)) {
+                && language.equalsConsiderVariantsIfSpecified(motherTongue) && !suggestions.contains(translation.toString())) {
           suggestions.add(translation.toString());
         }
         translation = new StringBuilder();

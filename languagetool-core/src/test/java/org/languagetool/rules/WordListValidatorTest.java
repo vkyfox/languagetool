@@ -30,27 +30,85 @@ import static junit.framework.TestCase.fail;
 
 public class WordListValidatorTest {
 
-  private static final Pattern VALID_CHARS = Pattern.compile(
-          "[ 0-9a-zA-ZöäüÖÄÜßëçèéáàóòÈÉÁÀÓÒãñíîş&" +
-          "Œ€ūαΑβΒγɣΓδΔεΕζΖηΗθΘιΙκΚλΛμΜνΝξΞοΟπΠρΡσΣτΤυΥφΦχΧψΨωΩάΆέΈίΊήΉύΎϊϋΰΐœţłń" +
-          "ŚśōżúïÎôêâû" +
-          "Ææ" +  // English
-          "ÍÚÑ" + // for Spanish
-          "õș" +   // for Portuguese
-          "ā" + // for Persian
-          "·" +   // for Catalan
-          "_" +   // for German (syntax: prefix_verb)
+  private static final String VALID_CHARS =
+          "[ 0-9a-zA-ZöäüÖÄÜßëçèéáàóòŁÈÉÁÀÓÒÍãñíîŞş&*_:\\\\" +
+          "___INSERT___" +
+          "Œ€ūαΑβΒγɣΓδΔεΕζΖηΗθΘιΙκΚλΛμΜνΝξΞοΟπΠρΡσΣτΤυΥφΦχΧψΨωΩάΆέΈίΊήΉύΎϊϋΰΐœţłńÿ" +
+          "ČŚśŌōżúïÎôêâû" +
+          "ÇÃÕÚÊÂÔ" +
+          "ă" +
+          "å" +
+          "ħ" +
+          "ø" +
+          "ĉĝĥĵŝŭĈĜĤĴŜŬ" +
           "'’" +
-          "ýùźăŽČĆÅıøğåšĝÇİŞŠčžć±ą+-" +   // for Dutch (inhabitants) proper names mostly
-          "./-]+" + 
-          "|[khmcdµ]?m[²³]|°[CFR]|CO₂-?.*|mc²"
-  );
+          "./%-]+" +
+          "|[khmcdµ]?m[²³]|°[CFR]|C?O₂-?.*|mc²";
 
   // Words that are valid but with special characters so that we don't want to
   // allow them in general:
   private static final Set<String> VALID_WORDS = new HashSet<>(Arrays.asList(
+          "Oświęcim",
+          "Brașov",
+          "Iași",
+          "Częstochowa",
+          "Ceaușescu",
+          "Timișoara",
+          "Guðnadóttir",
+          "Andrić",
+          "Andrićgrad",
+          "Višegrad",
+          "Onești",
+          "Karadžić",
+          "Mladić",
+          "Vučić",
+          "Milošević",
+          "Prešov",
+          "Martinů",
+          "Şanlıurfa",
+          "Žižek",
+          "Háček",
+          "Varaždin/S",
           "Będzin",
+          "Aydın",
+          "Pavlović",
+          "Poreč",
+          "Čeferin",
+          "Čeferin/S",
+          "Perišić",
+          "Perišić/S",
+          "Modrić",
+          "Modrić/S",
+          "Miłosz",
+          "Arnautović/S",
+          "Dàoxuān",
+          "Sigara böreği",
+          "Sigara böreği/S",
           "Bhagavad-gītā",
+          "Sønderjylland/S",
+          "Utøya/S",
+          "Božena/S",
+          "Brăila/S",
+          "Timișoara/S",
+          "Tromsø/S",
+          "Solidarność",
+          "Salihamidžić/S",
+          "Porošenko",
+          "Porošenko/S",
+          "Darʿā",  // de
+          "veni, vidi, vici", // en
+          "Food+Tech Connect", // en
+          "comme ci, comme ça", // en
+          "Robinson + Yu",
+          "herõon", // en
+          "herõons", // en
+          "Võro",  // en
+          "Łukasz",
+          "Čakavian",
+          "Erdoğan",
+          "Rădulescu",
+          "Štokavian",
+          "Veliko Tărnovo",
           "Brāhmaṇa",
           "Forlì-Cesena",
           "Hárbarðsljóð",
@@ -58,6 +116,7 @@ public class WordListValidatorTest {
           "Hyndluljóð",
           "Kazanlǎk",
           "Kesäranta",
+          "Krišjānis",
           "Kŭrdzhali",
           "Malko Tŭrnovo",
           "Rígsþula",
@@ -71,12 +130,32 @@ public class WordListValidatorTest {
           "chef-d’œuvre",
           "chefs-d’œuvre",
           "Brač",
+          "Forlì",
           "Qur’an",
+          "Kariņš",
           "Djuveč",
           "Djuvečreis",
+          "Çavuşoğlu",
+          "Çavuşoğlu/S",
           "Hidschāb/S",
           "Dvořák/S",
+          "Constanța",
+          "Constanța/S",
+          "Paul Erdős",
           "Erdoğan/S",
+          "Sørensen/S",
+          "Sørensen",
+          "Søren/S",
+          "Søren",
+          "Radosław",
+          "Radosław/S",
+          "Jarosław",
+          "Jarosław/S",
+          "Władysław/S",
+          "Şahin/S",
+          "Uğur/S",
+          "Jørgensen/S",
+          "Jørgensen",
           "Ångström",
           "ångström",
           "ångströms",
@@ -94,10 +173,76 @@ public class WordListValidatorTest {
           "S&P",
           "ČSSR",
           "V&D",
+          "Loïc/S",
+          "İlkay",
+          "Gündoğan",
+          "Tuğrul",
+          "Kīlauea",
+          "Māori",
+          "Chișinău",
+          "Chișinău/S",
+          "Křetínský/S",
+          "Terzić",
+          "Jūjutsu/S",
+          "Ñuñoa",
+          "Stevanović",
+          "Børge",
+          "Børge/S",
+          "Bjørn Gulden/S",
+          "Snæfellsjökull/S",
+          "Višegrad/S",
+          "Clément/S",
+          "Snæfellsjökull",
+          "Grudziądz",
+          "Skåneland",
+          "Øresund",
+          "Jokić",
+          "Ibišević",
+          "Fríður",
+          "Łódź",
+          "Ørsted",
+          "Samsø/S",
+          "Kılıçdaroğlu/S",
+          "Vlahović/S",
+          "Sønderborg/S",
+          "Sønderborg",
+          "Mirotić",
+          "Subotić",
+          "Pÿur",
+          "Subašić",
+          "Wałęsa",
+          "Çalhanoğlu",
+          "Çalhanoğlu/S",
+          "İmamoğlu",
+          "İmamoğlu/S",
+          "Szczęsny",
+          "celebrytę", // for PL
+          "antybiotykoterapię", // for PL
+          "elektromobilność", // for PL
+          "kryptowalutę", // for PL
+          "fotowoltaikę", // for PL
+          "insulinooporność", // for PL
+          "infografikę", // for PL
+          "dtª",  // for PT
+          "dtº",  // for PT
+          "ª",  // for PT
+          "º",  // for PT
+          "ĉi",  // for PT
+          "R$",  // for PT
           // Greek letters / Mathematics and physics variables
           "Α", "Β", "Γ", "Δ", "Ε", "Ζ", "Η", "Θ", "Ι", "Κ", "Λ", "Μ", "Ν", "Ξ", "Ο", "Π", "Ρ", "Σ", "Τ", "Υ", "Φ", "Χ", "Ψ", "Ω", 
           "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "ν", "ξ", "ο", "π", "ρ", "σ", "τ", "υ", "φ", "χ", "ψ", "ω"          
   ));
+
+  private final String additionalValidationChars;
+
+  public WordListValidatorTest() {
+    this("");
+  }
+
+  public WordListValidatorTest(String additionalValidationChars) {
+    this.additionalValidationChars = additionalValidationChars;
+  }
 
   public void testWordListValidity(Language lang) {
     if (lang.getShortCode().equals("ru")) {
@@ -111,7 +256,7 @@ public class WordListValidatorTest {
         SpellingCheckRule sRule = (SpellingCheckRule) rule;
         String file = sRule.getSpellingFileName();
         if (JLanguageTool.getDataBroker().resourceExists(file) && !checked.contains(file)) {
-          System.out.println("Checking " + file);
+          System.out.println("Checking validity of word list file " + file);
           CachingWordListLoader loader = new CachingWordListLoader();
           List<String> words = loader.loadWords(file);
           validateWords(words, file);
@@ -123,11 +268,13 @@ public class WordListValidatorTest {
 
   private void validateWords(List<String> words, String spellingFileName) {
     List<String> failures = new ArrayList<>();
+    String validChars = VALID_CHARS.replace("___INSERT___", additionalValidationChars);
+    Pattern validPattern = Pattern.compile(validChars);
     for (String word : words) {
       if (VALID_WORDS.contains(word) || VALID_WORDS.contains(word.trim())) {
         // okay
-      } else if (!VALID_CHARS.matcher(word).matches()) {
-        failures.add("Word '" + word + "' from " + spellingFileName + " doesn't match regex: " + VALID_CHARS +
+      } else if (!validPattern.matcher(word).matches()) {
+        failures.add("Word '" + word + "' from " + spellingFileName + " doesn't match regex: " + validChars +
                 " - please fix the word or add the character to the language's " + WordListValidatorTest.class.getName() + " if it's valid");
       }
     }

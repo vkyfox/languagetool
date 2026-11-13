@@ -27,22 +27,24 @@ import org.languagetool.rules.RuleMatch;
 import org.languagetool.rules.SuggestionFilter;
 import org.languagetool.rules.patterns.RuleFilter;
 import org.languagetool.synthesis.GermanSynthesizer;
-import org.languagetool.synthesis.Synthesizer;
 import org.languagetool.tagging.de.GermanTagger;
 import org.languagetool.tools.StringTools;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.regex.Pattern;
 
 public class AdaptSuggestionFilter extends RuleFilter {
   
-  private final static German german = new German();
-  private final static GermanTagger tagger = new GermanTagger();
-  private final static Synthesizer synth = new GermanSynthesizer(german);
-  
+  private static final German german = new German();
+  private static final Pattern ART_PRO_PATTERN = Pattern.compile("(ART|PRO):.*");
+  private static final Pattern MAS_FEM_NEU_PATTERN = Pattern.compile("MAS|FEM|NEU");
+  private static final Pattern PRO_POS_ETC_PATTERN = Pattern.compile("PRO:POS:(NOM|AKK|GEN|DAT):(SIN|PLU):(MAS|FEM|NEU)");
+  private static final Pattern STV_BEG_PATTERN = Pattern.compile(":(STV|BEG).*");
+
   @Nullable
   @Override
-  public RuleMatch acceptRuleMatch(RuleMatch match, Map<String, String> arguments, int patternTokenPos, AnalyzedTokenReadings[] patternTokens) {
+  public RuleMatch acceptRuleMatch(RuleMatch match, Map<String, String> arguments, int patternTokenPos, AnalyzedTokenReadings[] patternTokens, List<Integer> tokenPositions) {
     RuleMatch newMatch = null;
     List<String> newSugg = new ArrayList<>();
     if (patternTokenPos > 0) {
@@ -102,8 +104,8 @@ public class AdaptSuggestionFilter extends RuleFilter {
         if (reading.getPOSTag() == null || !(reading.getPOSTag().startsWith("ART:") || reading.getPOSTag().startsWith("PRO:"))) {
           continue;
         }
-        String newDetPos = reading.getPOSTag().replaceAll("MAS|FEM|NEU", replGender).replaceFirst("BEG", "(BEG|B/S)").replaceFirst(":STV", "");
-        String[] replDet = synth.synthesize(new AnalyzedToken(oldDetBaseform, null, oldDetBaseform), newDetPos, true);
+        String newDetPos = MAS_FEM_NEU_PATTERN.matcher(reading.getPOSTag()).replaceAll(replGender).replace("BEG", "(BEG|B/S)").replace(":STV", "");
+        String[] replDet = GermanSynthesizer.INSTANCE.synthesize(new AnalyzedToken(oldDetBaseform, null, oldDetBaseform), newDetPos, true);
         for (String s : replDet) {
           if (StringTools.startsWithUppercase(detToken.getToken())) {
             if (!s.toLowerCase().startsWith(detToken.getToken().substring(0, 1).toLowerCase())) {
@@ -134,22 +136,22 @@ public class AdaptSuggestionFilter extends RuleFilter {
         return result;
       }
       for (AnalyzedToken reading : detToken.getReadings()) {
-        if (reading.getPOSTag() == null || !reading.getPOSTag().matches("(ART|PRO):.*")) {
+        if (reading.getPOSTag() == null || !ART_PRO_PATTERN.matcher(reading.getPOSTag()).matches()) {
           continue;
         }
-        String newDetPos = reading.getPOSTag().replaceAll("MAS|FEM|NEU", replGender).replaceFirst("BEG", "(BEG|B/S)");
+        String newDetPos = MAS_FEM_NEU_PATTERN.matcher(reading.getPOSTag()).replaceAll(replGender).replace("BEG", "(BEG|B/S)");
         String newAdjPos;
         if (newDetPos.startsWith("ART:")) {
-          newAdjPos = reading.getPOSTag().replaceAll("MAS|FEM|NEU", replGender).replaceFirst("BEG", "(BEG|B/S)").replaceFirst(":STV", "");
+          newAdjPos = MAS_FEM_NEU_PATTERN.matcher(reading.getPOSTag()).replaceAll(replGender).replace("BEG", "(BEG|B/S)").replace(":STV", "");
         } else if (newDetPos.startsWith("PRO:")) {
-          newAdjPos = newDetPos.replaceAll("PRO:POS:(NOM|AKK|GEN|DAT):(SIN|PLU):(MAS|FEM|NEU)", "ADJ:$1:$2:$3").replaceFirst(":(STV|BEG).*", ":GRU:IND");
+          newAdjPos = STV_BEG_PATTERN.matcher(PRO_POS_ETC_PATTERN.matcher(newDetPos).replaceAll("ADJ:$1:$2:$3")).replaceFirst(":GRU:IND");
         } else {
           throw new RuntimeException("Unexpected POS tag: " + newDetPos);
         }
         //System.out.println("newDetPos: " + newDetPos + " for " + oldDetBaseform);
         //System.out.println("newAdjPos: " + newAdjPos + " for " + oldAdjBaseform);
-        String[] replDet = synth.synthesize(new AnalyzedToken(oldDetBaseform, null, oldDetBaseform), newDetPos, true);
-        String[] replAdj = synth.synthesize(new AnalyzedToken(oldAdjBaseform, null, oldAdjBaseform), newAdjPos, true);
+        String[] replDet = GermanSynthesizer.INSTANCE.synthesize(new AnalyzedToken(oldDetBaseform, null, oldDetBaseform), newDetPos, true);
+        String[] replAdj = GermanSynthesizer.INSTANCE.synthesize(new AnalyzedToken(oldAdjBaseform, null, oldAdjBaseform), newAdjPos, true);
         //System.out.println("replDet: " + Arrays.toString(replDet));
         //System.out.println("replAdj: " + Arrays.toString(replAdj));
         for (String det : replDet) {
@@ -183,7 +185,7 @@ public class AdaptSuggestionFilter extends RuleFilter {
 
   @Nullable
   private String getNounGender(String word) throws IOException {
-    List<AnalyzedTokenReadings> readings = tagger.tag(Collections.singletonList(word));
+    List<AnalyzedTokenReadings> readings = GermanTagger.INSTANCE.tag(Collections.singletonList(word));
     for (AnalyzedTokenReadings atr : readings) {
       if (atr.getReadings().size() > 0) {
         String pos = atr.getReadings().get(0).getPOSTag();

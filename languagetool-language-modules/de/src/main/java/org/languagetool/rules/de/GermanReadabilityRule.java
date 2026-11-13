@@ -16,7 +16,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301
  * USA
  */
-
 package org.languagetool.rules.de;
 
 import java.util.ResourceBundle;
@@ -37,24 +36,24 @@ import org.languagetool.rules.Category.Location;
  */
 public class GermanReadabilityRule extends ReadabilityRule {
   
-  private boolean tooEasyTest;
+  private final boolean tooEasyTest;
 
   public GermanReadabilityRule(ResourceBundle messages, Language lang, UserConfig userConfig, boolean tooEasyTest) {
-    this (messages, lang, userConfig, tooEasyTest, -1, false);
+    this(messages, lang, userConfig, tooEasyTest, -1, false);
   }
   
   public GermanReadabilityRule(ResourceBundle messages, Language lang, UserConfig userConfig, boolean tooEasyTest, int level) {
-    this (messages, lang, userConfig, tooEasyTest, level, false);
+    this(messages, lang, userConfig, tooEasyTest, level, false);
   }
   
   public GermanReadabilityRule(ResourceBundle messages, Language lang, UserConfig userConfig, boolean tooEasyTest, boolean defaultOn) {
-    this (messages, lang, userConfig, tooEasyTest, -1, defaultOn);
+    this(messages, lang, userConfig, tooEasyTest, -1, defaultOn);
   }
   
   public GermanReadabilityRule(ResourceBundle messages, Language lang, UserConfig userConfig, 
       boolean tooEasyTest, int level, boolean defaultOn) {
     super(messages, lang, userConfig, tooEasyTest, level, defaultOn);
-    super.setCategory(new Category(new CategoryId("TEXT_ANALYSIS"), "Textanalyse", Location.INTERNAL, false));
+    super.setCategory(new Category(new CategoryId("CREATIVE_WRITING"), messages.getString("category_creative_writing"), Location.INTERNAL, false));
     this.tooEasyTest = tooEasyTest;
   }
   
@@ -65,7 +64,7 @@ public class GermanReadabilityRule extends ReadabilityRule {
 
   @Override
   public String getId(boolean tooEasyTest) {
-    if(tooEasyTest) {
+    if (tooEasyTest) {
       return "READABILITY_RULE_SIMPLE_DE";
     } else {
       return "READABILITY_RULE_DIFFICULT_DE";
@@ -74,14 +73,15 @@ public class GermanReadabilityRule extends ReadabilityRule {
 
   @Override
   public String getDescription() {
-    if(tooEasyTest) {
+    if (tooEasyTest) {
       return "Lesbarkeit: Zu einfacher Text";
     } else {
       return "Lesbarkeit: Zu schwieriger Text";
     }
   }
 
-  private static String printMessageLevel(int level) {
+  @Override
+  public String printMessageLevel(int level) {
     String sLevel = null;
     if (level == 0) {
       sLevel = "Sehr schwer";
@@ -105,11 +105,10 @@ public class GermanReadabilityRule extends ReadabilityRule {
   }
   
   @Override
-  protected String getMessage(int level, int FRE, int ASL, int ASW) {
+  protected String getMessage(int level, int fre, int als, int asw) {
     String simple;
     String few;
-
-    if(tooEasyTest) {
+    if (tooEasyTest) {
       simple = "einfach";
       few = "wenige";
     } else {
@@ -126,34 +125,28 @@ public class GermanReadabilityRule extends ReadabilityRule {
   }
 
   @Override
-  protected double getFleschReadingEase(double ASL, double ASW) {
-    return 180 - ASL - ( 58.5 * ASW );  //  German
-  }
-  
-  private static boolean isVowel(char c) {
-    return (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' || c == 'y' ||
-        c == 'A' || c == 'E' || c == 'I' || c == 'O' || c == 'U' || c == 'Y' ||
-        c == 'ä' || c == 'ö' || c == 'ü' || c == 'Ä' || c == 'Ö' || c == 'Ü');
+  public double getFleschReadingEase(double asl, double asw) {
+    return 180 - asl - ( 58.5 * asw );  //  German
   }
   
   @Override
   protected int simpleSyllablesCount(String word) {
-    if(word.length() == 0) {
+    if (word.length() == 0) {
       return 0;
     }
     int nSyllables = 0;
-    if(isVowel(word.charAt(0))) {
+    if (GermanTools.isVowel(word.charAt(0))) {
       nSyllables++;
     }
     boolean lastDouble = false;
     for (int i = 1; i < word.length(); i++) {
       char c = word.charAt(i);
-      if(isVowel(c)) {
+      if (GermanTools.isVowel(c)) {
         char cl = word.charAt(i - 1);
-        if(lastDouble) {
+        if (lastDouble) {
           nSyllables++;
           lastDouble = false;
-        } else if(((c == 'i' || c == 'y') && (cl == 'a' || cl == 'e' || cl == 'A' || cl == 'E')) || 
+        } else if (((c == 'i' || c == 'y') && (cl == 'a' || cl == 'e' || cl == 'A' || cl == 'E')) ||
             (c == 'u' && (cl == 'a' || cl == 'e' || cl == 'o' || cl == 'A' || cl == 'E' || cl == 'O')) ||
             (c == 'e' && (cl == 'e' || cl == 'i' || cl == 'E' || cl == 'I')) ||
             (c == 'a' && (cl == 'a' || cl == 'A'))) {

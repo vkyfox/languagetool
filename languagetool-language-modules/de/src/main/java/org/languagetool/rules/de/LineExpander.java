@@ -18,12 +18,16 @@
  */
 package org.languagetool.rules.de;
 
-import org.languagetool.AnalyzedToken;
-import org.languagetool.language.GermanyGerman;
-import org.languagetool.synthesis.Synthesizer;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import org.jetbrains.annotations.NotNull;
+import org.languagetool.synthesis.GermanSynthesizer;
+import org.languagetool.tools.StringTools;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Expand lines according to their suffix, e.g. {@code foo/S} becomes {@code [foo, foos]}.
@@ -31,49 +35,74 @@ import java.util.*;
  */
 public class LineExpander implements org.languagetool.rules.LineExpander {
 
-  private final static Synthesizer synthesizer = new GermanyGerman().getSynthesizer();
+  private static final LoadingCache<String, String[]> verbFormCache = CacheBuilder.newBuilder()
+    .expireAfterAccess(10, TimeUnit.MINUTES)
+    .build(new CacheLoader<String, String[]>() {
+      @Override
+      public String[] load(@NotNull String verb) throws IOException {
+        return GermanSynthesizer.INSTANCE.synthesizeForPosTags(verb, s -> s.startsWith("VER:"));
+      }
+    });
 
-  @Override
-  public List<String> expandLine(String line) {
+  private static List<String> handleLineWithPrefix(String line) {
     List<String> result = new ArrayList<>();
-    if (!line.startsWith("#") && line.contains("_")) {
-      handleLineWithPrefix(line, result);
-    } else if (!line.startsWith("#") && line.contains("/")) {
-      handleLineWithFlags(line, result);
-    } else {
-      result.add(cleanTags(line));
-    }
-    return result;
-  }
-
-  private void handleLineWithPrefix(String line, List<String> result) {
-    String[] parts = cleanTags(line).split("_");
+    String[] parts = cleanTagsAndEscapeChars(line).split("_");
     if (parts.length != 2) {
       throw new IllegalArgumentException("Unexpected line format, expected at most one '_': " + line);
     }
     if (parts[0].contains("/") || parts[1].contains("/")) {
       throw new IllegalArgumentException("Unexpected line format, '_' cannot be combined with '/': " + line);
     }
-    try {
-      String[] forms = synthesizer.synthesize(new AnalyzedToken(parts[1], "FAKE", parts[1]), "VER:.*", true);
+    if (parts[1].equals("in")) {
+      // special case for the common gender gap characters:
+      result.add(parts[0] + "_in");
+      result.add(parts[0] + "_innen");
+      result.add(parts[0] + "*in");
+      result.add(parts[0] + "*innen");
+      result.add(parts[0] + ":in");
+      result.add(parts[0] + ":innen");
+      //result.add(parts[0] + "in");   // see if we can comment in these cases, too
+      //result.add(parts[0] + "innen");
+      //result.add(parts[0] + "e");
+      //result.add(parts[0] + "en");
+    } else {
+      String[] forms = verbFormCache.getUnchecked(parts[1]);
       if (forms.length == 0) {
         throw new RuntimeException("Could not expand '" + parts[1] + "' from line '" + line + "', no forms found");
       }
       Set<String> formSet = new HashSet<>(Arrays.asList(forms));
       for (String form : formSet) {
-        if (!form.contains("ß")) {
+        if (!form.contains("ß") && form.length() > 0 && Character.isLowerCase(form.charAt(0))) {
           // skip these, it's too risky to introduce old spellings like "gewußt" from the synthesizer
           result.add(parts[0] + form);
         }
       }
       result.add(parts[0] + "zu" + parts[1]);  //  "zu<verb>" is not part of forms from synthesizer
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+      result.add(StringTools.uppercaseFirstChar(parts[0]) + parts[1] + "s");  //  Genitiv, e.g. "des Weitergehens"
     }
+    return result;
   }
 
-  private void handleLineWithFlags(String line, List<String> result) {
-    String[] parts = cleanTags(line).split("/");
+  @Override
+  public List<String> expandLine(String line) {
+    return isLineWithVerbPrefix(line) ? handleLineWithPrefix(line) :
+           isLineWithFlag(line) ? handleLineWithFlags(line) :
+           Collections.singletonList(cleanTagsAndEscapeChars(line));
+  }
+
+  private boolean isLineWithFlag(String line) {
+    int idx = line.indexOf('/');
+    return !line.startsWith("#") && idx > 0 && line.charAt(idx-1) != '\\';
+  }
+
+  private boolean isLineWithVerbPrefix(String line) {
+    int idx = line.indexOf('_');
+    return !line.startsWith("#") && idx > 0 && line.charAt(idx-1) != '\\';
+  }
+
+  private List<String> handleLineWithFlags(String line) {
+    List<String> result = new ArrayList<>();
+    String[] parts = cleanTagsAndEscapeChars(line).split("/");
     if (parts.length != 2) {
       throw new IllegalArgumentException("Unexpected line format, expected at most one slash: " + line);
     }
@@ -93,7 +122,15 @@ public class LineExpander implements org.languagetool.rules.LineExpander {
       } else if (c == 'F') {
         add(result, word);
         result.add(word + "in"); // (m/f)
-      } else if (c == 'A') { // Adjektiv
+      } else if (c == 'T') {
+        add(result, word);
+        if (word.endsWith("straße") || word.endsWith("strasse")) {
+          result.add(word.replaceAll("stra(ß|ss)e", "str."));
+        } 
+        if (word.endsWith("Straße") || word.endsWith("Strasse")) {
+          result.add(word.replaceAll("Stra(ß|ss)e", "Str."));
+        } 
+      } else if (c == 'A' || c == 'P') { // Adjektiv / Partizip
         add(result, word);
         if (word.endsWith("e")) {
           result.add(word + "r");
@@ -111,6 +148,7 @@ public class LineExpander implements org.languagetool.rules.LineExpander {
         throw new IllegalArgumentException("Unknown suffix: " + suffix + " in line: " + line);
       }
     }
+    return result;
   }
 
   private void add(List<String> result, String word) {
@@ -120,11 +158,11 @@ public class LineExpander implements org.languagetool.rules.LineExpander {
   }
 
   // ignore "#..." so it can be used as a tag:
-  private String cleanTags(String s) {
+  private static String cleanTagsAndEscapeChars(String s) {
     int idx = s.indexOf('#');
     if (idx != -1) {
       s = s.substring(0, idx);
     }
-    return s.trim();
+    return s.replace("\\", "").trim();
   }
 }

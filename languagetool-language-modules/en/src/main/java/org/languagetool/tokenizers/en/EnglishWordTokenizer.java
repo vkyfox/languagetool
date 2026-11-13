@@ -18,11 +18,17 @@
  */
 package org.languagetool.tokenizers.en;
 
+import org.languagetool.tagging.en.EnglishTagger;
+import org.languagetool.tokenizers.WordTokenizer;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.StringTokenizer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-import org.languagetool.tokenizers.WordTokenizer;
+import static java.util.regex.Pattern.*;
 
 /**
  * @author Marcin Milkowski
@@ -30,51 +36,129 @@ import org.languagetool.tokenizers.WordTokenizer;
  */
 public class EnglishWordTokenizer extends WordTokenizer {
 
-  @Override
-  public String getTokenizingCharacters() {
-    return super.getTokenizingCharacters() + "–";  // n-dash
-  }
+  private static final String wordCharacters = "±§©@€£¥\\$\\p{L}\\d\\-\u0300-\u036F\u00A8°%‰‱&\uFFFD\u00AD\u00AC\uFF0C\uFF1F"; // # _ \\u2070-\\u209f
+  // \\uFFOC -> rule NON_STANDARD_COMMA
+  // \\uFF1F -> rule NON_STANDARD_QUESTION_MARK
+  private static final Pattern tokenizerPattern = Pattern.compile("[" + wordCharacters + "]+|[^" + wordCharacters + "]");
+  private static final Pattern SINGLE_QUOTE = compile("'");
+  private static final Pattern CURLY_QUOTE = compile("’");
+  private static final Pattern APOSTYPEW = compile("xxAPOSTYPEWxx");
+  private static final Pattern APOSTYPOG = compile("xxAPOSTYPOGxx");
+  private static final Pattern SOFT_HYPHEN = compile("\u00AD");
+  private static final List<Pattern> patternList = Arrays.asList(
+      compile("^(fo['’]c['’]sle|rec['’][ds]|OK['’]d|cc['’][ds]|DJ['’][d]|[pd]m['’]d|rsvp['’]d)$", CASE_INSENSITIVE | UNICODE_CASE),
+      compile(
+          "^(['’]?)(are|is|were|was|do|does|did|have|has|had|wo|would|ca|could|sha|should|must|ai|ought|might|need|may|am|dare|das|dass|hai|used|use)(n['’]t)$",
+          CASE_INSENSITIVE | UNICODE_CASE),
+      compile("^(.+)(['’]m|['’]re|['’]ll|['’]ve|['’]d|['’]s)(['’-]?)$",
+          CASE_INSENSITIVE | UNICODE_CASE),
+      compile("^(['’]t)(was|were|is)$", CASE_INSENSITIVE | UNICODE_CASE));
 
-  private static final String[] EXCEPTIONS = {"fo'c'sle"};
-  private static final String[] EXCEPTION_REPLACEMENT = {"fo\u2626c\u2626sle"};
+  //the string used to tokenize characters
+  private final String enTokenizingChars = super.getTokenizingCharacters() + "_"; // underscore;
+
+//  public EnglishWordTokenizer() {
+//
+//  }
 
   /**
-   * Tokenizes text.
-   * The English tokenizer differs from the standard one
-   * in two respects:
+   * Tokenizes text. The English tokenizer differs from the standard one in two
+   * respects:
    * <ol>
-   * <li> it does not treat the hyphen as part of the
-   * word if the hyphen is at the end of the word;</li>
-   * <li> it includes n-dash as a tokenizing character,
-   * as it is used without a whitespace in English.
+   * <li>it does not treat the hyphen as part of the word if the hyphen is at the
+   * end of the word;</li>
+   * <li>it includes n-dash as a tokenizing character, as it is used without a
+   * whitespace in English.
    * </ol>
+   * 
    * @param text String of words to tokenize.
    */
   @Override
   public List<String> tokenize(String text) {
     List<String> l = new ArrayList<>();
-    boolean hasException = false;
-    for (int idx = 0; idx < EXCEPTIONS.length; idx++) {
-      if(text.contains(EXCEPTIONS[idx])) {
-      	hasException = true;
-        text = text.replace(EXCEPTIONS[idx], EXCEPTION_REPLACEMENT[idx]);
+    String auxText = text;
+    auxText = SINGLE_QUOTE.matcher(auxText).replaceAll("xxAPOSTYPEWxx");
+    auxText = CURLY_QUOTE.matcher(auxText).replaceAll("xxAPOSTYPOGxx");
+    //auxText = auxText.replaceAll("-", "xxHYPHENxx");
+
+
+    Matcher tokenizerMatcher = tokenizerPattern.matcher(auxText);
+    while (tokenizerMatcher.find()) {
+      String s = tokenizerMatcher.group();
+      if (l.size() > 0 && s.length() == 1 && s.codePointAt(0)>=0xFE00 && s.codePointAt(0)<=0xFE0F) {
+        l.set(l.size() - 1, l.get(l.size() - 1) + s);
+        continue;
       }
-    }
-    StringTokenizer st = new StringTokenizer(text, getTokenizingCharacters(), true);
-    while (st.hasMoreElements()) {
-      String token = st.nextToken();
-      for (int idx = 0; hasException && idx < EXCEPTIONS.length; idx++) {
-        if (token.equals(EXCEPTION_REPLACEMENT[idx])) {
-      	  token = EXCEPTIONS[idx];
-      	}
+      s = APOSTYPEW.matcher(s).replaceAll("'");
+      s = APOSTYPOG.matcher(s).replaceAll("’");
+          //.replaceAll("xxHYPHENxx", "-");
+      boolean matchFound = false;
+      Matcher matcher = null;
+      if (s.contains("'") || s.contains("’")) {
+        for (Pattern pattern : patternList) {
+          matcher = pattern.matcher(s);
+          matchFound = matcher.find();
+          if (matchFound) {
+            break;
+          }
+        }
       }
-      if (token.length() > 1 && token.endsWith("-")) {
-        l.add(token.substring(0, token.length() - 1));
-        l.add("-");
+      if (matchFound) {
+        for (int i = 1; i <= matcher.groupCount(); i++) {
+          String groupStr = matcher.group(i);
+          l.addAll(wordsToAdd(groupStr));
+        }
       } else {
-        l.add(token);
+        l.addAll(wordsToAdd(s));
       }
     }
     return joinEMailsAndUrls(l);
+  }
+
+  /* Splits a word containing hyphen(-’') if it doesn't exist in the dictionary. */
+  private List<String> wordsToAdd(String s) {
+    final List<String> l = new ArrayList<>();
+    int hyphensAtEnd = 0;
+    if (!s.isEmpty()) {
+      while (s.startsWith("-")) {
+        l.add("-");
+        s = s.substring(1);
+      }
+      while (s.endsWith("-")) {
+        s = s.substring(0,s.length()-1);
+        hyphensAtEnd++;
+      }
+      if (!s.isEmpty()) {
+        if (!s.contains("-") && !s.contains("'") && !s.contains("’")) {
+          l.add(s);
+        } else {
+          String normalized = SOFT_HYPHEN.matcher(s).replaceAll("");
+          normalized = CURLY_QUOTE.matcher(normalized).replaceAll("'");
+          if (EnglishTagger.INSTANCE.tag(Arrays.asList(normalized)).get(0)
+              .isTagged()) {
+            l.add(s);
+          }
+          // some camel-case words containing hyphen (is there any better fix?)
+          else if (s.equalsIgnoreCase("mers-cov") || s.equalsIgnoreCase("mcgraw-hill")
+              || s.equalsIgnoreCase("sars-cov-2") || s.equalsIgnoreCase("sars-cov") || s.equalsIgnoreCase("ph-metre")
+              || s.equalsIgnoreCase("ph-metres") || s.equalsIgnoreCase("anti-ivg") || s.equalsIgnoreCase("anti-uv")
+              || s.equalsIgnoreCase("anti-vih") || s.equalsIgnoreCase("al-qaida")) {
+            l.add(s);
+          } else {
+            // if not found, the word is split
+            // final StringTokenizer st2 = new StringTokenizer(s, "-’'", true);
+            final StringTokenizer st2 = new StringTokenizer(s, "’'", true);
+            while (st2.hasMoreElements()) {
+              l.add(st2.nextToken());
+            }
+          }
+        }
+      }
+    }
+    while (hyphensAtEnd > 0) {
+      l.add("-");
+      hyphensAtEnd--;
+    }
+    return l;
   }
 }

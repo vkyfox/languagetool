@@ -21,6 +21,7 @@ package org.languagetool.synthesis;
 import org.jetbrains.annotations.NotNull;
 import org.languagetool.AnalyzedToken;
 import org.languagetool.Language;
+import org.languagetool.Languages;
 import org.languagetool.tokenizers.de.GermanCompoundTokenizer;
 import org.languagetool.tools.StringTools;
 
@@ -34,24 +35,45 @@ import java.util.*;
  */
 public class GermanSynthesizer extends BaseSynthesizer {
 
-  private final GermanCompoundTokenizer splitter;
-  
+  public static final GermanSynthesizer INSTANCE = new GermanSynthesizer(Languages.getLanguageForShortCode("de-DE"));
+  private static final Set<String> REMOVE = new HashSet<>(Arrays.asList("unsren", "unsrem", "unsres", "unsre", "unsern", "unserm", "unsrer",
+      // old spellings still in the synthesizer dict:
+      "angepaßt", "beschloß", "biß", "entschloß", "ergoß", "faßt", "genoß", "paßt", "paßte", "preßt", "preßte", "riß",
+      "schloß", "streßtest", "vergißt", "verlaß", "verläßt", "vermiß", "vermißt",
+      "wißt", "wußtest", "wüßtest"));
+
+  /** @deprecated use {@link #INSTANCE} */
   public GermanSynthesizer(Language lang) {
-    super("/de/german_synth.dict", "/de/german_tags.txt", lang);
-    try {
-      splitter = new GermanCompoundTokenizer();
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+    this();
   }
 
+  private GermanSynthesizer() {
+    super("de/de.sor", "/de/german_synth.dict", "/de/german_tags.txt", "de");
+  }
+
+  @Override
+  protected List<String> lookup(String lemma, String posTag) {
+    List<String> lookup = super.lookup(lemma, posTag);
+    List<String> results = new ArrayList<>();
+    for (String s : lookup) {
+      // don't inflect a lowercase lemma to an uppercase word and vice versa
+      // https://github.com/languagetool-org/languagetool/issues/4712
+      boolean lcLemma = StringTools.startsWithLowercase(lemma);
+      boolean lcLookup = StringTools.startsWithLowercase(s);
+      if (lcLemma == lcLookup || lemma.equals("mein") || lemma.equals("ich") && !REMOVE.contains(s)) {  // mein/ich wegen Ihr/Sie
+        results.add(s);
+      }
+    }
+    return results;
+  }
+  
   @Override
   public String[] synthesize(AnalyzedToken token, String posTag) throws IOException {
     String[] result = super.synthesize(token, posTag);
     if (result.length == 0) {
       return getCompoundForms(token, posTag, false);
     }
-    return result;
+    return Arrays.stream(result).filter(k -> !REMOVE.contains(k)).toArray(String[]::new);
   }
   
   @Override
@@ -60,14 +82,37 @@ public class GermanSynthesizer extends BaseSynthesizer {
     if (result.length == 0) {
       return getCompoundForms(token, posTag, posTagRegExp);
     }
-    return result;
+    String[] array = Arrays.stream(result).filter(k -> !REMOVE.contains(k)).toArray(String[]::new);
+    /*
+    // log cases where 'ß' is in a word and it's probably old spelling:
+    String other = null;
+    for (String s : array) {
+      if (s.contains("ß")) {
+        other = s.replaceAll("ß", "ss");
+      }
+    }
+    if (other != null && Arrays.asList(array).contains(other)) {
+      System.out.println(">>"+ Arrays.toString(array));
+    }*/
+    return array;
   }
 
   @NotNull
   private String[] getCompoundForms(AnalyzedToken token, String posTag, boolean posTagRegExp) throws IOException {
-    List<String> parts = splitter.tokenize(token.getToken());
-    String firstPart = String.join("", parts.subList(0, parts.size() - 1));
+    List<String> parts = GermanCompoundTokenizer.getStrictInstance().tokenize(token.getLemma());
+    if (parts.size() == 0) {
+      return parts.toArray(new String[0]);
+    }
+    String maybeHyphen = "";
+    if (parts.size() == 1 && token.getLemma() != null) {
+      parts = Arrays.asList(token.getLemma().split("-"));
+      if (parts.size() > 1) {
+        maybeHyphen = "-";
+      }
+    }
+    String firstPart = String.join(maybeHyphen, parts.subList(0, parts.size() - 1));
     String lastPart = StringTools.uppercaseFirstChar(parts.get(parts.size() - 1));
+    boolean uppercaseLastPart = !maybeHyphen.equals("") && StringTools.startsWithUppercase(parts.get(parts.size() - 1));
     AnalyzedToken lastPartToken = new AnalyzedToken(lastPart, posTag, lastPart);
     String[] lastPartForms;
     if (posTagRegExp) {
@@ -77,7 +122,11 @@ public class GermanSynthesizer extends BaseSynthesizer {
     }
     Set<String> results = new LinkedHashSet<>();  // avoid dupes
     for (String part : lastPartForms) {
-      results.add(firstPart + StringTools.lowercaseFirstChar(part));
+      if (uppercaseLastPart) {
+        results.add(firstPart + maybeHyphen + part);
+      } else {
+        results.add(firstPart + maybeHyphen + StringTools.lowercaseFirstChar(part));
+      }
     }
     return results.toArray(new String[0]);
   }

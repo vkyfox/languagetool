@@ -33,17 +33,16 @@ import org.languagetool.chunking.GermanChunker;
 import org.languagetool.language.German;
 import org.languagetool.rules.RuleMatch;
 
-
 public class SubjectVerbAgreementRuleTest {
 
   private static SubjectVerbAgreementRule rule;
-  private static JLanguageTool langTool;
+  private static JLanguageTool lt;
 
   @BeforeClass
   public static void setUp() {
     Language german = Languages.getLanguageForShortCode("de-DE");
     rule = new SubjectVerbAgreementRule(TestTools.getMessages("de"), (German) german);
-    langTool = new JLanguageTool(german);
+    lt = new JLanguageTool(german);
   }
 
   @Test
@@ -108,11 +107,11 @@ public class SubjectVerbAgreementRuleTest {
 
   @Test
   public void testArrayOutOfBoundsBug() throws IOException {
-    rule.match(langTool.getAnalyzedSentence("Die nicht Teil des Näherungsmodells sind"));
+    rule.match(lt.getAnalyzedSentence("Die nicht Teil des Näherungsmodells sind"));
   }
 
   private AnalyzedTokenReadings[] getTokens(String s) throws IOException {
-    return langTool.getAnalyzedSentence(s).getTokensWithoutWhitespace();
+    return lt.getAnalyzedSentence(s).getTokensWithoutWhitespace();
   }
 
   @Test
@@ -149,6 +148,9 @@ public class SubjectVerbAgreementRuleTest {
   @Test
   public void testRuleWithCorrectSingularVerb() throws IOException {
     List<String> sentences = Arrays.asList(
+        "Abschluss und Höhepunkt ist der Festumzug.",
+        "Abschluss und Höhepunkt ist der Festumzug, der im Oktober stattfindet.",
+        "All diesen Stadtteilen ist die Nähe zum Hamburger Hafen und zu den Industrie- und Gewerbegebieten gemein.",
         "All diesen Bereichen ist gemeinsam, dass sie unterfinanziert sind.",
         "Nicht entmutigen lassen, nur weil Sie kein Genie sind.",
         "Denken Sie daran, dass Sie hier zu Gast sind und sich entsprechend verhalten sollten.",
@@ -156,6 +158,9 @@ public class SubjectVerbAgreementRuleTest {
         "Die Katze ist schön.",
         "Die eine Katze ist schön.",
         "Eine Katze ist schön.",
+        "Für Tunesiens Tourismusindustrie mit seinen Stränden, Oasen und antiken Kulturschätzen ist das Attentat ein verheerender Rückschlag.",
+        "Man darf jedoch auch nicht glauben, weil die Brustvergrößerungscremes ein Allheilmittel sind, jedoch sind Sie optimal um Ihr Selbstvertrauen zu erhöhen",
+        "Die Rechte der Kinder sind universell.",
         "Beiden Filmen war kein Erfolg beschieden.",
         "In einigen Fällen ist der vermeintliche Beschützer schwach.",
         "Was Wasser für die Fische ist.",
@@ -301,7 +306,19 @@ public class SubjectVerbAgreementRuleTest {
         "Knapp acht Monate ist die Niederlage nun her.",
         "Vier Monate ist die Niederlage nun her.",
         "Sie liebt Kunst und Kunst war auch kein Problem, denn er würde das Geld zurückkriegen.",
-        "Bei komplexen und andauernden Störungen ist der Stress-Stoffwechsel des Hundes entgleist."
+        "Bei komplexen und andauernden Störungen ist der Stress-Stoffwechsel des Hundes entgleist.",
+        "Eltern ist der bisherige Kita-Öffnungsplan zu unkonkret",
+        "Einer der bedeutendsten Māori-Autoren der Gegenwart ist Witi Ihimaera.",
+        "Start und Ziel ist Innsbruck",
+        "Heute ist sie lieb.",
+        "Anfänger wie auch Fortgeschrittene sind herzlich willkommen!",
+        "Die Aussichten für Japans Zukunft sind düster.",
+        "Das Angeln an Mallorcas Felsküsten ist überaus Erfolg versprechend.",
+        "Das bedeutendste Bauwerk und Wahrzeichen der Stadt ist die ehemalige Klosterkirche des Klosters Hofen.",
+        "Das saisonale Obst und Gemüse ist köstlich und oft deutlich günstiger als in der Stadt.",
+        "Gründer und Leiter des Zentrums ist der Rabbiner Marvin Hier, sein Stellvertreter ist Rabbi Abraham Cooper.",
+        "Dank unserer Kunden, Freunde, Partner und unserer Mitarbeiter ist Alpenwahnsinn zur Heimatadresse für schöne Trachtenmode geworden.",
+        "Laut seiner Recherche und mehreren Berichten der Welt ist die Zahl zu niedrig gegriffen."
     );
     for (String sentence : sentences) {
       assertGood(sentence);
@@ -330,6 +347,13 @@ public class SubjectVerbAgreementRuleTest {
   @Test
   public void testRuleWithCorrectPluralVerb() throws IOException {
     List<String> sentences = Arrays.asList(
+        "Wenn Sie kein Teil der Lösung sind, sind Sie ein Teil des Problems.",
+        "Er bemerkte, dass Experimente nicht gerade sein Ding sind",
+        "Die meisten der Spieler sind nicht vermögend",
+        "Wie viel Prozent der Menschen sind total bescheuert?",
+        "Glaubt wirklich jemand, dass gute Fotos keine Arbeit sind?",
+        "Zwei Schülern war aufgefallen, dass man im Fernsehen dazu nichts mehr sieht.",
+        "Auch die Reste eines sehr großen Insektenfressers sind unter den Fossilien.",
         "Eine Persönlichkeit sind Sie selbst.",
         "Die Katzen sind schön.",
         "Frau Meier und Herr Müller sind alt.",
@@ -414,8 +438,13 @@ public class SubjectVerbAgreementRuleTest {
         "Details, Dialoge, wie auch die Typologie der Charaktere sind frei erfunden.",
         "Die internen Ermittler und auch die Staatsanwaltschaft sind nun am Zug.",
         "Sie sind so erfolgreich, weil sie eine Einheit sind.",
+        "Wie viele Erwerbstätige sind im Gesundheitswesen beschäftigt?",
         "Auch Polizisten zu Fuß sind unterwegs.",
-        "Julia sagte, dass Vater und Mutter zu Hause sind."
+        "Julia sagte, dass Vater und Mutter zu Hause sind.",
+        "Damit müssen sie zurechtkommen, wenn Kinder zu Hause sind.",
+        "Auch Studien zu Zink sind vielversprechend.",
+        "Die Züge vor Ort sind nicht klimatisiert.",
+        "Ich verspreche dir, dass wir ein tolles Team sind."
     );
     for (String sentence : sentences) {
       assertGood(sentence);
@@ -425,8 +454,10 @@ public class SubjectVerbAgreementRuleTest {
   @Test
   public void testRuleWithCorrectSingularAndPluralVerb() throws IOException {
     // Manchmal sind beide Varianten korrekt:
-    // siehe http://www.canoonet.eu/services/OnlineGrammar/Wort/Verb/Numerus-Person/ProblemNum.html
+    // siehe https://dict.leo.org/grammatik/deutsch/Wort/Verb/Kategorien/Numerus-Person/ProblemNum.html
     List<String> sentences = Arrays.asList(
+        "Solchen Personen ist der Zugriff auf diese Daten verboten.",
+        "Personen ist der Zugriff auf diese Daten verboten.",
         "So mancher Mitarbeiter und manche Führungskraft ist im Urlaub.",
         "So mancher Mitarbeiter und manche Führungskraft sind im Urlaub.",
         "Jeder Schüler und jede Schülerin ist mal schlecht gelaunt.",
@@ -440,7 +471,8 @@ public class SubjectVerbAgreementRuleTest {
         "1,5 Pfund ist nicht genug.",  // ugs.
         "1,5 Pfund sind nicht genug.",
         "Hier ist sowohl Anhalten wie Parken verboten.",
-        "Hier sind sowohl Anhalten wie Parken verboten."
+        "Hier sind sowohl Anhalten wie Parken verboten.",
+        "Der Eifer der Männer und Frauen ist enorm."
     );
     for (String sentence : sentences) {
       assertGood(sentence);
@@ -470,7 +502,7 @@ public class SubjectVerbAgreementRuleTest {
   }
 
   private RuleMatch[] getMatches(String input) throws IOException {
-    return rule.match(langTool.getAnalyzedSentence(input));
+    return rule.match(lt.getAnalyzedSentence(input));
   }
 
 }

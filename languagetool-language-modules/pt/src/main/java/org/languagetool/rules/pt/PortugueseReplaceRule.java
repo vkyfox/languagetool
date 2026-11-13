@@ -18,13 +18,12 @@
  */
 package org.languagetool.rules.pt;
 
+import org.languagetool.Language;
 import org.languagetool.rules.AbstractSimpleReplaceRule;
-import org.languagetool.rules.Example;
 import org.languagetool.rules.Categories;
 import org.languagetool.rules.ITSIssueType;
 import org.languagetool.tools.Tools;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -46,20 +45,21 @@ public class PortugueseReplaceRule extends AbstractSimpleReplaceRule {
   private static final Locale PT_LOCALE = new Locale("pt");
 
   @Override
-  protected Map<String, List<String>> getWrongWords() {
+  public Map<String, List<String>> getWrongWords() {
     return wrongWords;
   }
 
-  public PortugueseReplaceRule(ResourceBundle messages) throws IOException {
-    super(messages);
+  public PortugueseReplaceRule(ResourceBundle messages, Language language) {
+    super(messages, language);
     super.setCategory(Categories.STYLE.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.LocaleViolation);
-    addExamplePair(Example.wrong("<marker>device</marker>"),
-                   Example.fixed("<marker>dispositivo</marker>"));
+    useSubRuleSpecificIds();
+    /*addExamplePair(Example.wrong("<marker>device</marker>"),
+                   Example.fixed("<marker>dispositivo</marker>"));*/
   }
 
   @Override
-  public final String getId() {
+  public String getId() {
     return PORTUGUESE_SIMPLE_REPLACE_RULE;
   }
 
@@ -75,7 +75,7 @@ public class PortugueseReplaceRule extends AbstractSimpleReplaceRule {
   
   @Override
   public String getMessage(String tokenStr, List<String> replacements) {
-    return tokenStr + " é um estrangeirismo. Em Português é mais comum usar: "
+    return "'" + tokenStr + "' é um estrangeirismo. Em Português é mais comum usar: "
         + String.join(", ", replacements) + ".";
   }
 

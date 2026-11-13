@@ -39,15 +39,67 @@ public class CatalanDisambiguationRuleTest {
 
   @Before
   public void setUp() {
-    tagger = new CatalanTagger(new Catalan());
-    tokenizer = new CatalanWordTokenizer();
-    sentenceTokenizer = new SRXSentenceTokenizer(new Catalan());
+    tagger = CatalanTagger.INSTANCE_CAT;
+    tokenizer = CatalanWordTokenizer.INSTANCE;
+    sentenceTokenizer = new SRXSentenceTokenizer(Catalan.getInstance());
     //disambiguator = new MultiWordChunker("/ca/multiwords.txt", true);
-    disambiguator = new CatalanHybridDisambiguator();
+    disambiguator = new CatalanHybridDisambiguator(Catalan.getInstance());
   }
 
   @Test
   public void testChunker() throws IOException {
+
+    TestTools
+      .myAssert(
+        "Santa María del Páramo",
+        "/[null]SENT_START Santa/[Santa María del Páramo]NPCNM00|Santa/[sant]AQ0FS0|Santa/[sant]NCFS000  /[null]null María/[Santa María del Páramo]NPCNM00  /[null]null de/[Santa María del Páramo]NPCNM00|de/[de]SPS00 l/[Santa María del Páramo]NPCNM00|l/[el]DA0MS0  /[null]null Páramo/[Santa María del Páramo]NPCNM00",
+        tokenizer, sentenceTokenizer, tagger, disambiguator);
+
+    TestTools
+      .myAssert(
+        "Astragalus germaini",
+        "/[null]SENT_START Astragalus/[Astragalus germaini]NPCNM00  /[null]null germaini/[Astragalus germaini]NPCNM00",
+        tokenizer, sentenceTokenizer, tagger, disambiguator);
+
+    TestTools
+      .myAssert(
+        "Ammoxenus amphalodes",
+        "/[null]SENT_START Ammoxenus/[Ammoxenus amphalodes]NPCNM00|Ammoxenus/[Ammoxenus]NPCN000  /[null]null amphalodes/[Ammoxenus amphalodes]NPCNM00",
+        tokenizer, sentenceTokenizer, tagger, disambiguator);
+
+    TestTools
+      .myAssert(
+        "COVID-19",
+        "/[null]SENT_START COVID-19/[COVID-19]NCFS000|COVID-19/[covid-19]NCFS000",
+        tokenizer, sentenceTokenizer, tagger, disambiguator);
+
+    TestTools
+      .myAssert(
+        "New York University",
+        "/[null]SENT_START New/[New York University]NPCN000  /[null]null York/[New York University]NPCN000|York/[York]_possible_nompropi"
+          + "  /[null]null University/[New York University]NPCN000|University/[University]_possible_nompropi",
+        tokenizer, sentenceTokenizer, tagger, disambiguator);
+
+
+    TestTools
+      .myAssert(
+        "Jean-Luc Mélanchon",
+        "/[null]SENT_START Jean-Luc/[Jean-Luc Mélanchon]NPMSSP0  /[null]null Mélanchon/[Jean-Luc Mélanchon]NPMSSP0|Mélanchon/[Mélanchon]_possible_nompropi",
+        tokenizer, sentenceTokenizer, tagger, disambiguator);
+
+    TestTools
+      .myAssert(
+        "Yuval Noha Hariri",
+        "/[null]SENT_START Yuval/[Yuval]NPCN000  /[null]null Noha/[null]null  /[null]null Hariri/[null]null",
+        tokenizer, sentenceTokenizer, tagger, disambiguator);
+
+    TestTools
+      .myAssert(
+        "Yuval Noah Harari",
+        "/[null]SENT_START Yuval/[Yuval Noah Harari]NPCN000  /[null]null Noah/[Noah]_possible_nompropi|Noah/[Yuval Noah Harari]NPCN000  /[null]null Harari/[Harari]_possible_nompropi|Harari/[Yuval Noah Harari]NPCN000",
+        tokenizer, sentenceTokenizer, tagger, disambiguator);
+
+
     TestTools
     .myAssert(
         "Abans-d'ahir va ser",
@@ -56,7 +108,7 @@ public class CatalanDisambiguationRuleTest {
     TestTools
     .myAssert(
         "Las Palmas de Gran Canaria",
-        "/[null]SENT_START Las/[Las Palmas de Gran Canaria]NPCNG00  /[null]null Palmas/[Las Palmas de Gran Canaria]NPCNG00|Palmas/[Palmas]_possible_nompropi  /[null]null de/[Las Palmas de Gran Canaria]NPCNG00  /[null]null Gran/[Gran]_possible_nompropi|Gran/[Las Palmas de Gran Canaria]NPCNG00  /[null]null Canaria/[Canaria]_possible_nompropi|Canaria/[Las Palmas de Gran Canaria]NPCNG00",
+        "/[null]SENT_START Las/[Las Palmas de Gran Canaria]NPCNG00  /[null]null Palmas/[Las Palmas de Gran Canaria]NPCNG00|Palmas/[Palmas]_possible_nompropi  /[null]null de/[Las Palmas de Gran Canaria]NPCNG00  /[null]null Gran/[Las Palmas de Gran Canaria]NPCNG00  /[null]null Canaria/[Canaria]_possible_nompropi|Canaria/[Las Palmas de Gran Canaria]NPCNG00",
         tokenizer, sentenceTokenizer, tagger, disambiguator);
     TestTools
     .myAssert(
@@ -116,22 +168,22 @@ public class CatalanDisambiguationRuleTest {
     TestTools
         .myAssert(
             "A costa d'ell",
-            "/[null]SENT_START A/[a costa d']LOC_PREP  /[null]null costa/[a costa d']LOC_PREP  /[null]null d'/[a costa d']LOC_PREP ell/[ell]PP3MS000",
+            "/[null]SENT_START A/[a costa d']LOC_PREP  /[null]null costa/[a costa d']LOC_PREP  /[null]null d'/[a costa d']LOC_PREP ell/[ell]PP3MSN00",
             tokenizer, sentenceTokenizer, tagger, disambiguator);
     TestTools
         .myAssert(
             "A costa d’ell",
-            "/[null]SENT_START A/[a costa d']LOC_PREP  /[null]null costa/[a costa d']LOC_PREP  /[null]null d'/[a costa d']LOC_PREP ell/[ell]PP3MS000",
+            "/[null]SENT_START A/[a costa d']LOC_PREP  /[null]null costa/[a costa d']LOC_PREP  /[null]null d'/[a costa d']LOC_PREP ell/[ell]PP3MSN00",
             tokenizer, sentenceTokenizer, tagger, disambiguator);
     TestTools
     .myAssert(
         "Els fons voltor",
-        "/[null]SENT_START Els/[Els]_GN_MP|Els/[Els]_GN_MP|Els/[el]DA0MP0  /[null]null fons/[fons]NCMP000|fons/[fons]_GN_MP|fons/[fons]_GN_MP|fons/[fons]_GN_MP  /[null]null voltor/[fons voltor]AQ0MN0|voltor/[voltor]_GN_MP|voltor/[voltor]_GN_MP|voltor/[voltor]ignore_concordance",
+        "/[null]SENT_START Els/[Els]_GN_MP|Els/[el]DA0MP0  /[null]null fons/[fons]NCMP000|fons/[fons]_GN_MP  /[null]null voltor/[fons voltor]AQ0MN0|voltor/[voltor]_GN_MP|voltor/[voltor]ignore_concordance",
         tokenizer, sentenceTokenizer, tagger, disambiguator);    
     TestTools
     .myAssert(
         "La crème de la crème",
-        "/[null]SENT_START La/[La]_GN_FS|La/[La]_GN_FS|La/[el]DA0FS0  /[null]null crème/[crème de la crème]NCFS000|crème/[crème]_GN_FS|crème/[crème]_GN_FS|crème/[crème]_GN_FS  /[null]null de/[crème de la crème]AQ0FS0|de/[de]_GN_FS|de/[de]_GN_FS|de/[de]ignore_concordance  /[null]null la/[crème de la crème]AQ0FS0|la/[la]_GN_FS|la/[la]ignore_concordance  /[null]null crème/[crème de la crème]AQ0FS0|crème/[crème]_GN_FS",
+        "/[null]SENT_START La/[La]_GN_FS|La/[el]DA0FS0  /[null]null crème/[crème de la crème]NCFS000|crème/[crème]_GN_FS  /[null]null de/[crème de la crème]AQ0FS0|de/[de]_GN_FS|de/[de]ignore_concordance  /[null]null la/[crème de la crème]AQ0FS0|la/[la]_GN_FS|la/[la]ignore_concordance  /[null]null crème/[crème de la crème]AQ0FS0|crème/[crème]_GN_FS",
         tokenizer, sentenceTokenizer, tagger, disambiguator);
 
   }

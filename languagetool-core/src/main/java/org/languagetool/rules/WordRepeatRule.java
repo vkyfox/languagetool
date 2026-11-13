@@ -26,6 +26,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.languagetool.AnalyzedSentence;
 import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.Language;
+import org.languagetool.tools.StringTools;
 
 /**
  * Check if a word is repeated, e.g. "the the".
@@ -49,6 +50,25 @@ public class WordRepeatRule extends Rule {
    * @return this implementation always returns false
    */
   public boolean ignore(AnalyzedTokenReadings[] tokens, int position) {
+    if (wordRepetitionOf("Phi", tokens, position)) {
+      return true;   // "Phi Phi Islands"
+    } else if (wordRepetitionOf("Li", tokens, position)) {
+      return true;   // "Li Li", Chinese name
+    } else if (wordRepetitionOf("Xiao", tokens, position)) {
+      return true;   // "Xiao Xiao", name
+    } else if (wordRepetitionOf("Duran", tokens, position)) {
+      return true;   // "Duran Duran"
+    } else if (wordRepetitionOf("Wagga", tokens, position)) {
+      return true;   // "Wagga Wagga"
+    } else if (wordRepetitionOf("Abdullah", tokens, position)) {
+      return true;   // https://en.wikipedia.org/wiki/Abdullah_Abdullah
+    } else if (wordRepetitionOf("Nwe", tokens, position)) {
+      return true;   // e.g. https://en.wikipedia.org/wiki/Nwe_Nwe_Aung
+    } else if (wordRepetitionOf("Pago", tokens, position)) {
+      return true;   // "Pago Pago"
+    } else if (wordRepetitionOf("Cao", tokens, position)) {
+      return true;   // https://en.wikipedia.org/wiki/Cao_Cao
+    }
     return false;
   }
 
@@ -97,18 +117,24 @@ public class WordRepeatRule extends Rule {
     return ruleMatch;
   }
 
+  protected boolean wordRepetitionOf(String word, AnalyzedTokenReadings[] tokens, int position) {
+    return position > 0 && tokens[position - 1].getToken().equals(word) && tokens[position].getToken().equals(word);
+  }
+
   // avoid "..." etc. to be matched:
   private boolean isWord(String token) {
-    boolean isWord = true;
+    if (StringTools.isEmoji(token)) {
+      return false;
+    }
     if (StringUtils.isNumericSpace(token)) {
-      isWord = false;
+      return false;
     } else if (token.length() == 1) {
       char c = token.charAt(0);
       if (!Character.isLetter(c)) {
-        isWord = false;
+        return false;
       }
     }
-    return isWord;
+    return true;
   }
 
 }

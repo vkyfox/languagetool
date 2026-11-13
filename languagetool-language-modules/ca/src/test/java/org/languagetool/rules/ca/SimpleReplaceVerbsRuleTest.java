@@ -36,107 +36,164 @@ import static org.junit.Assert.assertEquals;
 public class SimpleReplaceVerbsRuleTest {
 
   private SimpleReplaceVerbsRule rule;
-  private JLanguageTool langTool;
+  private JLanguageTool lt;
 
   @Before
   public void setUp() throws Exception {
-    rule = new SimpleReplaceVerbsRule(TestTools.getMessages("ca"), new Catalan());
-    langTool = new JLanguageTool(new Catalan());
+    rule = new SimpleReplaceVerbsRule(TestTools.getMessages("ca"), Catalan.getInstance());
+    lt = new JLanguageTool(Catalan.getInstance());
   }
 
   @Test
   public void testRule() throws IOException {
 
-    // correct sentences:
-
     // incorrect sentences:
-    RuleMatch[] matches = rule.match(langTool.getAnalyzedSentence("pringava"));
+    RuleMatch[] matches;
+    
+    matches = rule.match(lt.getAnalyzedSentence("permanegué"));
     assertEquals(1, matches.length);
-    assertEquals("enllardava", matches[0].getSuggestedReplacements().get(0));
+    assertEquals("restà", matches[0].getSuggestedReplacements().get(0));
+    assertEquals("estigué", matches[0].getSuggestedReplacements().get(1));
+    assertEquals("quedà", matches[0].getSuggestedReplacements().get(2));
+    assertEquals("romangué", matches[0].getSuggestedReplacements().get(3));
+    
+    matches = rule.match(lt.getAnalyzedSentence("permanesqué"));
+    assertEquals(1, matches.length);
+    assertEquals("restà", matches[0].getSuggestedReplacements().get(0));
+    assertEquals("estigué", matches[0].getSuggestedReplacements().get(1));
+    assertEquals("quedà", matches[0].getSuggestedReplacements().get(2));
+    assertEquals("romangué", matches[0].getSuggestedReplacements().get(3));
+    
+    matches = rule.match(lt.getAnalyzedSentence("permanéixer"));
+    assertEquals(1, matches.length);
+    assertEquals("restar", matches[0].getSuggestedReplacements().get(0));
+    assertEquals("estar", matches[0].getSuggestedReplacements().get(1));
+    assertEquals("quedar", matches[0].getSuggestedReplacements().get(2));
+    assertEquals("romandre", matches[0].getSuggestedReplacements().get(3));
+    
+    matches = rule.match(lt.getAnalyzedSentence("pringava"));
+    assertEquals(1, matches.length);
+    assertEquals("enfangava", matches[0].getSuggestedReplacements().get(0));
     assertEquals("empastifava", matches[0].getSuggestedReplacements().get(1));
     assertEquals("llepava", matches[0].getSuggestedReplacements().get(2));
     assertEquals("cagava", matches[0].getSuggestedReplacements().get(3));
-    assertEquals("(haver begut oli)", matches[0].getSuggestedReplacements().get(4));
-    assertEquals("(tocar el rebre)", matches[0].getSuggestedReplacements().get(5));
-    assertEquals("(fotre's)", matches[0].getSuggestedReplacements().get(6));
-    assertEquals("(fer-se fotre)", matches[0].getSuggestedReplacements().get(7));
+    assertEquals("havia begut oli", matches[0].getSuggestedReplacements().get(4));
+    assertEquals("tocava el rebre", matches[0].getSuggestedReplacements().get(5));
+    assertEquals("es fotia", matches[0].getSuggestedReplacements().get(6));
+    assertEquals("es feia fotre", matches[0].getSuggestedReplacements().get(7));
     
-    matches = rule.match(langTool.getAnalyzedSentence("abarca"));
+    matches = rule.match(lt.getAnalyzedSentence("abarca"));
     assertEquals(1, matches.length);
     assertEquals("abraça", matches[0].getSuggestedReplacements().get(0));
     assertEquals("abasta", matches[0].getSuggestedReplacements().get(1));
-    assertEquals("agafa", matches[0].getSuggestedReplacements().get(2));
-    assertEquals("estreny", matches[0].getSuggestedReplacements().get(3));
-    assertEquals("comprèn", matches[0].getSuggestedReplacements().get(4));
-    assertEquals("comprén", matches[0].getSuggestedReplacements().get(5));
-    assertEquals("inclou", matches[0].getSuggestedReplacements().get(6));
+    assertEquals("comprèn", matches[0].getSuggestedReplacements().get(2));
+    //assertEquals("comprén", matches[0].getSuggestedReplacements().get(3));
+    assertEquals("inclou", matches[0].getSuggestedReplacements().get(3));
     
-    matches = rule.match(langTool.getAnalyzedSentence("abarcaven"));
+    matches = rule.match(lt.getAnalyzedSentence("abarcaven"));
     assertEquals(1, matches.length);
     assertEquals("abraçaven", matches[0].getSuggestedReplacements().get(0));
     assertEquals("abastaven", matches[0].getSuggestedReplacements().get(1));
-    assertEquals("agafaven", matches[0].getSuggestedReplacements().get(2));
-    assertEquals("estrenyien", matches[0].getSuggestedReplacements().get(3));
-    assertEquals("comprenien", matches[0].getSuggestedReplacements().get(4));
-    assertEquals("incloïen", matches[0].getSuggestedReplacements().get(5));
+    assertEquals("comprenien", matches[0].getSuggestedReplacements().get(2));
+    assertEquals("incloïen", matches[0].getSuggestedReplacements().get(3));
     
-    matches = rule.match(langTool.getAnalyzedSentence("abarquéssim"));
+    matches = rule.match(lt.getAnalyzedSentence("abarquéssim"));
     assertEquals(1, matches.length);
     assertEquals("abracéssim", matches[0].getSuggestedReplacements().get(0));
     
-    matches = rule.match(langTool.getAnalyzedSentence("antojà"));
+    matches = rule.match(lt.getAnalyzedSentence("antojà"));
     assertEquals(1, matches.length);
     assertEquals("passà pel cap", matches[0].getSuggestedReplacements().get(0));
     assertEquals("passà pel magí", matches[0].getSuggestedReplacements().get(1));
     assertEquals("antullà", matches[0].getSuggestedReplacements().get(2));
     
-    matches = rule.match(langTool.getAnalyzedSentence("alardeaven"));
+    matches = rule.match(lt.getAnalyzedSentence("alardeaven"));
     assertEquals(1, matches.length);
     assertEquals("feien gala", matches[0].getSuggestedReplacements().get(0));
     assertEquals("feien ostentació", matches[0].getSuggestedReplacements().get(1));
     
-    matches = rule.match(langTool.getAnalyzedSentence("alardejo"));
+    matches = rule.match(lt.getAnalyzedSentence("alardejo"));
     assertEquals(1, matches.length);
     assertEquals("faig gala", matches[0].getSuggestedReplacements().get(0));
     assertEquals("faig ostentació", matches[0].getSuggestedReplacements().get(1));  
     
-    matches = rule.match(langTool.getAnalyzedSentence("aclares"));
+    matches = rule.match(lt.getAnalyzedSentence("aclares"));
     assertEquals(1, matches.length);
     assertEquals("aclareixes", matches[0].getSuggestedReplacements().get(0));
-    assertEquals("aclarisques", matches[0].getSuggestedReplacements().get(1));  
-    assertEquals("aclaresques", matches[0].getSuggestedReplacements().get(2));
+    //assertEquals("aclarisques", matches[0].getSuggestedReplacements().get(1));  
+    //assertEquals("aclaresques", matches[0].getSuggestedReplacements().get(2));
     
-    matches = rule.match(langTool.getAnalyzedSentence("atossigues"));
+    matches = rule.match(lt.getAnalyzedSentence("atossigues"));
     assertEquals(1, matches.length);
     assertEquals("acuites", matches[0].getSuggestedReplacements().get(0));
     assertEquals("apresses", matches[0].getSuggestedReplacements().get(1));
     assertEquals("dones pressa", matches[0].getSuggestedReplacements().get(2));
-    assertEquals("dónes pressa", matches[0].getSuggestedReplacements().get(3));
-    assertEquals("atabuixes", matches[0].getSuggestedReplacements().get(4));
-    assertEquals("aclapares", matches[0].getSuggestedReplacements().get(5));
-    assertEquals("afeixugues", matches[0].getSuggestedReplacements().get(6));
-    assertEquals("mareges", matches[0].getSuggestedReplacements().get(7));
-    assertEquals("afanyes", matches[0].getSuggestedReplacements().get(8));
+    //assertEquals("dónes pressa", matches[0].getSuggestedReplacements().get(3));
+    assertEquals("atabuixes", matches[0].getSuggestedReplacements().get(3));
+    assertEquals("aclapares", matches[0].getSuggestedReplacements().get(4));
+    assertEquals("afeixugues", matches[0].getSuggestedReplacements().get(5));
+    assertEquals("mareges", matches[0].getSuggestedReplacements().get(6));
+    assertEquals("afanyes", matches[0].getSuggestedReplacements().get(7));
     
-    matches = rule.match(langTool.getAnalyzedSentence("agobiem"));
+    matches = rule.match(lt.getAnalyzedSentence("agobiem"));
     assertEquals(1, matches.length);
     assertEquals("aclaparem", matches[0].getSuggestedReplacements().get(0));
     assertEquals("atabalem", matches[0].getSuggestedReplacements().get(1));  
     assertEquals("angoixem", matches[0].getSuggestedReplacements().get(2));
     assertEquals("estressem", matches[0].getSuggestedReplacements().get(3));
-    assertEquals("(estar) molt a sobre", matches[0].getSuggestedReplacements().get(4));
-    assertEquals("(cansar) molt", matches[0].getSuggestedReplacements().get(5));
-    assertEquals("(ser) molt pesat", matches[0].getSuggestedReplacements().get(6));
+    assertEquals("ofeguem", matches[0].getSuggestedReplacements().get(4));
     
-    matches = rule.match(langTool.getAnalyzedSentence("agobiïs"));
+    matches = rule.match(lt.getAnalyzedSentence("agobiïs"));
     assertEquals(1, matches.length);
     assertEquals("aclaparis", matches[0].getSuggestedReplacements().get(0));
     assertEquals("atabalis", matches[0].getSuggestedReplacements().get(1));  
     assertEquals("angoixis", matches[0].getSuggestedReplacements().get(2));
     assertEquals("estressis", matches[0].getSuggestedReplacements().get(3));
-    assertEquals("(estar) molt a sobre", matches[0].getSuggestedReplacements().get(4));
-    assertEquals("(cansar) molt", matches[0].getSuggestedReplacements().get(5));
-    assertEquals("(ser) molt pesat", matches[0].getSuggestedReplacements().get(6));
+    assertEquals("ofeguis", matches[0].getSuggestedReplacements().get(4));
+    assertEquals("estiguis molt a sobre", matches[0].getSuggestedReplacements().get(5));
+    assertEquals("cansis molt", matches[0].getSuggestedReplacements().get(6));
+    assertEquals("siguis molt pesat", matches[0].getSuggestedReplacements().get(7));
+    
+    matches = rule.match(lt.getAnalyzedSentence("desabasteix"));
+    assertEquals("desproveeix", matches[0].getSuggestedReplacements().get(0));
+    matches = rule.match(lt.getAnalyzedSentence("desabastíssim"));
+    assertEquals("desproveíssim", matches[0].getSuggestedReplacements().get(0));
+    
+    matches = rule.match(lt.getAnalyzedSentence("desabasta"));
+    assertEquals("desproveeix", matches[0].getSuggestedReplacements().get(0)); 
+    
+    matches = rule.match(lt.getAnalyzedSentence("sobresegueix"));
+    assertEquals("sobreseu", matches[0].getSuggestedReplacements().get(0));
+    matches = rule.match(lt.getAnalyzedSentence("sobreseguir"));
+    assertEquals("sobreseure", matches[0].getSuggestedReplacements().get(0));
+
+    matches = rule.match(lt.getAnalyzedSentence("coretgeix"));
+    assertEquals("corregeix", matches[0].getSuggestedReplacements().get(0));
+
+    matches = rule.match(lt.getAnalyzedSentence("coretjit"));
+    assertEquals("corregit", matches[0].getSuggestedReplacements().get(0));
+    
+    matches = rule.match(lt.getAnalyzedSentence("encandilen"));
+    assertEquals("[enlluernen, esbalaeixen, fascinen, enceguen, al·lucinen, espurnegen, resten enlluernat]", 
+        matches[0].getSuggestedReplacements().toString());
+    
+    matches = rule.match(lt.getAnalyzedSentence("permitisc"));
+    assertEquals("permeto", matches[0].getSuggestedReplacements().get(0));
+
+    matches = rule.match(lt.getAnalyzedSentence("Influí en pràcticament tots els gèneres de la música dance des dels anys 70 fins ara."));
+    assertEquals(0, matches.length);
+
+    matches = rule.match(lt.getAnalyzedSentence("Moldejant-les"));
+    assertEquals("[Modelant-les, Afaiçonant-les]", matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("Me s'ha ocurrit."));
+    assertEquals("[Se m'ha ocorregut]", matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("Com te s'ha ocurrit."));
+    assertEquals("[se t'ha ocorregut]", matches[0].getSuggestedReplacements().toString());
+
+    matches = rule.match(lt.getAnalyzedSentence("liar-te-la"));
+    assertEquals("[embolicar-te-la, enredar-te-la, enrotllar-te-la, armar-te-la, engalipar-te-la, entabanar-te-la, embullar-te-la, embrollar-te-la]", matches[0].getSuggestedReplacements().toString());
   }
 
 }

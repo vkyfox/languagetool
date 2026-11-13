@@ -24,6 +24,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.regex.Pattern;
 
 import org.languagetool.AnalyzedSentence;
 import org.languagetool.AnalyzedToken;
@@ -31,10 +32,6 @@ import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.Language;
 import org.languagetool.LinguServices;
 import org.languagetool.UserConfig;
-import org.languagetool.rules.Categories;
-import org.languagetool.rules.ITSIssueType;
-import org.languagetool.rules.RuleMatch;
-import org.languagetool.rules.TextLevelRule;
 
 /**
  * An abstract rule checks the appearance of same words in a sentence or in two consecutive sentences.
@@ -45,24 +42,39 @@ import org.languagetool.rules.TextLevelRule;
  */
 public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
   
+  private static final Pattern OPENING_QUOTES = Pattern.compile("[\"“„»«]");
+  private static final Pattern ENDING_QUOTES = Pattern.compile("[\"“”»«]");
+  private static final Pattern SINGLE_QUOTES = Pattern.compile("[\'‚‘’'›‹]");
   private static final int MAX_TOKEN_TO_CHECK = 5;
+  private static final int MAX_DISTANCE_OF_SENTENCES = 1;
+  private static final boolean EXCLUDE_DIRECT_SPEECH = true;
   
-  private final LinguServices linguServices;
-  private final Language lang;
+  protected final LinguServices linguServices;
+  protected final Language lang;
   
-  protected int maxDistanceOfSentences = 1;
+  protected int maxDistanceOfSentences = MAX_DISTANCE_OF_SENTENCES;
+  protected boolean excludeDirectSpeech = EXCLUDE_DIRECT_SPEECH;
 
   public AbstractStyleRepeatedWordRule(ResourceBundle messages, Language lang, UserConfig userConfig) {
     super(messages);
     super.setCategory(Categories.STYLE.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Style);
     setDefaultOff();
+    setOfficeDefaultOn();  // Default for LO/OO is always On
     this.lang = lang;
     if (userConfig != null) {
       linguServices = userConfig.getLinguServices();
-      int confDistance = userConfig.getConfigValueByID(getId());
-      if (confDistance >= 0) {
-        this.maxDistanceOfSentences = confDistance;
+      if (linguServices != null) {
+        linguServices.setThesaurusRelevantRule(this);
+      }
+      Object[] cf = userConfig.getConfigValueByID(getId());
+      if (cf != null) {
+        if (cf != null && cf.length > 0 && cf[0] != null && cf[0] instanceof Integer) {
+          maxDistanceOfSentences = (int) cf[0];
+        }
+        if (cf != null && cf.length > 1 && cf[1] != null && cf[1] instanceof Boolean) {
+          excludeDirectSpeech = (boolean) cf[1];
+        }
       }
     } else {
       linguServices = null;
@@ -99,44 +111,15 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
    */
   protected abstract String messageSentenceAfter();
   
-  /*
-   * get maximal Distance of words in number of sentences
-   * @since 4.1
+  /**
+   *  give the user the possibility to configure the function
    */
   @Override
-  public int getDefaultValue() {
-    return maxDistanceOfSentences;
-  }
-  
-  /**
-   * @since 4.2
-   */
-  @Override
-  public boolean hasConfigurableValue() {
-    return true;
-  }
-
-  /**
-   * @since 4.2
-   */
-  @Override
-  public int getMinConfigurableValue() {
-    return 0;
-  }
-
-  /**
-   * @since 4.2
-   */
-  @Override
-  public int getMaxConfigurableValue() {
-    return 5;
-  }
-
-  /**
-   * @since 4.2
-   */
-  public String getConfigureText() {
-    return messages.getString("guiStyleRepeatedWordText");
+  public RuleOption[] getRuleOptions() {
+    RuleOption[] ruleOptions = { new RuleOption(MAX_DISTANCE_OF_SENTENCES, messages.getString("guiStyleRepeatedWordText"), 0, 5),
+                                 new RuleOption(EXCLUDE_DIRECT_SPEECH, messages.getString("guiStyleExcludeDirectSpeechText"), 0, 5)
+                               };
+    return ruleOptions;
   }
 
   /*
@@ -144,7 +127,7 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
    * (German example: return (token.matchesPosTagRegex("(SUB|EIG|VER|ADJ):.*") 
    *              && !token.matchesPosTagRegex("ART:.*|ADV:.*|VER:(AUX|MOD):.*"));
    */
-  protected abstract boolean isTokenToCheck(AnalyzedTokenReadings token);
+  protected abstract boolean isTokenToCheck(AnalyzedTokenReadings[] tokens, int n);
     
   /*
    * Is checked word part of pairs like "arm in arm", "side by side", etc. (exclude such pairs)
@@ -163,8 +146,36 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
     return false;
   }
   
-  private boolean isTokenInSentence(AnalyzedTokenReadings testToken, AnalyzedTokenReadings[] tokens) {
-    return isTokenInSentence(testToken, tokens, -1);
+  /*
+   * question - response - pairs are excluded
+   */
+  private static boolean isQuestionResponse(int nAct, int nTest, List<AnalyzedTokenReadings[]> tokenList) {
+    int dist = nAct - nTest;
+    if (dist != 1 && dist != -1) {
+      return false;
+    }
+    AnalyzedTokenReadings[] actTokens = tokenList.get(nAct);
+    AnalyzedTokenReadings[] testTokens = tokenList.get(nTest);
+    if (actTokens.length < 2 || testTokens.length < 2) {
+      return false;
+    }
+    String actToken;
+    if (ENDING_QUOTES.matcher(actTokens[actTokens.length - 1].getToken()).matches()) {
+      actToken = actTokens[actTokens.length - 2].getToken();
+    } else {
+      actToken = actTokens[actTokens.length - 1].getToken();
+    }
+    String testToken;
+    if (ENDING_QUOTES.matcher(testTokens[testTokens.length - 1].getToken()).matches()) {
+      testToken = testTokens[testTokens.length - 2].getToken();
+    } else {
+      testToken = testTokens[testTokens.length - 1].getToken();
+    }
+    return ((actToken.equals("?") && !testToken.equals("?")) || (testToken.equals("?") && !actToken.equals("?")));
+  }
+  
+  private boolean isTokenInSentence(AnalyzedTokenReadings testToken, AnalyzedTokenReadings[] tokens, boolean isDirectSpeech) {
+    return isTokenInSentence(testToken, tokens, -1, isDirectSpeech);
   }
   
   /* 
@@ -176,49 +187,25 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
   }
 
   /* 
-   *  set an URL to an synonym dictionary for a token
+   *  true if is an exception of token pair
+   *  note: method is called after two tokens are tested to share the same lemma
+   */
+  protected boolean isExceptionPair(AnalyzedTokenReadings token1, AnalyzedTokenReadings token2) {
+    return false;
+  }
+
+  /* 
+   * Set a URL to a synonym dictionary for a token
    */
   protected URL setURL(AnalyzedTokenReadings token ) throws MalformedURLException {
     return null;
   }
   
-  /**
-   * get synonyms for a repeated word
-   */
-  public List<String> getSynonyms(AnalyzedTokenReadings token) {
-    List<String> synonyms = new ArrayList<String>();
-    if(linguServices == null || token == null) {
-      return synonyms;
-    }
-    List<AnalyzedToken> readings = token.getReadings();
-    for (AnalyzedToken reading : readings) {
-      String lemma = reading.getLemma();
-      if (lemma != null) {
-        List<String> rawSynonyms = linguServices.getSynonyms(lemma, lang);
-        for (String synonym : rawSynonyms) {
-          synonym = synonym.replaceAll("\\(.*\\)", "").trim();
-          if (!synonym.isEmpty() && !synonyms.contains(synonym)) {
-            synonyms.add(synonym);
-          }
-        }
-      }
-    }
-    if(synonyms.isEmpty()) {
-      List<String> rawSynonyms = linguServices.getSynonyms(token.getToken(), lang);
-      for (String synonym : rawSynonyms) {
-        synonym = synonym.replaceAll("\\(.*\\)", "").trim();
-        if (!synonym.isEmpty() && !synonyms.contains(synonym)) {
-          synonyms.add(synonym);
-        }
-      }
-    }
-    return synonyms;
-  }
-
   /* 
    *  true if token is found in sentence
    */
-  private boolean isTokenInSentence(AnalyzedTokenReadings testToken, AnalyzedTokenReadings[] tokens, int notCheck) {
+  private boolean isTokenInSentence(AnalyzedTokenReadings testToken, AnalyzedTokenReadings[] tokens, 
+      int notCheck, boolean isDirectSpeech) {
     if (testToken == null || tokens == null) {
       return false;
     }
@@ -230,8 +217,14 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
       }
     }
     for (int i = 0; i < tokens.length; i++) {
-      if (i != notCheck && isTokenToCheck(tokens[i])) {
-        if ((!lemmas.isEmpty() && tokens[i].hasAnyLemma(lemmas.toArray(new String[0]))) 
+      if (excludeDirectSpeech && !isDirectSpeech && OPENING_QUOTES.matcher(tokens[i].getToken()).matches() 
+          && i < tokens.length - 1 && !tokens[i + 1].isWhitespaceBefore()) {
+        isDirectSpeech = true;
+      } else if (excludeDirectSpeech && isDirectSpeech && ENDING_QUOTES.matcher(tokens[i].getToken()).matches() 
+          && i > 1 && !tokens[i].isWhitespaceBefore()) {
+        isDirectSpeech = false;
+      } else if (i != notCheck && !isDirectSpeech && !isInQuotes(tokens, i) && isTokenToCheck(tokens, i)) {
+        if ((!lemmas.isEmpty() && tokens[i].hasAnyLemma(lemmas.toArray(new String[0])) && !isExceptionPair(testToken, tokens[i])) 
             || isPartOfWord(testToken.getToken(), tokens[i].getToken())) {
           if (notCheck >= 0) {
             if (notCheck == i - 2) {
@@ -249,21 +242,56 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
     }
     return false;
   }
+  
+  private boolean isInQuotes(AnalyzedTokenReadings[] tokens, int i) {
+    return (i > 0 
+            && (OPENING_QUOTES.matcher(tokens[i - 1].getToken()).matches() 
+                || SINGLE_QUOTES.matcher(tokens[i - 1].getToken()).matches())
+            && i < tokens.length - 1 
+            && (ENDING_QUOTES.matcher(tokens[i + 1].getToken()).matches()
+                || SINGLE_QUOTES.matcher(tokens[i + 1].getToken()).matches()));
+  }
+  
+  private boolean getStartsWithDirectSpeech(int n, List<AnalyzedSentence> sentences, boolean isDirectSpeech) {
+    if (!excludeDirectSpeech || n <= 0) {
+      return false;
+    }
+    AnalyzedTokenReadings[] sentence = sentences.get(n - 1).getTokensWithoutWhitespace();
+    for (int i = 0; i < sentence.length; i++) {
+      AnalyzedTokenReadings token = sentence[i];
+      if (!isDirectSpeech && OPENING_QUOTES.matcher(token.getToken()).matches() 
+          && i < sentence.length - 1 && !sentence[i + 1].isWhitespaceBefore()) {
+        isDirectSpeech = true;
+      } else if (isDirectSpeech && ENDING_QUOTES.matcher(token.getToken()).matches() 
+          && i > 1 && !sentence[i].isWhitespaceBefore()) {
+        isDirectSpeech = false;
+      }
+    }
+    return isDirectSpeech;
+  }
 
   @Override
   public RuleMatch[] match(List<AnalyzedSentence> sentences) throws IOException {
     List<RuleMatch> ruleMatches = new ArrayList<>();
     List<AnalyzedTokenReadings[]> tokenList = new ArrayList<>();
+    List<Boolean> isDSList = new ArrayList<>();
     int pos = 0;
+    boolean startsWithDirectSpeech = false;
     for (int n = 0; n < maxDistanceOfSentences && n < sentences.size(); n++) {
       tokenList.add(sentences.get(n).getTokensWithoutWhitespace());
+      startsWithDirectSpeech = getStartsWithDirectSpeech(n, sentences, startsWithDirectSpeech);
+      isDSList.add(startsWithDirectSpeech);
     }
+    boolean isDirectSpeech = false;
     for (int n = 0; n < sentences.size(); n++) {
       if (n + maxDistanceOfSentences < sentences.size()) {
         tokenList.add(sentences.get(n + maxDistanceOfSentences).getTokensWithoutWhitespace());
+        startsWithDirectSpeech = getStartsWithDirectSpeech(n + maxDistanceOfSentences, sentences, startsWithDirectSpeech);
+        isDSList.add(startsWithDirectSpeech);
       }
       if (tokenList.size() > 2 * maxDistanceOfSentences + 1) {
         tokenList.remove(0);
+        isDSList.remove(0);
       }
       int nTok = maxDistanceOfSentences;
       if (n < maxDistanceOfSentences) {
@@ -274,18 +302,24 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
       if (!hasBreakToken(tokenList.get(nTok))) {
         for (int i = 0; i < tokenList.get(nTok).length; i++) {
           AnalyzedTokenReadings token = tokenList.get(nTok)[i];
-          if (isTokenToCheck(token)) {
+          if (excludeDirectSpeech && !isDirectSpeech && OPENING_QUOTES.matcher(token.getToken()).matches() 
+              && i < tokenList.get(nTok).length - 1 && !tokenList.get(nTok)[i + 1].isWhitespaceBefore()) {
+            isDirectSpeech = true;
+          } else if (excludeDirectSpeech && isDirectSpeech && ENDING_QUOTES.matcher(token.getToken()).matches() 
+              && i > 1 && !tokenList.get(nTok)[i].isWhitespaceBefore()) {
+            isDirectSpeech = false;
+          } else if (!isDirectSpeech && !isInQuotes(tokenList.get(nTok), i) && isTokenToCheck(tokenList.get(nTok), i)) {
             int isRepeated = 0;
-            if (isTokenInSentence(token, tokenList.get(nTok), i)) {
+            if (isTokenInSentence(token, tokenList.get(nTok), i, isDSList.get(nTok))) {
               isRepeated = 1;
             }
             for(int j = nTok - 1; isRepeated == 0 && j >= 0 && j >= nTok - maxDistanceOfSentences; j--) {
-              if (isTokenInSentence(token, tokenList.get(j))) {
+              if (!isQuestionResponse(nTok, j, tokenList) && isTokenInSentence(token, tokenList.get(j), isDSList.get(j))) {
                 isRepeated = 2;
               }
             }
             for(int j = nTok + 1; isRepeated == 0 && j < tokenList.size() && j <= nTok + maxDistanceOfSentences; j++) {
-              if (isTokenInSentence(token, tokenList.get(j))) {
+              if (!isQuestionResponse(nTok, j, tokenList) && isTokenInSentence(token, tokenList.get(j), isDSList.get(j))) {
                 isRepeated = 3;
               }
             }
@@ -300,11 +334,7 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
               }
               int startPos = pos + token.getStartPos();
               int endPos = pos + token.getEndPos();
-              RuleMatch ruleMatch = new RuleMatch(this, startPos, endPos, msg);
-              List<String> suggestions = getSynonyms(token);
-              if(!suggestions.isEmpty()) {
-                ruleMatch.setSuggestedReplacements(suggestions);
-              }
+              RuleMatch ruleMatch = new RuleMatch(this, null, startPos, endPos, msg);
               URL url = setURL(token);
               if(url != null) {
                 ruleMatch.setUrl(url);
@@ -314,14 +344,14 @@ public abstract class AbstractStyleRepeatedWordRule  extends TextLevelRule {
           } 
         }
       }
-      pos += sentences.get(n).getText().length();
+      pos += sentences.get(n).getCorrectedTextLength();
     }
     return toRuleMatchArray(ruleMatches);
   }
   
   @Override
   public int minToCheckParagraph() {
-    return maxDistanceOfSentences;
+    return excludeDirectSpeech ? -1 : maxDistanceOfSentences;
   }
   
 }

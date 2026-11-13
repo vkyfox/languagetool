@@ -76,6 +76,8 @@ Akonten
 Akontozahlung
 Akontozahlungen
 MWST
+MWST-Typ/S
+MWST-Typen
 abhangen
 abhocken  #derb
 Abricotine
@@ -93,7 +95,7 @@ Ambiance
 Amtei
 Anken  #ugs
 anmächelig/A  #ugs
-Anstößer
+Anstösser
 antönen
 Apero
 Attikawohnung
@@ -127,7 +129,7 @@ Brocki  #ugs
 Bruttoinlandprodukt/S
 Bruttoinlandproduktes
 Büezer
-Car  #franz
+Car/S  #franz
 Carrosserie Chalet
 Chlübis  #ugs
 Chnöbli
@@ -192,9 +194,9 @@ Göller  #fachspr
 Gradabzeichen/S
 Grättimann  #regional #schweiz  #selten
 Grittibänz
-Großes Alpenglöckchen
-Großkind
-Großkinder
+Grosses Alpenglöckchen
+Grosskind
+Grosskinder
 Guezli
 Guidon
 Gupf  #ugs
@@ -214,7 +216,7 @@ Inkassant  #süddt
 Jaghund/S  #veraltet
 Jöggeli  #ugs
 Jus
-Kabis 
+Kabis
 Karette
 Kehrichtsack/S
 Kehrichtsäcke
@@ -325,7 +327,7 @@ Ständerlampe/N
 Staunse  #bair
 Stewi
 Stöckli
-Straßensignal/S
+Strassensignal/S
 Stumpengleis  #fachspr
 Stutz  #ugs
 Sulzschnee/S
@@ -393,12 +395,16 @@ Zältli
 Zapfengeld
 zapfig  #ugs  #bair
 Zeitungsverträger
-zensurieren
+zensuriere/N
+zensurierend/A
+Zensurierens
+zensurierst
+zensuriert/A
+zensuriertest
 Zibelle
 Ziberli
 Zigi  #ugs
-Zmorge  #ugs
-Zmorgen  #ugs
+Zmorge/N  #ugs
 Znacht  #ugs
 Znüni
 Zügelauto/S
@@ -461,3 +467,378 @@ anzuscheissen
 anzurussen
 abzuschmeissen
 SRF
+Aufenthalter/NS
+vorbehältlich
+Bünzli/S
+Zeltli/S
+Schweizerpass
+Schweizerpasses
+Schweizerpässe/N
+SonntagsBlick/S #name
+Veloträger/NS
+Pilatusstrasse
+Näherbaurecht/S
+Denner #name
+Strasseninspektorate/N
+Strasseninspektorat/S
+Schweinsplätzli
+Parkierungsmöglichkeiten
+Zapfenwein/S
+Zapfenweine/N
+Bernasconi/S #name
+Lüthi/S #name
+Rüegg/S #name
+Leuenberger/S #name
+Bianchi/S #name
+da Silva/S #name
+Hunziker/S #name
+Krasniqi/S #name
+Zaugg/S #name
+Furrer/S #name
+Fankhauser/S #name
+Burri/S #name
+Betschart/S #name
+Berisha/S #name
+Jeanneret/S #name
+Imhof/S #name
+Kälin/S #name
+Hänni/S #name
+Häfliger/S #name
+Perret/S #name
+Meylan/S #name
+Thommen/S #name
+Monney/S #name
+Fleury/S #name
+Crivelli/S #name
+Röthlisberger/S #name
+Amstutz #name
+Pasquier/S #name
+Liechti/S #name
+Chevalley/S #name
+Caduff/S #name
+Allemann/S #name
+Aebischer/S #name
+Stettler/S #name
+Jäggi/S #name
+Hostettler/S #name
+Eberle/S #name
+Bourquin/S #name
+Oppliger/S #name
+Huguenin/S #name
+Hänggi/S #name
+Derungs #name
+Chappuis #name
+Vonlanthen/S #name
+Pereira/S #name
+Grandjean/S #name
+Clerc/S #name
+Camenisch/S #name
+Bosshard/S #name
+Zufferey/S #name
+Wernli/S #name
+Trachsel/S #name
+Ruffieux #name
+Perroud/S #name
+Giovanoli/S #name
+Emmenegger/S #name
+Caviezel/S #name
+Tschanz #name
+Rezzonico/S #name
+Guignard/S #name
+Gremaud/S #name
+Cattaneo/S #name
+Brönnimann/S #name
+Boillat/S #name
+von Allmen/S #name
+Schüpbach/S #name
+Menoud/S #name
+Imboden/S #name
+Grossenbacher/S #name
+Cereghetti/S #name
+Campana/S #name
+Zemp/S #name
+Jaccard/S #name
+Crameri/S #name
+Birchler/S #name
+Stampfli/S #name
+Savary/S #name
+Monnier/S #name
+Lepori/S #name
+Jaquet/S #name
+Gygax #name
+Guggisberg/S #name
+Grosjean/S #name
+Genoud/S #name
+Fellay/S #name
+Fahrni/S #name
+Ducommun/S #name
+Buchli/S #name
+Beyeler/S #name
+Bajrami/S #name
+Zgraggen/S #name
+Habegger/S #name
+Gubser/S #name
+Friedli/S #name
+Fragnière/S #name
+dos Santos #name
+Chollet/S #name
+Chételat/S #name
+Cavalli/S #name
+Brühwiler/S #name
+Binggeli/S #name
+Besson/S #name
+Bärtschi/S #name
+Aeschlimann/S #name
+Zurbrügg/S #name
+Zingg/S #name
+Schmidlin/S #name
+Roulin/S #name
+Pillonel/S #name
+Niggli/S #name
+Krähenbühl/S #name
+Jaquier/S #name
+Hunkeler/S #name
+Girardin/S #name
+Cotting/S #name
+Chassot/S #name
+Cavegn/S #name
+Bircher/S #name
+Bersier/S #name
+Mosimann/S #name
+Michellod/S #name
+Meichtry/S #name
+Jordi/S #name
+Eggimann/S #name
+Dutoit/S #name
+Cueni/S #name
+Arpagaus #name
+Aeby/S #name
+Noelia/S #name
+Leano/S #name
+Nevio/S #name
+Lionel/S #name
+Büsslitour
+Büsslitouren
+Verlad
+Marroni
+Ausschaffung
+Ausschaffungen
+Ausschaffungsflüge/N
+Ausschaffungsflug/S
+Ausschaffungshäftling/S
+Ausschaffungshäftlinge/N
+Ausschaffungshaft
+Zwangsausschaffung
+Zwangsausschaffungen
+einlässlich/A
+Leistungsbeschrieb/S
+Kriens #name
+Meyrin/S #name
+Vernier/S #name
+Emmen/S #name
+Kölliken/S #name
+beelenden
+beelende
+beelendet
+beelendeten
+beelendest
+beelendete
+beelendest
+Chiasso/S
+Aesch
+Bottmingen/S #name
+Allschwil/S #name
+Adetswil/S #name
+Bäretswil/S #name
+Bieler/SN
+Bielerin
+Bielerinnen
+Trampilot
+Trampiloten
+Trampilotin
+Trampilotinnen
+Rayonverbot/S
+Rayonverbote/NS
+Päcklistation
+Päcklistationen
+Rindsplätzli
+Rindshackfleisch/S
+Appartemente/N
+Ämtli/S
+FaGe #abk
+obgenannt/A
+Moldova #Republik Moldova
+Salomoninseln
+Türkiye #Republik Türkiye
+Berset/S #name
+dtl. #abk
+mdal. #abk
+bair. #abk
+Wz. #abk
+inf. #abk
+Buffet à discrétion
+Zmittag/E
+Zmittag/S
+Wähe/N
+Randen/S
+Hahnenburger/S
+foutieren
+abschleichen
+abtischen
+Alpabzug/S
+Alpaufzug/S
+Alpabzüge/N
+Alpaufzüge/N
+Blockierverhinderer/S
+Blockierverhinderer/N
+Barrierenwärter/S
+Barrierenwärter/N
+Billeteurkabine/N
+Billeteursitz/E
+Billeteursitzes
+Billeteursitzen
+Bostitch/E
+Bostitch/S
+Bostitchen
+Briden
+Schlauchbriden
+Brieschmilch
+Buschenschenke/N
+Buschi/S
+Büsi/S
+Chaussierung
+Chaussierungen
+Chörblichrut
+Dole/N
+Planzer #brand
+Horgen #name
+Marketingmassnahme/N
+Töggeliturnier/E
+Bettlachrank
+Bettlach
+Jungfreisinnige/N
+Eventualvorsatz
+Eventualvorsätze
+Pratteln
+Marketingkampagne/N
+Hörnli
+Räbeliechtliumzug
+Räbeliechtliumzüge
+Räbelicht/S
+Räbelichtes
+Räbelichter
+Makkabäeraufstand
+Makkabäeraufstände
+Ettingen
+Döttingen
+Münsterlingen
+Lozärner Määs
+Marketingstrategien
+Nikolaiten
+Marketingleiter/SN
+verzögerungslos/A
+Abtragsleistung
+Abtragsleistungen
+Gutschriftsbeleg/SE
+Gutschriftsbelegen
+Umtriebsentschädigung
+Umtriebsentschädigungen
+Weihnachtsapéro/S
+Festtagswünsche/N
+Sitzbepreisung
+Sitzbepreisungen
+Intimtuch/S
+Intimtücher/N
+Velomechaniker/NS
+Veloraum/S
+Veloräume/N
+Prozessdefinierung
+Prozessdefinierungen
+Gewölbegalerie/N
+Absenzenheft/ES
+Absenzenheften
+Affidavit/S
+Bündner/SN
+Bündnerin
+Bündnerinnen
+Gönnerbeitrag/S
+Gönnerbeiträge/N
+Kehlmaschine/N
+Marketinglandschaft
+Marketinglandschaften
+Marketingziel/SE
+Marketingmethode/N
+Nimmerland/S
+Sicherheitsdispositiv/S
+Verjährungsfristerklärung
+Verjährungsfristerklärungen
+Töggelikasten
+Töggelikästen
+Coiffeursalon/S
+Parkierungsstrategie/N
+Abströmöffnung
+Abströmöffnungen
+Glücklichkeit
+Grauholz
+Grenzgängerabkommen/S
+Hepatopathie
+Hüllwellrohr/ES
+Hüllwellrohren
+Initialgespräch/SE
+Initialgesprächen
+Kindseltern
+Kerzengesteck/SE
+Krustenverdickung
+Krustenverdickungen
+Schreinerdreieck/ES
+Spitalbett/S
+Spitalbetten
+Sprudelgetränk/ES
+Sprudelgetränken
+Sulfonylharnstoff/SE
+Sulfonylharnstoffen
+Vermieterschaft
+Vermieterschaften
+Wichtelauflösung
+Wichtelauflösungen
+Primarklasse/N
+Chesselhuus
+Deliktsgut/S
+Deliktsgüter/N
+Primarlehrperson
+Primarlehrpersonen
+Taggeld/S
+Taggelder/N
+Taggeldes
+Krankentaggeld
+Einspracheentscheid/SE
+Einspracheentscheide/N
+Stübli
+Veloabstellplatz
+Veloabstellplatzes
+Veloabstellplätze/N
+Veloplatz
+Veloplatzes
+Veloplätze/N
+Retrozession
+Retrozessionen
+retrozessionsfrei/A
+Retrozessionar/S
+Retrozessionare/N
+Hospitalisation
+Hospitalisationen
+Rehospitalisation
+Rehospitalisationen
+Arbeitsinspektorat/S
+Arbeitsinspektorate/N
+Gesuchsunterlage/N
+schnöden
+geschnödet/P
+Feldweibel/SN
+Gradabzeichen/S
+Pedibus-Linie/N
+Pedibuslinie/N
+Feldschiessen/S
+Flössgräben
+Flössgraben
+Ständemehr/S

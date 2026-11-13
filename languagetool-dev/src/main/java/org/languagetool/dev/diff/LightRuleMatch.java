@@ -20,10 +20,12 @@ package org.languagetool.dev.diff;
 
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 class LightRuleMatch {
-  
+
   enum Status {
     temp_off, on
   }
@@ -32,27 +34,31 @@ class LightRuleMatch {
   private final int column;
   private final String fullRuleId;
   private final String message;
+  private final String category;
   private final String context;
   private final String coveredText;
-  private final String suggestions;
+  private final List<String> suggestions;
   private final String ruleSource;  // e.g. grammar.xml
   private final String title;
   private final Status status;
-  private final boolean isTempOff;
-
-  LightRuleMatch(int line, int column, String ruleId, String message, String context, String coveredText,
-                 String suggestions, String ruleSource, String title, Status status, boolean isTempOff) {
-    this.line =  line;
+  private final List<String> tags;
+  private final boolean isPremium;
+  
+  LightRuleMatch(int line, int column, String ruleId, String message, String category, String context, String coveredText,
+                 List<String> suggestions, String ruleSource, String title, Status status, List<String> tags, boolean isPremium) {
+    this.line = line;
     this.column = column;
     this.fullRuleId = Objects.requireNonNull(ruleId);
     this.message = Objects.requireNonNull(message);
+    this.category = Objects.requireNonNull(category);
     this.context = Objects.requireNonNull(context);
     this.coveredText = Objects.requireNonNull(coveredText);
-    this.suggestions = suggestions == null ? "" : suggestions;
+    this.suggestions = suggestions == null ? Arrays.asList() : suggestions;
     this.ruleSource = ruleSource;
     this.title = title;
     this.status = Objects.requireNonNull(status);
-    this.isTempOff = isTempOff;
+    this.tags = Objects.requireNonNull(tags);
+    this.isPremium = isPremium;
   }
 
   int getLine() {
@@ -80,6 +86,10 @@ class LightRuleMatch {
     return message;
   }
 
+  String getCategoryName() {
+    return category;
+  }
+
   String getContext() {
     return context;
   }
@@ -88,14 +98,16 @@ class LightRuleMatch {
     return coveredText;
   }
 
-  String getSuggestions() {
+  List<String> getSuggestions() {
     return suggestions;
   }
 
+  @Nullable
   String getRuleSource() {
     return ruleSource;
   }
-  
+
+  @Nullable
   String getTitle() {
     return title;
   }
@@ -103,11 +115,15 @@ class LightRuleMatch {
   Status getStatus() {
     return status;
   }
-  
-  boolean isTempOff() {
-    return isTempOff;
+
+  List<String> getTags() {
+    return tags;
   }
-  
+
+  boolean isPremium() {
+    return isPremium;
+  }
+
   @Override
   public String toString() {
     return line + "/" + column +

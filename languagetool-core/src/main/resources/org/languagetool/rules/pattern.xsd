@@ -114,10 +114,11 @@
 					<xs:enumeration value="allupper" />
 					<xs:enumeration value="alllower" />
 					<xs:enumeration value="preserve" />
+					<xs:enumeration value="firstupper" />
+					<xs:enumeration value="notashkeel" />
 				</xs:restriction>
 			</xs:simpleType>
 		</xs:attribute>
-		<xs:attribute name="suppress_misspelled" type="binaryYesNo" use="optional"/>
 		<xs:attribute name="include_skipped" type="includeSelector" use="optional" default="none" />
 	</xs:complexType>
 	</xs:element>
@@ -157,14 +158,35 @@
 						<!-- prepositional phrases: -->
 						<xs:enumeration value="B-PP" />
 						<xs:enumeration value="I-PP" />
-						<!-- Dealing with typewriter/typographic apostrophe (used in Catalan) -->
-						<xs:enumeration value="containsTypewriterApostrophe" />
-						<xs:enumeration value="containsTypographicApostrophe" />
-						<!--MayMissingYo (used in Russian) -->
-						<xs:enumeration value="MayMissingYO" />
+						<!-- particle -->
+						<xs:enumeration value="B-PRT" />
+						<!-- adjective phrases: -->
+						<xs:enumeration value="B-ADJP" />
+						<xs:enumeration value="I-ADJP" />
+						<!-- adverb phrases: -->
+						<xs:enumeration value="B-ADVP" />
+						<xs:enumeration value="I-ADVP" />
+                                                <!-- adverbial participle phrases (for Russian): -->
+						<xs:enumeration value="B-DPT" />
+						<xs:enumeration value="I-DPT" />
+						<!-- other: -->
+						<xs:enumeration value="B-LST" />
+						<xs:enumeration value="B-SBAR" />
+                        <xs:enumeration value="O" />
+					    <!-- Dealing with typewriter/typographic apostrophe (used in French) -->
+					    <xs:enumeration value="containsTypewriterApostrophe" />
+					    <xs:enumeration value="containsTypographicApostrophe" />
+						<!-- Romance languages -->
+					    <xs:enumeration value="GV" />
+					    <xs:enumeration value="PTime" />
+					    <!-- Catalan -->
+					    <xs:enumeration value="_incorrect_verb_" />
+					    <!--MayMissingYo (used in Russian) -->
+					    <xs:enumeration value="MayMissingYO" />
 					</xs:restriction>
 				</xs:simpleType>
 			</xs:attribute>
+			<xs:attribute name="chunk_re" type="xs:token" use="optional" />
 			<xs:attribute name="spacebefore" use="optional" default="ignore">
 				<xs:simpleType>
 					<xs:restriction base="xs:NMTOKEN">

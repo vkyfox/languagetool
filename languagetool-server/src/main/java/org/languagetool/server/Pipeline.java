@@ -21,10 +21,9 @@ package org.languagetool.server;
 
 import org.jetbrains.annotations.NotNull;
 import org.languagetool.*;
-import org.languagetool.rules.Category;
-import org.languagetool.rules.CategoryId;
-import org.languagetool.rules.Rule;
-import org.languagetool.rules.RuleMatchFilter;
+import org.languagetool.markup.AnnotatedText;
+import org.languagetool.markup.AnnotatedTextBuilder;
+import org.languagetool.rules.*;
 import org.languagetool.rules.patterns.AbstractPatternRule;
 import org.xml.sax.SAXException;
 
@@ -36,6 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Wrapper for JLanguageTool instances that can be made immutable.
@@ -52,7 +52,6 @@ class Pipeline extends JLanguageTool {
   }
 
   private boolean setup = false;
-  private long lastUsedTimestamp;
 
   /**
    * Prevents any further changes after this method was called.
@@ -61,128 +60,95 @@ class Pipeline extends JLanguageTool {
    this.setup = true;
   }
 
-  /**
-   * Refresh expire timer of pipeline
-   */
-  void refreshExpireTimer() {
-    lastUsedTimestamp = System.currentTimeMillis();
+  Pipeline(Language language, List<Language> altLanguages, Language motherTongue, ResultCache cache, GlobalConfig globalConfig, UserConfig userConfig, boolean inputLogging) {
+    super(language, altLanguages, motherTongue, cache, globalConfig, userConfig, inputLogging);
   }
 
-  /**
-   * Test if expire time has elapsed since last use.
-   * @return is pipeline expired?
-   */
-  boolean isExpired() {
-    long delta = System.currentTimeMillis() - lastUsedTimestamp;
-    return delta > PipelinePool.PIPELINE_EXPIRE_TIME;
-  }
-
-  Pipeline(Language language, List<Language> altLanguages, Language motherTongue, ResultCache cache, GlobalConfig globalConfig, UserConfig userConfig) {
-    super(language, altLanguages, motherTongue, cache, globalConfig, userConfig);
-    lastUsedTimestamp = System.currentTimeMillis();
+  Pipeline(Language language, List<Language> altLanguages, Language motherTongue, ResultCache cache, GlobalConfig globalConfig, UserConfig userConfig, boolean inputLogging, boolean withLanguageModel) {
+    super(language, altLanguages, motherTongue, cache, globalConfig, userConfig, inputLogging, withLanguageModel);
   }
 
   @Override
   public void setCleanOverlappingMatches(boolean cleanOverlappingMatches) {
+    preventModificationAfterSetup();
+    super.setCleanOverlappingMatches(cleanOverlappingMatches);
+  }
+
+  private void preventModificationAfterSetup() {
     if (setup) {
       throw new IllegalPipelineMutationException();
     }
-    super.setCleanOverlappingMatches(cleanOverlappingMatches);
   }
 
   @Override
   public void setMaxErrorsPerWordRate(float maxErrorsPerWordRate) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.setMaxErrorsPerWordRate(maxErrorsPerWordRate);
   }
 
   @Override
   public void setOutput(PrintStream printStream) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.setOutput(printStream);
   }
 
   @Override
   public List<AbstractPatternRule> loadPatternRules(String filename) throws IOException {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     return super.loadPatternRules(filename);
   }
 
   @Override
   public List<AbstractPatternRule> loadFalseFriendRules(String filename) throws ParserConfigurationException, SAXException, IOException {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     return super.loadFalseFriendRules(filename);
   }
 
   @Override
   public void activateLanguageModelRules(File indexDir) throws IOException {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.activateLanguageModelRules(indexDir);
   }
 
   @Override
-  public void activateWord2VecModelRules(File indexDir) throws IOException {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
-    super.activateWord2VecModelRules(indexDir);
-  }
-
-  @Override
   public void activateRemoteRules(File configFile) throws IOException {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.activateRemoteRules(configFile);
   }
 
   @Override
+  public void activateRemoteRules(List<RemoteRuleConfig> configs) throws IOException {
+    preventModificationAfterSetup();
+    super.activateRemoteRules(configs);
+  }
+
+  @Override
   public void addMatchFilter(@NotNull RuleMatchFilter filter) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.addMatchFilter(filter);
   }
 
   @Override
   public void addRule(Rule rule) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.addRule(rule);
   }
 
   @Override
   public void disableRule(String ruleId) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.disableRule(ruleId);
   }
 
   @Override
   public void disableRules(List<String> ruleIds) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.disableRules(ruleIds);
   }
 
   @Override
   public void disableCategory(CategoryId id) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.disableCategory(id);
   }
 
@@ -193,17 +159,13 @@ class Pipeline extends JLanguageTool {
 
   @Override
   public void enableRule(String ruleId) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.enableRule(ruleId);
   }
 
   @Override
   public void enableRuleCategory(CategoryId id) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+    preventModificationAfterSetup();
     super.enableRuleCategory(id);
   }
 
@@ -238,11 +200,19 @@ class Pipeline extends JLanguageTool {
   }
 
   @Override
-  public void setConfigValues(Map<String, Integer> v) {
-    if (setup) {
-      throw new IllegalPipelineMutationException();
-    }
+  public void setConfigValues(Map<String, Object[]> v) {
+    preventModificationAfterSetup();
     super.setConfigValues(v);
   }
 
+  /**
+   * exposed here for GRPCServer
+   */
+  CheckResults checkAnalyzedSentences(List<AnalyzedSentence> analyzed, RuleMatchListener listener) throws Exception {
+    // TODO use checkInternal again
+    List<String> sentences = analyzed.stream().map(AnalyzedSentence::getText).collect(Collectors.toList());
+    String text = sentences.stream().collect(Collectors.joining());
+    AnnotatedText annotated = new AnnotatedTextBuilder().addText(text).build();
+    return checkInternal(annotated, ParagraphHandling.NORMAL, listener, Mode.ALL, Level.DEFAULT, null, sentences, analyzed);
+  }
 }

@@ -35,7 +35,7 @@ import java.util.*;
  * LanguageTool's probability check that uses ngram lookups
  * to decide if an ngram of the input text is so rare in our
  * ngram index that it should be considered an error.
- * Also see <a href="http://wiki.languagetool.org/finding-errors-using-n-gram-data">http://wiki.languagetool.org/finding-errors-using-n-gram-data</a>.
+ * Also see <a href="https://dev.languagetool.org/finding-errors-using-n-gram-data">https://dev.languagetool.org/finding-errors-using-n-gram-data</a>.
  * @since 3.2
  */
 @Experimental
@@ -161,7 +161,7 @@ public class NgramProbabilityRule extends Rule {
       prevToken = googleToken;
       i++;
     }
-    return matches.toArray(new RuleMatch[0]);
+    return matches.toArray(RuleMatch.EMPTY_ARRAY);
   }
 
   /**
@@ -278,7 +278,7 @@ public class NgramProbabilityRule extends Rule {
     }
   }
 
-  class Alternative {
+  static class Alternative {
     final String token;
     final Probability p;
     Alternative(String token, Probability p) {

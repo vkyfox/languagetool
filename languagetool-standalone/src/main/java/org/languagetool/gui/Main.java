@@ -123,11 +123,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.input.BOMInputStream;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.AnalyzedToken;
-import org.languagetool.AnalyzedTokenReadings;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
+import org.languagetool.*;
 import org.languagetool.rules.Rule;
 import org.languagetool.server.HTTPServer;
 import org.languagetool.server.HTTPServerConfig;
@@ -230,9 +226,7 @@ public final class Main {
       textArea.setText(fileContents);
       currentFile = file;
       updateTitle();
-      if(recentFiles.contains(file.getAbsolutePath())) {
-        recentFiles.remove(file.getAbsolutePath());
-      }
+      recentFiles.remove(file.getAbsolutePath());
       recentFiles.add(file.getAbsolutePath());
       localStorage.saveProperty("recentFiles", recentFiles);
       updateRecentFilesMenu();
@@ -281,14 +275,14 @@ public final class Main {
   }
 
   private void showOptions() {
-    JLanguageTool langTool = ltSupport.getLanguageTool();
-    List<Rule> rules = langTool.getAllRules();
+    JLanguageTool lt = ltSupport.getLanguageTool();
+    List<Rule> rules = lt.getAllRules();
     ConfigurationDialog configDialog = getCurrentConfigDialog();
     boolean configChanged = configDialog.show(rules); // this blocks until OK/Cancel is clicked in the dialog
     if(configChanged) {
       Configuration config = ltSupport.getConfig();
       try { //save config - needed for the server
-        config.saveConfiguration(langTool.getLanguage());
+        config.saveConfiguration(lt.getLanguage());
       } catch (IOException e) {
         Tools.showError(e);
       }
@@ -685,7 +679,7 @@ public final class Main {
 
   private void updateRecentFilesMenu() {
     recentFilesMenu.removeAll();
-    String[] files = recentFiles.toArray(new String[recentFiles.size()]);
+    String[] files = recentFiles.toArray(new String[0]);
     ArrayUtils.reverse(files);
     for(String filename : files) {
       recentFilesMenu.add(new RecentFileAction(new File(filename)));
@@ -1042,9 +1036,11 @@ public final class Main {
   }
 
   private void tagTextAndDisplayResults() {
-    JLanguageTool langTool = ltSupport.getLanguageTool();
+    // make sure we track stats like the disambiguation log to be able to show them
+    GlobalConfig.setVerbose(true);
+    JLanguageTool lt = ltSupport.getLanguageTool();
     // tag text
-    List<String> sentences = langTool.sentenceTokenize(textArea.getText());
+    List<String> sentences = lt.sentenceTokenize(textArea.getText());
     StringBuilder sb = new StringBuilder();
     if(taggerShowsDisambigLog) {
       sb.append("<table>");
@@ -1059,7 +1055,7 @@ public final class Main {
       boolean odd = true;
       try {
         for (String sent : sentences) {
-          AnalyzedSentence analyzed = langTool.getAnalyzedSentence(sent);
+          AnalyzedSentence analyzed = lt.getAnalyzedSentence(sent);
           odd = appendTagsWithDisambigLog(sb, analyzed, odd);
         }
       } catch (Exception e) {
@@ -1069,7 +1065,7 @@ public final class Main {
     } else {
       try {
         for (String sent : sentences) {
-          AnalyzedSentence analyzed = langTool.getAnalyzedSentence(sent);
+          AnalyzedSentence analyzed = lt.getAnalyzedSentence(sent);
           String analyzedString = StringTools.escapeHTML(analyzed.toString(",")).
                   replace("&lt;S&gt;", "&lt;S&gt;<br>").
                   replace("[", "<font color='" + TAG_COLOR + "'>[").
@@ -1661,7 +1657,7 @@ public final class Main {
    *  on the Java Tips Weblog without restriction. A credit in the code comments
    *  would be nice, but not in any way mandatory.
    */
-  public class TextLineNumber extends JPanel
+  public static class TextLineNumber extends JPanel
     implements CaretListener, DocumentListener, ComponentListener, PropertyChangeListener
   {
     private static final long serialVersionUID = 1L;
@@ -1672,7 +1668,7 @@ public final class Main {
     private final Border OUTER = new MatteBorder(0, 0, 0, 1, Color.GRAY);
 
     //  Text component this TextTextLineNumber component is in sync with
-    private JTextComponent component;
+    private final JTextComponent component;
 
     //  Properties that can be changed
     private int borderGap;
@@ -1682,7 +1678,6 @@ public final class Main {
 
     //  Keep history information to reduce the number of times the component
     //  needs to be repainted
-    private int lastDigits;
     private int lastLine;
 
     /**
@@ -1695,14 +1690,14 @@ public final class Main {
     public TextLineNumber(JTextComponent component, int minimumDisplayDigits) {
       this.component = component;
 
-      setFont( component.getFont() );
-      setBorderGap( 5 );
-      setCurrentLineForeground( Color.RED );
-      setDigitAlignment( RIGHT );
-      setMinimumDisplayDigits( minimumDisplayDigits );
+      setFont(component.getFont());
+      setBorderGap(5);
+      setCurrentLineForeground(Color.RED);
+      setDigitAlignment(RIGHT);
+      setMinimumDisplayDigits(minimumDisplayDigits);
 
       component.getDocument().addDocumentListener(this);
-      component.addCaretListener( this );
+      component.addCaretListener(this);
       component.addPropertyChangeListener("font", this);
       component.addComponentListener(this);
     }
@@ -1723,8 +1718,7 @@ public final class Main {
     public void setBorderGap(int borderGap) {
       this.borderGap = borderGap;
       Border inner = new EmptyBorder(0, borderGap, 0, borderGap);
-      setBorder( new CompoundBorder(OUTER, inner) );
-      lastDigits = 0;
+      setBorder(new CompoundBorder(OUTER, inner));
       setPreferredWidth();
     }
 
@@ -1798,15 +1792,15 @@ public final class Main {
       int lines = root.getElementCount();
       int digits = Math.max(String.valueOf(lines).length(), minimumDisplayDigits);
 
-      FontMetrics fontMetrics = getFontMetrics( getFont() );
-      int width = fontMetrics.charWidth( '0' ) * digits;
+      FontMetrics fontMetrics = getFontMetrics(getFont());
+      int width = fontMetrics.charWidth('0') * digits;
       Insets insets = getInsets();
       int preferredWidth = insets.left + insets.right + width;
 
       Dimension d = getPreferredSize();
       d.setSize(preferredWidth, component.getHeight());
-      setPreferredSize( d );
-      setSize( d );
+      setPreferredSize(d);
+      setSize(d);
     }
 
     /**
@@ -1817,29 +1811,29 @@ public final class Main {
       super.paintComponent(g);
 
       //  Determine the width of the space available to draw the line number
-      FontMetrics fontMetrics = component.getFontMetrics( component.getFont() );
+      FontMetrics fontMetrics = component.getFontMetrics(component.getFont());
       Insets insets = getInsets();
       int availableWidth = getSize().width - insets.left - insets.right;
 
       //  Determine the rows to draw within the clipped bounds.
       Rectangle clip = g.getClipBounds();
-      int rowStartOffset = component.viewToModel( new Point(0, clip.y) );
-      int endOffset      = component.viewToModel( new Point(0, clip.y + clip.height) );
+      int rowStartOffset = component.viewToModel(new Point(0, clip.y));
+      int endOffset      = component.viewToModel(new Point(0, clip.y + clip.height));
 
       while (rowStartOffset <= endOffset)
       {
         try {
           if (isCurrentLine(rowStartOffset)) {
-            g.setColor( getCurrentLineForeground() );
+            g.setColor(getCurrentLineForeground());
           } else {
-            g.setColor( getForeground() );
+            g.setColor(getForeground());
           }
           //  Get the line number as a string and then determine the
           //  "X" and "Y" offsets for drawing the string.
 
           String lineNumber = getTextLineNumber(rowStartOffset);
           if (!lineNumber.isEmpty()) {
-            int stringWidth = fontMetrics.stringWidth( lineNumber );
+            int stringWidth = fontMetrics.stringWidth(lineNumber);
             int x = getOffsetX(availableWidth, stringWidth) + insets.left;
             int y = getOffsetY(rowStartOffset, fontMetrics);
             g.drawString(lineNumber, x, y);
@@ -1861,8 +1855,7 @@ public final class Main {
     private boolean isCurrentLine(int rowStartOffset) {
       int caretPosition = component.getCaretPosition();
       Element root = component.getDocument().getDefaultRootElement();
-
-      return root.getElementIndex( rowStartOffset ) == root.getElementIndex(caretPosition);
+      return root.getElementIndex(rowStartOffset) == root.getElementIndex(caretPosition);
     }
 
     /*
@@ -1871,9 +1864,8 @@ public final class Main {
      */
     protected String getTextLineNumber(int rowStartOffset) {
       Element root = component.getDocument().getDefaultRootElement();
-      int index = root.getElementIndex( rowStartOffset );
-      Element line = root.getElement( index );
-
+      int index = root.getElementIndex(rowStartOffset);
+      Element line = root.getElement(index);
       if (line.getStartOffset() == rowStartOffset) {
         return String.valueOf(index + 1);
       } else {
@@ -1894,12 +1886,10 @@ public final class Main {
      */
     private int getOffsetY(int rowStartOffset, FontMetrics fontMetrics) throws BadLocationException {
       //  Get the bounding rectangle of the row
-      Rectangle r = component.modelToView( rowStartOffset );
+      Rectangle r = component.modelToView(rowStartOffset);
       int y = r.y + r.height;
-
       //  The text needs to be positioned above the bottom of the bounding
       //  rectangle based on the descent of the font(s) contained on the row.
-
       return y - fontMetrics.getDescent();
     }
 
@@ -1908,7 +1898,7 @@ public final class Main {
       //  Get the line the caret is positioned on
       int caretPosition = component.getCaretPosition();
       Element root = component.getDocument().getDefaultRootElement();
-      int currentLine = root.getElementIndex( caretPosition );
+      int currentLine = root.getElementIndex(caretPosition);
 
       //  Need to repaint so the correct line number can be highlighted
       if (lastLine != currentLine) {
@@ -1957,7 +1947,6 @@ public final class Main {
       if (evt.getNewValue() instanceof Font) {
         Font newFont = (Font) evt.getNewValue();
         setFont(newFont);
-        lastDigits = 0;
         setPreferredWidth();
         documentChanged();
       }

@@ -23,6 +23,9 @@ import org.languagetool.Languages;
 import org.languagetool.TestTools;
 import org.languagetool.tokenizers.SRXSentenceTokenizer;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
+
 /**
  * @author Daniel Naber
  */
@@ -47,13 +50,25 @@ public class GermanSRXSentenceTokenizerTest {
     testSplit("Das ist ja 1a. ", "Und das auch.");
     testSplit("Hallo, ich bin’s. ", "Könntest du kommen?");
     testSplit("In der 1. Bundesliga kam es zum Eklat.");
+    testSplit("Dies ist, z. B., ein Satz."); 
+    testSplit("Da hatte es über 30 °C. ", "Hier kommt der nächste Satz.");
 
+    testSplit("Das 1. Internationale Filmfestival findet nächste Woche statt.");
     testSplit("Friedrich I., auch bekannt als Friedrich der Große.");
     testSplit("Friedrich II., auch bekannt als Friedrich der Große.");
     testSplit("Friedrich IIXC., auch bekannt als Friedrich der Große.");
     testSplit("Friedrich II. öfter auch bekannt als Friedrich der Große.");
     testSplit("Friedrich VII. öfter auch bekannt als Friedrich der Große.");
     testSplit("Friedrich X. öfter auch bekannt als Friedrich der Zehnte.");
+
+    // non-breaking space, happen e.g. in online editors, because HTML merges spaces:
+    assertThat(stokenizer.tokenize("Dies ist ein Satz. \u00A0Noch einer.").size(), is(2));
+    assertThat(stokenizer.tokenize("Dies ist ein Satz.   \u00A0Noch einer.").size(), is(2));
+    assertThat(stokenizer.tokenize("Dies ist ein Satz.\u00A0 Noch einer.").size(), is(2));
+    assertThat(stokenizer.tokenize("Dies ist ein Satz.\u00A0\u00A0\u00A0 Noch einer.").size(), is(2));
+    testSplit("Ein Satz!\u00A0", "Noch einer.");
+    testSplit("Dies ist, z.\u00A0B., ein Satz.");
+    testSplit("Hier steht was mit mehr Wörtern, weil wir mal sehen wollen, wie denn so die Erkennung der Satzlänge geht, wenn die Sätze doch deutlich länger werden, also wirklich deutlich länger als das normal.\u00A0", "Hier steht etwas anderes.");
 
     testSplit("Heute ist der 13.12.2004.");
     testSplit("Heute ist der 13. Dezember.");
@@ -95,12 +110,24 @@ public class GermanSRXSentenceTokenizerTest {
     testSplit("Stimme am lautesten heraustönte …. ", "Sobald er auf der Straße war");
 //    testSplit(new String[] { "Aber nein doch, er hörte alles nur zu deutlich! ", "\n", "… ", "›Also, wenn's so ist" });
     testSplit("»Welche Wohnung?\" ", "»Die, wo wir arbeiten.");
-    testSplit("»Nun also, wie ist's?« ", "fragte Lushin und blickte sie fest an.");
-    testSplit("»Nun also, wie ist es?« ", "fragte Lushin und blickte sie fest an.");
+    testSplit("»Nun also, wie ist's?« fragte Lushin und blickte sie fest an.");
+    testSplit("»Nun also, wie ist es?« fragte Lushin und blickte sie fest an.");
+    testSplit("„Nun also, wie ist es?“ fragte Lushin und blickte sie fest an.");
+    testSplit("»Nun also, wie ist es?« ", "Dann ging er.");
 //    testSplit(new String[] { "gezeigt hat.« ", "… ", "Hm! " });
 
     testSplit("Dies ist ein Satz mit einer EMail.Addresse@example.com!");
     testSplit("Sonderbarerweise sind auch Beispiel!Eins@example.com und Foo?Bar@example.com valide.");
+
+    testSplit("Er kauft Obst, Gemüse, Brot, Milch, usw. ", "Danach geht er nach Hause.");
+    testSplit("Sie kaufte Bücher, Hefte, Stifte usw., weil sie sich auf das neue Schuljahr vorbereiten wollte.");
+    testSplit("Im Supermarkt gibt es viele Sorten von Käse, Wurst, Brot usw. und alle sind sehr lecker.");
+
+    testSplit("Im Büro gibt es Computer, Drucker, Telefone etc. ", "Die Mitarbeiter arbeiten den ganzen Tag an verschiedenen Projekten.");
+    testSplit("Die Ergebnisse sind in Tabellen, Grafiken, Diagrammen etc. dargestellt.");
+
+    testSplit("Master of Law (LL.B.)");
+    testSplit("Master of Law (LL. B.)");
   }
 
   private void testSplit(String... sentences) {

@@ -29,12 +29,12 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertThat;
 
 public class QuestionMarkRuleTest {
 
   private final QuestionMarkRule rule = new QuestionMarkRule(JLanguageTool.getMessageBundle());
-  private final JLanguageTool lt = new JLanguageTool(new Spanish());
+  private final JLanguageTool lt = new JLanguageTool(Spanish.getInstance());
   
   @Before
   public void setup() {
@@ -47,12 +47,13 @@ public class QuestionMarkRuleTest {
 
   @Test
   public void test() throws IOException {
+
     RuleMatch[] matches = check("Hola, ¿cómo estás?");
     assertThat(matches.length, is(0));
 
     RuleMatch[] matches2 = check("Hola, cómo estás?");
     assertThat(matches2.length, is(1));
-    assertThat(matches2[0].getSuggestedReplacements().toString(), is("[¿Hola]"));  // maybe ¿ should in front of 'cómo'? 
+    assertThat(matches2[0].getSuggestedReplacements().toString(), is("[¿cómo]")); 
 
     RuleMatch[] matches3 = check("¿Que pasa?");
     assertThat(matches3.length, is(0));
@@ -94,6 +95,29 @@ public class QuestionMarkRuleTest {
     assertThat(matches13.get(0).getSuggestedReplacements().toString(), is("[¿Que]"));
     assertThat(matches13.get(0).getFromPos(), is(20));
 
+    RuleMatch[] matches14 = check("Hola, de qué me hablas?");
+    assertThat(matches14.length, is(1));
+    assertThat(matches14[0].getSuggestedReplacements().toString(), is("[¿de]"));
+    
+    RuleMatch[] matches15 = check("Después de todo lo que pasó, qué quieres que te diga?");
+    assertThat(matches15.length, is(1));
+    assertThat(matches15[0].getSuggestedReplacements().toString(), is("[¿qué]"));
+    
+    RuleMatch[] matches16 = check("Pero cómo quieres que te lo diga?");
+    assertThat(matches16[0].getSuggestedReplacements().toString(), is("[¿Pero]"));
+    
+    RuleMatch[] matches17 = check("Pero, cómo quieres que te lo diga?");
+    assertThat(matches17[0].getSuggestedReplacements().toString(), is("[¿cómo]"));
+    
+    RuleMatch[] matches18 = check("Puedes imaginarte por qué no vino con nosotros?");
+    assertThat(matches18[0].getSuggestedReplacements().toString(), is("[¿Puedes]"));
+     
+    RuleMatch[] matches19 = check("Hola, Marco: Puedes darme tu dirección de correo?");
+    assertThat(matches19[0].getSuggestedReplacements().toString(), is("[¿Puedes]"));
+
+    RuleMatch[] matches33 =check("Están aquí: https://gtlb.com/smll-cued-datasets/hu[…]nitized/-/tree/main/beling?ref_type=heads");
+    assertThat(matches33.length, is(0));
+
     // Exclamation marks:
     List<RuleMatch> matches20 = lt.check("Qué irritante!");
     assertThat(matches20.size(), is(1));
@@ -101,6 +125,50 @@ public class QuestionMarkRuleTest {
 
     List<RuleMatch> matches21 = lt.check("¡Qué irritante!");
     assertThat(matches21.size(), is(0));
+    
+    List<RuleMatch> matches22 = lt.check("—Hola!");
+    assertThat(matches22.size(), is(1));
+    assertThat(matches22.get(0).getSuggestedReplacements().toString(), is("[¡Hola]"));
+
+    List<RuleMatch> matches23 = lt.check("Muchas gracias! ✌\uFE0F");
+    assertThat(matches23.size(), is(1));
+    assertThat(matches23.get(0).getSuggestedReplacements().toString(), is("[¡Muchas]"));
+
+    List<RuleMatch> matches24 = lt.check("Muchas gracias! ✌\uFE0F✌\uFE0F");
+    assertThat(matches24.size(), is(1));
+    assertThat(matches24.get(0).getSuggestedReplacements().toString(), is("[¡Muchas]"));
+
+    List<RuleMatch> matches25 = lt.check("Muchas gracias! ✌\uFE0F ✌\uFE0F");
+    assertThat(matches25.size(), is(1));
+    assertThat(matches25.get(0).getSuggestedReplacements().toString(), is("[¡Muchas]"));
+
+    List<RuleMatch> matches26 = lt.check("Muchas gracias!, le dijo entonces.");
+    assertThat(matches26.size(), is(1));
+    assertThat(matches26.get(0).getSuggestedReplacements().toString(), is("[¡Muchas]"));
+
+    List<RuleMatch> matches27 = lt.check("\"Muchas gracias!\".");
+    assertThat(matches27.size(), is(1));
+    assertThat(matches27.get(0).getSuggestedReplacements().toString(), is("[¡Muchas]"));
+
+    List<RuleMatch> matches28 = lt.check("Seguro que estás más habituado a algunas de estas formas verbales, pero cuál es la correcta?");
+    assertThat(matches28.size(), is(1));
+    assertThat(matches28.get(0).getSuggestedReplacements().toString(), is("[¿pero]"));
+
+    List<RuleMatch> matches29 = lt.check("Tengo razón, o no?");
+    assertThat(matches29.size(), is(1));
+    assertThat(matches29.get(0).getSuggestedReplacements().toString(), is("[¿o]"));
+
+    List<RuleMatch> matches30 = lt.check("Tengo razón, no?");
+    assertThat(matches30.size(), is(1));
+    assertThat(matches30.get(0).getSuggestedReplacements().toString(), is("[¿no]"));
+
+    List<RuleMatch> matches31 = lt.check("Tengo razón, eh?");
+    assertThat(matches31.size(), is(1));
+    assertThat(matches31.get(0).getSuggestedReplacements().toString(), is("[¿eh]"));
+
+    List<RuleMatch> matches32 = lt.check("qué me recomendarías???….");
+    assertThat(matches32.size(), is(1));
+    assertThat(matches32.get(0).getSuggestedReplacements().toString(), is("[¿qué]"));
   }
 
   private RuleMatch[] check(String s) throws IOException {

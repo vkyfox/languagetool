@@ -36,11 +36,9 @@ public class ManualTaggerTest {
     ManualTagger tagger = new ManualTagger(JLanguageTool.getDataBroker().getFromResourceDirAsStream(MANUAL_DICT_FILENAME));
     assertThat(tagger.tag("").size(), is(0));
     assertThat(tagger.tag("gibtsnicht").size(), is(0));
-
-    assertEquals("[Enigma/EIG:NOM:SIN:MAS, Enigma/EIG:GEN:SIN:MAS, Enigma/EIG:DAT:SIN:MAS, Enigma/EIG:AKK:SIN:MAS]",
-            tagger.tag("Enigma").toString());
+    assertEquals("[drunter/ADV:LOK+PRO]", tagger.tag("drunter").toString());
     // lookup is case sensitive:
-    assertThat(tagger.tag("enigma").size(), is(0));
+    assertThat(tagger.tag("Drunter").size(), is(0));
   }
 
 }

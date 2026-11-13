@@ -21,6 +21,8 @@
 
 package org.languagetool.rules.en;
 
+import org.languagetool.tools.Tools;
+
 import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.util.Locale;
@@ -35,6 +37,7 @@ public class UnitConversionRuleUS extends UnitConversionRule {
 
   public UnitConversionRuleUS(ResourceBundle messages) {
     super(messages);
+    setUrl(Tools.getUrl("https://languagetool.org/insights/post/imperial-metric-system/"));
 
     format = NumberFormat.getNumberInstance(Locale.US);
     format.setMaximumFractionDigits(2);
@@ -49,7 +52,6 @@ public class UnitConversionRuleUS extends UnitConversionRule {
     addUnit("millimet(re|er)s?", METRE, "micrometers", 1e-3, true);
     addUnit("micromet(re|er)s?", METRE, "micrometers", 1e-6, true);
     addUnit("nanomet(re|er)s?", METRE, "nanometers", 1e-9, true);
-
 
     addUnit("square met(re|er)s?", SQUARE_METRE, "square meters", 1, true);
     addUnit("square kilomet(re|er)s?", SQUARE_METRE, "square kilometers", 1e6, true);

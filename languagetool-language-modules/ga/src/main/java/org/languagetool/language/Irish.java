@@ -18,42 +18,45 @@
  */
 package org.languagetool.language;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-
-import org.languagetool.Language;
-import org.languagetool.LanguageMaintainedState;
-import org.languagetool.UserConfig;
-import org.languagetool.languagemodel.LanguageModel;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.languagetool.*;
 import org.languagetool.rules.*;
 import org.languagetool.rules.ga.*;
+import org.languagetool.rules.spelling.SpellingCheckRule;
 import org.languagetool.synthesis.Synthesizer;
 import org.languagetool.synthesis.ga.IrishSynthesizer;
 import org.languagetool.tagging.Tagger;
-import org.languagetool.tagging.ga.IrishTagger;
 import org.languagetool.tagging.disambiguation.Disambiguator;
 import org.languagetool.tagging.disambiguation.ga.IrishHybridDisambiguator;
+import org.languagetool.tagging.ga.IrishTagger;
 import org.languagetool.tokenizers.SRXSentenceTokenizer;
 import org.languagetool.tokenizers.SentenceTokenizer;
 import org.languagetool.tokenizers.Tokenizer;
 import org.languagetool.tokenizers.WordTokenizer;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.ResourceBundle;
+
 /**
  * @since 4.9
  */
-public class Irish extends Language implements AutoCloseable {
+public class Irish extends LanguageWithModel {
 
-  private static final Language DEFAULT_IRISH = new Irish();
-  
-  private Tagger tagger;
-  private SentenceTokenizer sentenceTokenizer;
-  private Tokenizer wordTokenizer;
-  private Synthesizer synthesizer;
-  private Disambiguator disambiguator;
-  private LanguageModel languageModel;
+  private static final String LANGUAGE_SHORT_CODE = "ga";
+
+  private static volatile Throwable instantiationTrace;
+
+  public Irish() {
+    Throwable trace = instantiationTrace;
+    if (trace != null) {
+      throw new RuntimeException("Language was already instantiated, see the cause stacktrace below.", trace);
+    }
+    instantiationTrace = new Throwable();
+  }
 
   @Override
   public String getName() {
@@ -71,8 +74,9 @@ public class Irish extends Language implements AutoCloseable {
   }
 
   @Override
+  @NotNull
   public Language getDefaultLanguageVariant() {
-    return DEFAULT_IRISH;
+    return getInstance();
   }
   
   @Override
@@ -94,7 +98,7 @@ public class Irish extends Language implements AutoCloseable {
                     Arrays.asList("]", ")", "}", "\"", "”")),
       new DoublePunctuationRule(messages),
       new UppercaseSentenceStartRule(messages, this),
-      new LongSentenceRule(messages, userConfig, -1, true),
+      new LongSentenceRule(messages, userConfig, 50),
       new LongParagraphRule(messages, this, userConfig),
       new UppercaseSentenceStartRule(messages, this),
       new MultipleWhitespaceRule(messages, this),
@@ -104,58 +108,45 @@ public class Irish extends Language implements AutoCloseable {
       new ParagraphRepeatBeginningRule(messages, this),
       new WordRepeatRule(messages, this),
       new MorfologikIrishSpellerRule(messages, this, userConfig, altLanguages),
-      new LogainmRule(messages),
-      new PeopleRule(messages),
-      new SpacesRule(messages),
-      new CompoundRule(messages),
-      new PrestandardReplaceRule(messages),
-      new IrishReplaceRule(messages),
-      new IrishFGBEqReplaceRule(messages),
-      new EnglishHomophoneRule(messages),
+      new LogainmRule(messages, this),
+      new PeopleRule(messages, this),
+      new SpacesRule(messages, this),
+      new CompoundRule(messages, this, userConfig),
+      new PrestandardReplaceRule(messages, this),
+      new IrishReplaceRule(messages, this),
+      new IrishFGBEqReplaceRule(messages, this),
+      new EnglishHomophoneRule(messages, this),
       new DhaNoBeirtRule(messages),
-      new DativePluralStandardReplaceRule(messages),
+      new DativePluralStandardReplaceRule(messages, this),
       new IrishSpecificCaseRule(messages)
     );
   }
 
+  @NotNull
   @Override
-  public Tagger getTagger() {
-    if (tagger == null) {
-      tagger = new IrishTagger();
-    }
-    return tagger;
+  public Tagger createDefaultTagger() {
+    return new IrishTagger();
+  }
+
+  @Nullable
+  @Override
+  public Synthesizer createDefaultSynthesizer() {
+    return IrishSynthesizer.INSTANCE;
   }
 
   @Override
-  public Synthesizer getSynthesizer() {
-    if (synthesizer == null) {
-      synthesizer = new IrishSynthesizer(this);
-    }
-    return synthesizer;
+  public SentenceTokenizer createDefaultSentenceTokenizer() {
+    return new SRXSentenceTokenizer(this);
   }
 
   @Override
-  public SentenceTokenizer getSentenceTokenizer() {
-    if (sentenceTokenizer == null) {
-      sentenceTokenizer = new SRXSentenceTokenizer(this);
-    }
-    return sentenceTokenizer;
+  public Disambiguator createDefaultDisambiguator() {
+    return new IrishHybridDisambiguator();
   }
-  
+
   @Override
-  public Disambiguator getDisambiguator() {
-    if (disambiguator == null) {
-      disambiguator = new IrishHybridDisambiguator();
-    }
-    return disambiguator;
-  }  
-  
-  @Override
-  public Tokenizer getWordTokenizer() {
-    if (wordTokenizer == null) {
-      wordTokenizer = new WordTokenizer();
-    }
-    return wordTokenizer;
+  public Tokenizer createDefaultWordTokenizer() {
+    return new WordTokenizer();
   }
 
   @Override
@@ -164,15 +155,24 @@ public class Irish extends Language implements AutoCloseable {
   }
 
   @Override
-  public synchronized LanguageModel getLanguageModel(File indexDir) throws IOException {
-    languageModel = initLanguageModel(indexDir, languageModel);
-    return languageModel;
+  protected int getPriorityForId(String id) {
+    switch (id) {
+      case "TOO_LONG_PARAGRAPH": return -15;
+    }
+    return super.getPriorityForId(id);
   }
 
+  @Nullable
   @Override
-  public void close() throws Exception {
-    if (languageModel != null) {
-      languageModel.close();
+  protected SpellingCheckRule createDefaultSpellingRule(ResourceBundle messages) throws IOException {
+    return new MorfologikIrishSpellerRule(messages, this, null, null);
+  }
+
+  public static @NotNull Irish getInstance() {
+    Language language = Objects.requireNonNull(Languages.getLanguageForShortCode(LANGUAGE_SHORT_CODE));
+    if (language instanceof Irish irish) {
+      return irish;
     }
-  } 
+    throw new RuntimeException("Irish language expected, got " + language);
+  }
 }

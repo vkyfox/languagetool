@@ -19,9 +19,11 @@
 
 package org.languagetool.rules.ca;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,10 +48,10 @@ public class CatalanUnpairedBracketsRule extends GenericUnpairedBracketsRule {
     super(messages, CA_START_SYMBOLS, CA_END_SYMBOLS);
   }
 
-  @Override
-  public String getId() {
-    return "CA_UNPAIRED_BRACKETS";
-  }
+//  @Override
+//  public String getId() {
+//    return "CA_UNPAIRED_BRACKETS";
+//  }
 
   @Override
   protected boolean isNoException(final String tokenStr,
@@ -58,6 +60,15 @@ public class CatalanUnpairedBracketsRule extends GenericUnpairedBracketsRule {
 
     if (i < 1) {
       return true;
+    }
+
+    if (tokens[i].hasPosTagStartingWith("NP") || tokens[i].hasPosTagStartingWith("allow_saxon_genitive")) {
+      return false;
+    }
+    
+    if ((tokenStr.equals("’") || tokenStr.equals("'"))
+        && (tokens[i].hasPosTagStartingWith("N") || tokens[i].hasPosTagStartingWith("A"))) {
+      return false;
     }
 
     final boolean superException = !super.isNoException(tokenStr, tokens, i, j, precSpace, follSpace, symbolStack);
@@ -98,6 +109,25 @@ public class CatalanUnpairedBracketsRule extends GenericUnpairedBracketsRule {
     }
 
     return true;
+  }
+
+  @Override
+  protected List<String> getSuggestions(Supplier<String> text, int startPos, int endPos, Symbol symbol, String otherSymbol) {
+    List<String> replacements = new ArrayList<>();
+    // add the other symbol together with the original symbol, needs to be moved by the user
+    if (symbol.symbolType == Symbol.Type.Closing) {
+      replacements.add(otherSymbol + symbol);
+    } else {
+      replacements.add(symbol + otherSymbol);
+    }
+    // add the option to remove the original symbol
+    replacements.add("");
+    return replacements;
+  }
+
+  @Override
+  protected String getMessage() {
+    return "Símbol sense parella. Afegiu-lo i situeu-lo manualment en el lloc adequat, o bé esborreu-lo.";
   }
 
 }

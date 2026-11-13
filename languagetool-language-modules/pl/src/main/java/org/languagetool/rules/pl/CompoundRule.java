@@ -18,12 +18,12 @@
  */
 package org.languagetool.rules.pl;
 
+import org.languagetool.Language;
+import org.languagetool.UserConfig;
+import org.languagetool.rules.*;
+
 import java.io.IOException;
 import java.util.ResourceBundle;
-
-import org.languagetool.rules.AbstractCompoundRule;
-import org.languagetool.rules.CompoundRuleData;
-import org.languagetool.rules.Example;
 
 /**
  * Checks that compounds (if in the list) are not written as separate words.
@@ -32,10 +32,10 @@ import org.languagetool.rules.Example;
  */
 public final class CompoundRule extends AbstractCompoundRule {
 
-  private static final CompoundRuleData compoundData = new CompoundRuleData("/pl/compounds.txt");
+  private static volatile CompoundRuleData compoundData;
 
-  public CompoundRule(ResourceBundle messages) throws IOException {
-    super(messages,
+  public CompoundRule(ResourceBundle messages, Language lang, UserConfig userConfig) throws IOException {
+    super(messages, lang, userConfig,
             "Ten wyraz pisze się z łącznikiem.",
             "Ten wyraz pisze się razem (bez spacji ani łącznika).",
             "Ten wyraz pisze się z łącznikiem lub bez niego.",
@@ -55,8 +55,18 @@ public final class CompoundRule extends AbstractCompoundRule {
   }
 
   @Override
-  protected CompoundRuleData getCompoundRuleData() {
-    return compoundData;
+  public CompoundRuleData getCompoundRuleData() {
+    CompoundRuleData data = compoundData;
+    if (data == null) {
+      synchronized (CompoundRule.class) {
+        data = compoundData;
+        if (data == null) {
+          compoundData = data = new CompoundRuleData("/pl/compounds.txt");
+        }
+      }
+    }
+
+    return data;
   }
 
 }

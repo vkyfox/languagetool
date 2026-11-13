@@ -18,6 +18,8 @@
  */
 package org.languagetool.rules.nl;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
@@ -26,6 +28,7 @@ import org.junit.Test;
 import org.languagetool.JLanguageTool;
 import org.languagetool.TestTools;
 import org.languagetool.language.Dutch;
+import org.languagetool.rules.RuleMatch;
 
 public class MorfologikDutchSpellerRuleTest {
 
@@ -33,25 +36,34 @@ public class MorfologikDutchSpellerRuleTest {
   public void testSpeller() throws IOException {
     Dutch language = new Dutch();
     MorfologikDutchSpellerRule rule = new MorfologikDutchSpellerRule(TestTools.getEnglishMessages(), language, null);
-    JLanguageTool langTool = new JLanguageTool(language);
+    JLanguageTool lt = new JLanguageTool(language);
 
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("Amsterdam")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("ipv")).length); // in ignore.txt
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("voorzover")).length); // in ignore.txt
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Amsterdam")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("ipv")).length); // in ignore.txt
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("voorzover")).length); // in ignore.txt
 
-    assertEquals(1, rule.match(langTool.getAnalyzedSentence("FoobarWrongxx")).length); // camel case is not ignored
-    assertEquals(1, rule.match(langTool.getAnalyzedSentence("foobarwrong")).length);
+    assertEquals(1, rule.match(lt.getAnalyzedSentence("FoobarWrongxx")).length); // camel case is not ignored
+    assertEquals(1, rule.match(lt.getAnalyzedSentence("foobarwrong")).length);
 
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("kómen")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("háár")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("kán")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("ín")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("kómen")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("háár")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("kán")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("ín")).length);
 
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("géén")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("géén")).length);
 
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("déúr")).length);
-    assertEquals(1, rule.match(langTool.getAnalyzedSentence("déur")).length);
-    assertEquals(0, rule.match(langTool.getAnalyzedSentence("deur-knop")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("déúr")).length);
+    assertEquals(1, rule.match(lt.getAnalyzedSentence("déur")).length);
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("deur-knop")).length);
+
+    assertEquals(0, rule.match(lt.getAnalyzedSentence("Hartelijke groet en hopelijk tot ziens!")).length);
+    
+    RuleMatch[] matches1 = rule.match(lt.getAnalyzedSentence("thailan."));
+    assertThat(matches1.length, is(1));
+    assertThat(matches1[0].getSuggestedReplacements().get(0), is("Thailand"));
+    assertThat(matches1[0].getSuggestedReplacements().size(), is(1));
+    assertThat(matches1[0].getFromPos(), is(0));
+    assertThat(matches1[0].getToPos(), is(7));
 
   }
 }

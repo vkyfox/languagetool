@@ -40,32 +40,19 @@ public class ItalianWordRepeatRule extends WordRepeatRule {
 
   @Override
   public boolean ignore(AnalyzedTokenReadings[] tokens, int position) {
-    if (wordRepetitionOf("via", tokens, position)) {
-      return true;   // "Il lessico si andava via via modificando."
-    }
     if (wordRepetitionOf("così", tokens, position)) {
       return true;   // "Mi è sembrato così così."
     }
-    if (wordRepetitionOf("Pago", tokens, position)) {
-      return true;   // "Pago Pago"
+    if (wordRepetitionOf("passo", tokens, position)) {
+      return true;   // "che passo passo vanno verso la rovina"
     }
-    if (wordRepetitionOf("Wagga", tokens, position)) {
-      return true;   // "Wagga Wagga"
+    if (wordRepetitionOf("piano", tokens, position)) {
+     return true;  // "Piano, piano, signor podestà."
     }
-    if (wordRepetitionOf("Duran", tokens, position)) {
-      return true;   // "Duran Duran"
+    if (wordRepetitionOf("via", tokens, position)) {
+      return true;   // "Il lessico si andava via via modificando."
     }
-    return false;
-  }
-
-  private boolean wordRepetitionOf(String word, AnalyzedTokenReadings[] tokens, int position) {
-    if (position > 2) {
-      return (tokens[position - 1].getToken().equals(word) && tokens[position].getToken().equals(word));
-    }
-    if (position == 2) {
-      return (tokens[1].getToken().equalsIgnoreCase(word) && tokens[2].getToken().equals(word));
-    }
-    return false;
+    return super.ignore(tokens, position);
   }
 
 }

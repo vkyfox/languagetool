@@ -18,19 +18,21 @@
  */
 package org.languagetool.commandline;
 
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.DetectedLanguage;
-import org.languagetool.JLanguageTool;
+import org.languagetool.*;
 import org.languagetool.bitext.BitextReader;
 import org.languagetool.bitext.StringPair;
+import org.languagetool.markup.AnnotatedTextBuilder;
 import org.languagetool.rules.Rule;
 import org.languagetool.rules.RuleMatch;
 import org.languagetool.rules.TextLevelRule;
 import org.languagetool.rules.bitext.BitextRule;
+import org.languagetool.rules.patterns.PatternRule;
+import org.languagetool.rules.patterns.PatternRuleMatcher;
+import org.languagetool.rules.patterns.PatternToken;
 import org.languagetool.rules.patterns.AbstractPatternRule;
+import org.languagetool.tagging.disambiguation.rules.DisambiguationPatternRule;
 import org.languagetool.tokenizers.SentenceTokenizer;
 import org.languagetool.tools.ContextTools;
-import org.languagetool.tools.RuleMatchAsXmlSerializer;
 import org.languagetool.tools.RuleMatchesAsJsonSerializer;
 import org.languagetool.tools.StringTools;
 import org.languagetool.tools.Tools;
@@ -39,9 +41,14 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static java.util.Collections.emptyList;
+import static org.languagetool.JLanguageTool.Level.*;
 
 /**
  * @since 2.3
@@ -69,25 +76,29 @@ public final class CommandLineTools {
   }
 
   public static int checkText(String contents, JLanguageTool lt) throws IOException {
-    return checkText(contents, lt, false, false, -1, 0, 0, StringTools.ApiPrintMode.NORMAL_API, false, Collections.<String>emptyList());
+    return checkText(contents, lt, false, -1, 0, 0, StringTools.ApiPrintMode.NORMAL_API, false, DEFAULT, emptyList(), false);
   }
 
   public static int checkText(String contents, JLanguageTool lt,
-                              boolean isXmlFormat, boolean isJsonFormat, int lineOffset) throws IOException {
-    return checkText(contents, lt, isXmlFormat, isJsonFormat, -1, lineOffset, 0, StringTools.ApiPrintMode.NORMAL_API, false, Collections.<String>emptyList());
+                              boolean isJsonFormat, int lineOffset) throws IOException {
+    return checkText(contents, lt, isJsonFormat, -1, lineOffset, 0, StringTools.ApiPrintMode.NORMAL_API, false, DEFAULT, emptyList(), false);
   }
   
   public static int checkText(String contents, JLanguageTool lt,
-          boolean isXmlFormat, boolean isJsonFormat, int lineOffset, boolean listUnknownWords) throws IOException {
-    return checkText(contents, lt, isXmlFormat, isJsonFormat, -1, lineOffset, 0, StringTools.ApiPrintMode.NORMAL_API, listUnknownWords, Collections.<String>emptyList());
-}
+          boolean isJsonFormat, int lineOffset, JLanguageTool.Level level, boolean listUnknownWords) throws IOException {
+    return checkText(contents, lt, isJsonFormat, -1, lineOffset, 0, StringTools.ApiPrintMode.NORMAL_API, listUnknownWords, level, emptyList(), false);
+  }
+
+  public static int checkText(String contents, JLanguageTool lt,
+          boolean isJsonFormat, int lineOffset, JLanguageTool.Level level, boolean listUnknownWords, boolean verbose) throws IOException {
+    return checkText(contents, lt, isJsonFormat, -1, lineOffset, 0, StringTools.ApiPrintMode.NORMAL_API, listUnknownWords, level, emptyList(), verbose);
+  }
 
   /**
    * Check the given text and print results to System.out.
    *
    * @param contents a text to check (may be more than one sentence)
    * @param lt Initialized LanguageTool
-   * @param isXmlFormat whether to print the result in XML format
    * @param isJsonFormat whether to print the result in JSON format
    * @param contextSize error text context size: -1 for default
    * @param lineOffset line number offset to be added to line numbers in matches
@@ -96,63 +107,109 @@ public final class CommandLineTools {
    * @return Number of rule matches to the input text.
    */
   public static int checkText(String contents, JLanguageTool lt,
-                              boolean isXmlFormat, boolean isJsonFormat, int contextSize, int lineOffset,
+                              boolean isJsonFormat, int contextSize, int lineOffset,
                               int prevMatches, StringTools.ApiPrintMode apiMode,
-                              boolean listUnknownWords, List<String> unknownWords) throws IOException {
+                              boolean listUnknownWords, JLanguageTool.Level level, List<String> unknownWords,
+                              boolean verbose) throws IOException {
     if (contextSize == -1) {
       contextSize = DEFAULT_CONTEXT_SIZE;
     }
     long startTime = System.currentTimeMillis();
-    List<RuleMatch> ruleMatches = lt.check(contents);
-    // adjust line numbers
-    for (RuleMatch r : ruleMatches) {
+    List<RuleMatch> ruleMatches = lt.check(new AnnotatedTextBuilder().addText(contents).build(), true, JLanguageTool.ParagraphHandling.NORMAL,
+      null, JLanguageTool.Mode.ALL, level);
+    ruleMatches.parallelStream().forEach(r -> {
+      // adjust line numbers
       r.setLine(r.getLine() + lineOffset);
       r.setEndLine(r.getEndLine() + lineOffset);
-    }
-    if (isXmlFormat) {
-      if (listUnknownWords && apiMode == StringTools.ApiPrintMode.NORMAL_API) {
-        unknownWords = lt.getUnknownWords();
-      }
-      RuleMatchAsXmlSerializer serializer = new RuleMatchAsXmlSerializer();
-      String xml = serializer.ruleMatchesToXml(ruleMatches, contents,
-              contextSize, apiMode, lt.getLanguage(), unknownWords);
-      PrintStream out = new PrintStream(System.out, true, "UTF-8");
-      out.print(xml);
-    } else if (isJsonFormat) {
+
+      // calculate lazy suggestions in parallel and cache them
+      r.getSuggestedReplacementObjects();
+    });
+    if (isJsonFormat) {
       RuleMatchesAsJsonSerializer serializer = new RuleMatchesAsJsonSerializer();
       String json = serializer.ruleMatchesToJson(ruleMatches, contents, contextSize,
         new DetectedLanguage(lt.getLanguage(), lt.getLanguage()));
       PrintStream out = new PrintStream(System.out, true, "UTF-8");
       out.print(json);
     } else {
-      printMatches(ruleMatches, prevMatches, contents, contextSize);
+      printMatches(ruleMatches, prevMatches, contents, contextSize, lt.getLanguage(), verbose);
+      if (verbose) {
+        printActivatedAntiPatterns(contents, lt);
+      }
     }
 
     //display stats if it's not in a buffered mode
     if (apiMode == StringTools.ApiPrintMode.NORMAL_API && !isJsonFormat) {
       SentenceTokenizer sentenceTokenizer = lt.getLanguage().getSentenceTokenizer();
       int sentenceCount = sentenceTokenizer.tokenize(contents).size();
-      displayTimeStats(startTime, sentenceCount, isXmlFormat);
+      displayTimeStats(startTime, sentenceCount);
     }
     return ruleMatches.size();
   }
 
-  private static void displayTimeStats(long startTime,
-                                       long sentCount, boolean isXmlFormat) {
+  private static void printActivatedAntiPatterns(String contents, JLanguageTool lt) throws IOException {
+    List<AnalyzedSentence> sentences;
+    lt.setOutput(null);
+    try {
+      sentences = lt.analyzeText(contents);
+    } finally {
+      lt.setOutput(System.err);
+    }
+    Map<String, List<String>> tokensByAntipattern = new LinkedHashMap<>();
+    for (Rule rule : lt.getAllActiveRules()) {
+      if (!(rule instanceof PatternRule) || rule.getAntiPatterns().isEmpty()) {
+        continue;
+      }
+      PatternRule patternRule = (PatternRule) rule;
+      PatternRuleMatcher matcher = new PatternRuleMatcher(patternRule, false);
+      for (AnalyzedSentence sentence : sentences) {
+        if (matcher.match(sentence).length == 0) {
+          continue;
+        }
+        for (int i = 0; i < rule.getAntiPatterns().size(); i++) {
+          DisambiguationPatternRule antiPattern = rule.getAntiPatterns().get(i);
+          AnalyzedSentence immunizedSentence = antiPattern.replace(sentence.copy(sentence));
+          if (matcher.match(immunizedSentence).length > 0) {
+            continue;
+          }
+          int line = antiPattern.getXmlLineNumber();
+          String key = patternRule.getFullId() + " <antipattern> " + (i + 1) + " (line " + line + ") "
+              + patternToString(antiPattern.getPatternTokens());
+          for (AnalyzedTokenReadings token : immunizedSentence.getTokens()) {
+            if (token.isImmunized() && token.getImmunizationSourceLine() == line) {
+              List<String> tokens = tokensByAntipattern.computeIfAbsent(key, k -> new ArrayList<>());
+              if (!tokens.contains(token.getToken())) {
+                tokens.add(token.getToken());
+              }
+            }
+          }
+        }
+      }
+    }
+    if (tokensByAntipattern.isEmpty()) {
+      return;
+    }
+    System.err.println("Antipatterns activated:");
+    for (Map.Entry<String, List<String>> entry : tokensByAntipattern.entrySet()) {
+      System.err.println("  " + entry.getKey() + ": " + String.join(" ", entry.getValue()));
+    }
+  }
+
+  private static String patternToString(List<PatternToken> patternTokens) {
+    return patternTokens.stream()
+        .map(PatternToken::toString)
+        .collect(Collectors.joining(" "));
+  }
+
+  private static void displayTimeStats(long startTime, long sentCount) {
     long endTime = System.currentTimeMillis();
     long time = endTime - startTime;
     float timeInSeconds = time / 1000.0f;
     float sentencesPerSecond = sentCount / timeInSeconds;
-    if (isXmlFormat) {
-      System.out.println("<!--");
-    }
     System.out.printf(Locale.ENGLISH,
             "Time: %dms for %d sentences (%.1f sentences/sec)", time,
             sentCount, sentencesPerSecond);
     System.out.println();
-    if (isXmlFormat) {
-      System.out.println("-->");
-    }
   }
 
   /**
@@ -163,27 +220,36 @@ public final class CommandLineTools {
    * @param contextSize The size of contents displayed.
    * @since 1.0.1
    */
-  private static void printMatches(List<RuleMatch> ruleMatches,
-                                   int prevMatches, String contents, int contextSize) {
+  public static void printMatches(List<RuleMatch> ruleMatches,
+                                  int prevMatches, String contents, int contextSize, Language lang, boolean verbose) {
     int i = 1;
     ContextTools contextTools = new ContextTools();
     contextTools.setContextSize(contextSize);
     for (RuleMatch match : ruleMatches) {
       Rule rule = match.getRule();
       String output = i + prevMatches + ".) Line " + (match.getLine() + 1) + ", column "
-              + match.getColumn() + ", Rule ID: " + rule.getId();
+              + match.getColumn() + ", Rule ID: " + match.getSpecificRuleId(); //rule.getId();
       if (rule instanceof AbstractPatternRule) {
         AbstractPatternRule pRule = (AbstractPatternRule) rule;
         if (pRule.getSubId() != null) {
           output += "[" + pRule.getSubId() + "]";
         }
       }
+      output += " premium: " + Premium.get().isPremiumRule(match.getRule());
+      int priorityForId = lang.getRulePriority(match.getRule());
+      if (priorityForId != 0) {
+        output += " prio=" + priorityForId;
+      }
+      if (verbose && rule instanceof AbstractPatternRule) {
+        AbstractPatternRule pRule = (AbstractPatternRule) rule;
+        output += " (line " + pRule.getXmlLineNumber()+")";
+      }
       System.out.println(output);
-      String msg = match.getMessage();
-      msg = msg.replaceAll("</?suggestion>", "'");
+      String msg = lang.toAdvancedTypography(match.getMessage()); //.replaceAll("<suggestion>", lang.getOpeningDoubleQuote()).replaceAll("</suggestion>", lang.getClosingDoubleQuote())
       System.out.println("Message: " + msg);
       List<String> replacements = match.getSuggestedReplacements();
       if (!replacements.isEmpty()) {
+        replacements = replacements.subList(0, Math.min(5, replacements.size()));
         System.out.println("Suggestion: " + String.join("; ", replacements));
       }
       System.out.println(contextTools.getPlainTextContext(match.getFromPos(), match.getToPos(), contents));
@@ -191,6 +257,10 @@ public final class CommandLineTools {
         System.out.println("More info: " + match.getUrl());
       } else if (rule.getUrl() != null) {
         System.out.println("More info: " + rule.getUrl());
+      }
+      List<Tag> tags = rule.getTags();
+      if (!tags.isEmpty()) {
+        System.out.println("Tags: " + tags);
       }
       if (i < ruleMatches.size()) {
         System.out.println();
@@ -215,47 +285,34 @@ public final class CommandLineTools {
    */
   public static int checkBitext(BitextReader reader,
                                 JLanguageTool srcLt, JLanguageTool trgLt,
-                                List<BitextRule> bRules,
-                                boolean isXmlFormat) throws IOException {
+                                List<BitextRule> bRules) throws IOException {
     long startTime = System.currentTimeMillis();
     int contextSize = DEFAULT_CONTEXT_SIZE;
     List<RuleMatch> ruleMatches = new ArrayList<>();
     int matchCount = 0;
     int sentCount = 0;
-    RuleMatchAsXmlSerializer serializer = new RuleMatchAsXmlSerializer();
-    PrintStream out = new PrintStream(System.out, true, "UTF-8");
-    if (isXmlFormat) {
-      out.print(serializer.getXmlStart(null, null));
-    }
-    for (StringPair srcAndTrg : reader) {
-      List<RuleMatch> curMatches = Tools.checkBitext(
-              srcAndTrg.getSource(), srcAndTrg.getTarget(),
-              srcLt, trgLt, bRules);
-      List<RuleMatch> fixedMatches = new ArrayList<>();
-      for (RuleMatch thisMatch : curMatches) {
-        fixedMatches.add(
-                trgLt.adjustRuleMatchPos(thisMatch,
-                        reader.getSentencePosition(),
-                        reader.getColumnCount(),
-                        reader.getLineCount(),
-                        reader.getCurrentLine(), null));
-      }
-      ruleMatches.addAll(fixedMatches);
-      if (fixedMatches.size() > 0) {
-        if (isXmlFormat) {
-          String xml = serializer.ruleMatchesToXmlSnippet(fixedMatches,
-                  reader.getCurrentLine(), contextSize);
-          out.print(xml);
-        } else {
-          printMatches(fixedMatches, matchCount, reader.getCurrentLine(), contextSize);
+    try (PrintStream out = new PrintStream(System.out, true, "UTF-8")) {
+      for (StringPair srcAndTrg : reader) {
+        List<RuleMatch> curMatches = Tools.checkBitext(
+          srcAndTrg.getSource(), srcAndTrg.getTarget(),
+          srcLt, trgLt, bRules);
+        List<RuleMatch> fixedMatches = new ArrayList<>();
+        for (RuleMatch thisMatch : curMatches) {
+          fixedMatches.add(
+            trgLt.adjustRuleMatchPos(thisMatch,
+              reader.getSentencePosition(),
+              reader.getColumnCount(),
+              reader.getLineCount(),
+              reader.getCurrentLine(), null));
+        }
+        ruleMatches.addAll(fixedMatches);
+        if (fixedMatches.size() > 0) {
+          printMatches(fixedMatches, matchCount, reader.getCurrentLine(), contextSize, trgLt.getLanguage(), false);
           matchCount += fixedMatches.size();
         }
+        sentCount++;
       }
-      sentCount++;
-    }
-    displayTimeStats(startTime, sentCount, isXmlFormat);
-    if (isXmlFormat) {
-      out.print(serializer.getXmlEnd());
+      displayTimeStats(startTime, sentCount);
     }
     return ruleMatches.size();
   }
@@ -269,34 +326,79 @@ public final class CommandLineTools {
    */
   public static void profileRulesOnText(String contents,
                                         JLanguageTool lt) throws IOException {
-    long[] workTime = new long[10];
+    int iterationCount = 3;
+    long[] workTime = new long[iterationCount];
     List<Rule> rules = lt.getAllActiveRules();
     int ruleCount = rules.size();
-    System.out.printf("Testing %d rules%n", ruleCount);
-    System.out.println("Rule ID\tTime\tSentences\tMatches\tSentences per sec.");
+
     List<String> sentences = lt.sentenceTokenize(contents);
+
+    long analyzeStartTime = System.currentTimeMillis();
+    List<AnalyzedSentence> rawAnalyzedSentences = new ArrayList<>();
+    for(String sentence: sentences) {
+      rawAnalyzedSentences.add(lt.getRawAnalyzedSentence(sentence));
+    }
+
+    long tagEndTime = System.currentTimeMillis();
+
+    long analyzeEndTime = tagEndTime;
+    long analyzeTime = analyzeEndTime-analyzeStartTime;
+    System.out.printf("Analyze time: %d ms, %.1f sent/sec\n\n", analyzeTime, (float)sentences.size()/analyzeTime*1000);
+
+    Language language = lt.getLanguage();
+    
+    //TODO: it would be nice to have timing for each disambiguation rule too
+    List<AnalyzedSentence> analyzedSentences = rawAnalyzedSentences.stream().map( s -> 
+    {
+      try {
+        AnalyzedSentence disambig = language.getDisambiguator().disambiguate(s);
+        AnalyzedSentence analyzedSentence = new AnalyzedSentence(disambig.getTokens(), s.getTokens());
+        if (language.getPostDisambiguationChunker() != null) {
+          language.getPostDisambiguationChunker().addChunkTags(Arrays.asList(analyzedSentence.getTokens()));
+        }
+        return analyzedSentence;
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    ).collect(Collectors.toList());
+
+    long disambigEndTime = System.currentTimeMillis();
+    long disambigTime = disambigEndTime-tagEndTime;
+    System.out.printf("Disambig time: %d ms, %f sent/sec\n\n", disambigTime, (float)sentences.size()/disambigTime*1000);
+
+    System.out.printf("Testing %d rules%n", ruleCount);
+    System.out.printf("%-40s%10s%10s%10s%15s\n", "Rule ID", "Time", "Sentences", "Matches", "Sentences per sec.");
+    
+    
     for (Rule rule : rules) {
       if (rule instanceof TextLevelRule) {
         continue; // profile rules for sentences only
       }
+
       int matchCount = 0;
-      for (int k = 0; k < 10; k++) {
+      for (int k = 0; k < iterationCount; k++) {
         long startTime = System.currentTimeMillis();
-        for (String sentence : sentences) {
+        for (AnalyzedSentence sentence : analyzedSentences) {
           matchCount += rule.match
-                  (lt.getAnalyzedSentence(sentence)).length;
+                  (sentence).length;
         }
-        long endTime = System.currentTimeMillis();
+        long endTime =  System.currentTimeMillis();
         workTime[k] = endTime - startTime;
       }
+
       long time = median(workTime);
       float timeInSeconds = time / 1000.0f;
       float sentencesPerSecond = sentences.size() / timeInSeconds;
       System.out.printf(Locale.ENGLISH,
-              "%s\t%d\t%d\t%d\t%.1f", rule.getId(),
+              "%-40s%10d%10d%10d%15.1f\n", rule.getFullId(),
               time, sentences.size(), matchCount, sentencesPerSecond);
-      System.out.println();
     }
+    
+    long ruleEndTime =  System.currentTimeMillis();
+    long totalRuleTime = (ruleEndTime - disambigEndTime)/iterationCount;
+    System.out.printf("\nTotal rule time: %d ms\n", totalRuleTime);
+    System.out.printf("Total time: %d ms (analyze + disambig + rules)\n", analyzeTime + disambigTime + totalRuleTime);
   }
 
   private static long median(long[] m) {

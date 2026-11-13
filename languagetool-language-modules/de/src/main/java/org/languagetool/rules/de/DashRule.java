@@ -24,6 +24,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.languagetool.AnalyzedSentence;
 import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.rules.*;
+import org.languagetool.tools.Tools;
 
 /**
  * Prüft, dass in Bindestrich-Komposita kein Leerzeichen eingefügt wird (wie z.B. in 'Diäten- Erhöhung').
@@ -34,6 +35,7 @@ public class DashRule extends Rule {
 
   public DashRule(ResourceBundle messages) {
     super.setCategory(Categories.COMPOUNDING.getCategory(messages));
+    setUrl(Tools.getUrl("https://languagetool.org/insights/de/beitrag/grammatik-leerzeichen/#fehler-1-leerzeichen-vor-und-nach-satzzeichen"));
     addExamplePair(Example.wrong("Bundestag beschließt <marker>Diäten- Erhöhung</marker>"),
                    Example.fixed("Bundestag beschließt <marker>Diäten-Erhöhung</marker>"));
   }
@@ -69,9 +71,11 @@ public class DashRule extends Rule {
             String shortMsg = "Fehlendes 'und' oder Komma oder überflüssiges Leerzeichen?";
             int fromPos = tokens[i - 1].getStartPos();
             RuleMatch ruleMatch = new RuleMatch(this, sentence, fromPos,
-                    fromPos +prevToken.length()+1, msg, shortMsg);
-            String prevTokenStr = tokens[i-1].getToken();
-            ruleMatch.setSuggestedReplacements(Arrays.asList(prevTokenStr, prevTokenStr + ", "));
+                    tokens[i].getEndPos(), msg, shortMsg);
+            ruleMatch.addSuggestedReplacement(tokens[i-1].getToken() + tokens[i].getToken());
+            if (StringUtils.countMatches(tokens[i-1].getToken(), "-") + StringUtils.countMatches(tokens[i].getToken(), "-") <= 1) {
+              ruleMatch.addSuggestedReplacement(tokens[i-1].getToken() + ", " + tokens[i].getToken());
+            }
             ruleMatches.add(ruleMatch);
           }
         }

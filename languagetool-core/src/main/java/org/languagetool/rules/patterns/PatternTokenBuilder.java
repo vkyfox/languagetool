@@ -38,6 +38,7 @@ public class PatternTokenBuilder {
   private int minOccurrence = 1;
   private int maxOccurrence = 1;
   private int skip;
+  private String tokenException;
 
   /**
    * Add a case-insensitive token. 
@@ -103,9 +104,20 @@ public class PatternTokenBuilder {
     return this;
   }
 
+  public PatternTokenBuilder posRegexWithStringException(String posTag, String tokenExceptionRegex) {
+    return pos(posTag, true, tokenExceptionRegex);
+  }
+
   private PatternTokenBuilder pos(String posTag, boolean regexp) {
     this.posTag = Objects.requireNonNull(posTag);
     this.regexp = regexp;
+    return this;
+  }
+
+  private PatternTokenBuilder pos(String posTag, boolean regexp, String tokenExceptionRegex) {
+    this.posTag = Objects.requireNonNull(posTag);
+    this.regexp = regexp;
+    this.tokenException = tokenExceptionRegex;
     return this;
   }
 
@@ -140,17 +152,18 @@ public class PatternTokenBuilder {
   
   public PatternToken build() {
     PatternToken patternToken;
+    patternToken = new PatternToken(token, caseSensitive, regexp, matchInflectedForms);
     if (posTag != null) {
-      patternToken = new PatternToken(null, false, false, false);
       patternToken.setPosToken(new PatternToken.PosToken(posTag, regexp, false));
-    } else {
-      patternToken = new PatternToken(token, caseSensitive, regexp, matchInflectedForms);
     }
     if (isWhiteSpaceSet) {
       patternToken.setWhitespaceBefore(isWhiteSpaceBefore);
     }
     if (maxOccurrence < minOccurrence) {
       throw new IllegalArgumentException("minOccurrence must <= maxOccurrence: minOccurrence " + minOccurrence + ", maxOccurrence " + maxOccurrence);
+    }
+    if (tokenException != null) {
+      patternToken.setStringPosException(tokenException, true, false, false, false, false, null, false, false, false);
     }
     patternToken.setMinOccurrence(minOccurrence);
     patternToken.setMaxOccurrence(maxOccurrence);

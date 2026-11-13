@@ -5,13 +5,13 @@
     <parent>
         <groupId>org.languagetool</groupId>
         <artifactId>languagetool-parent</artifactId>
-        <version>4.9-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
+        <version>${revision}</version>
     </parent>
-    
+
     <artifactId>languagetool-commandline</artifactId>
-    <url>http://www.languagetool.org</url>
+    <packaging>jar</packaging>
     <name>LanguageTool command-line version</name>
+    <url>https://www.languagetool.org</url>
 
     <licenses>
         <license>
@@ -20,26 +20,62 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
-    
-    <packaging>jar</packaging>
 
     <developers>
         <developer>
             <name>Daniel Naber</name>
-            <roles><role>Maintainer</role></roles>
+            <roles>
+                <role>Maintainer</role>
+            </roles>
         </developer>
         <developer>
             <name>Marcin Miłkowski</name>
-            <roles><role>Maintainer</role></roles>
+            <roles>
+                <role>Maintainer</role>
+            </roles>
         </developer>
     </developers>
-    
+
+    <dependencies>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.languagetool</groupId>
+            <artifactId>language-all</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.languagetool</groupId>
+            <artifactId>languagetool-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- see http://stackoverflow.com/questions/174560/sharing-test-code-in-maven#174670 -->
+            <groupId>org.languagetool</groupId>
+            <artifactId>languagetool-core</artifactId>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <build>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>${maven.jar.plugin}</version>
                 <configuration>
                     <archive>
                         <manifest>
@@ -57,52 +93,11 @@
                         </manifestEntries>
                     </archive>
                 </configuration>
-            </plugin>            
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+            </plugin>
         </plugins>
     </build>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.languagetool</groupId>
-            <artifactId>languagetool-core</artifactId>
-            <version>${languagetool.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.languagetool</groupId>
-            <artifactId>language-all</artifactId>
-            <version>${languagetool.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
-            <version>2.6</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>1.7.25</version>
-        </dependency>
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>1.2.3</version>
-        </dependency>
-
-        <dependency>
-            <!-- see http://stackoverflow.com/questions/174560/sharing-test-code-in-maven#174670 -->
-            <groupId>org.languagetool</groupId>
-            <artifactId>languagetool-core</artifactId>
-            <version>${languagetool.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
 </project>

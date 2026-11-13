@@ -26,6 +26,8 @@ import org.languagetool.rules.ITSIssueType;
 import org.languagetool.tools.Tools;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
@@ -45,14 +47,14 @@ public class EnglishPlainEnglishRule extends AbstractSimpleReplaceRule2 {
   private static final Locale EN_LOCALE = new Locale("en");  // locale used on case-conversion
 
   @Override
-  public final String getFileName() {
-    return FILE_NAME;
+  public final List<String> getFileNames() {
+    return Collections.singletonList(FILE_NAME);
   }
 
   public EnglishPlainEnglishRule(ResourceBundle messages) throws IOException {
     super(messages, new English());
     setDefaultOff();  // reactivate after feature freeze
-    super.setCategory(Categories.PLAIN_ENGLISH.getCategory(messages));
+    setCategory(Categories.PLAIN_ENGLISH.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Style);
     addExamplePair(Example.wrong("<marker>fatal outcome</marker>"),
                    Example.fixed("<marker>death</marker>"));
@@ -74,8 +76,8 @@ public class EnglishPlainEnglishRule extends AbstractSimpleReplaceRule2 {
   }
 
   @Override
-  public String getSuggestion() {
-    return "'$match' is a wordy or complex expression. In some cases, it might be preferable to use $suggestions";
+  public String getMessage() {
+    return "'$match' is a wordy or complex expression. In some cases, it might be preferable to use $suggestions.";
   }
 
   @Override

@@ -20,9 +20,7 @@ package org.languagetool.markup;
 
 import org.apache.commons.lang3.StringUtils;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * A text with markup and with a mapping so error positions will refer to the original
@@ -38,6 +36,7 @@ public class AnnotatedText {
   public enum MetaDataKey {
     DocumentTitle,
     EmailToAddress,
+    FullName,
     EmailNumberOfAttachments
   }
 
@@ -46,11 +45,22 @@ public class AnnotatedText {
   private final Map<MetaDataKey, String> metaData;
   private final Map<String, String> customMetaData;
 
+  // Lazily computed and cached: rebuilding the whole text for every call is O(n) and callers
+  // like the JSON serializer invoke it once per match, turning that into O(n^2) on large texts.
+  private volatile String textWithMarkup;
+
   AnnotatedText(List<TextPart> parts, Map<Integer, MappingValue> mapping, Map<MetaDataKey, String> metaData, Map<String, String> customMetaData) {
     this.parts = Objects.requireNonNull(parts);
     this.mapping = Objects.requireNonNull(mapping);
     this.metaData = Objects.requireNonNull(metaData);
     this.customMetaData = Objects.requireNonNull(customMetaData);
+  }
+
+  /**
+   * @since 5.4
+   */
+  public List<TextPart> getParts() {
+    return parts;
   }
 
   /**
@@ -84,13 +94,18 @@ public class AnnotatedText {
    * @since 4.3
    */
   public String getTextWithMarkup() {
-    StringBuilder sb = new StringBuilder();
-    for (TextPart part : parts) {
-      if (part.getType() != TextPart.Type.FAKE_CONTENT) {
-        sb.append(part.getPart());
+    String result = textWithMarkup;
+    if (result == null) {
+      StringBuilder sb = new StringBuilder();
+      for (TextPart part : parts) {
+        if (part.getType() != TextPart.Type.FAKE_CONTENT) {
+          sb.append(part.getPart());
+        }
       }
+      result = sb.toString();
+      textWithMarkup = result;
     }
-    return sb.toString();
+    return result;
   }
 
   /**
@@ -121,7 +136,8 @@ public class AnnotatedText {
       }
     }
     if (bestMatch == null) {
-      throw new RuntimeException("Could not map " + plainTextPosition + " to original position");
+      String msg = "mappings: " + (mapping.size() < 5 ? mapping : mapping.size());
+      throw new RuntimeException("Could not map " + plainTextPosition + " to original position. isToPos: " + isToPos + ", " + msg);
     }
     // we remove markup total length if usage of fake markup and need from position
     if (!isToPos && bestMatch.getFakeMarkupLength() > 0) {
@@ -145,6 +161,16 @@ public class AnnotatedText {
    */
   public String getGlobalMetaData(MetaDataKey key, String defaultValue) {
     return metaData.getOrDefault(key, defaultValue);
+  }
+
+  /** @since 5.4 */
+  public Map<MetaDataKey, String> getGlobalMetaData() {
+    return metaData;
+  }
+
+  /** @since 5.4 */
+  public Map<String, String> getCustomMetaData() {
+    return customMetaData;
   }
 
   @Override

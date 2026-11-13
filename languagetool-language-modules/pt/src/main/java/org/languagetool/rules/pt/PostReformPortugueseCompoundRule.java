@@ -18,16 +18,18 @@
  */
 package org.languagetool.rules.pt;
 
-import org.languagetool.rules.AbstractCompoundRule;
-import org.languagetool.rules.CompoundRuleData;
-import org.languagetool.rules.Categories;
-import org.languagetool.rules.ITSIssueType;
+import org.apache.commons.lang3.StringUtils;
+import org.languagetool.Language;
+import org.languagetool.UserConfig;
+import org.languagetool.rules.*;
 import org.languagetool.tools.Tools;
 
 import java.io.IOException;
-import java.util.ResourceBundle;
-
 import java.net.URL;
+import java.util.ResourceBundle;
+import java.util.regex.Pattern;
+
+import static java.util.regex.Pattern.compile;
 
 /**
  * Checks that compounds (if in the list) are not written as separate words.
@@ -35,16 +37,20 @@ import java.net.URL;
  */
 public class PostReformPortugueseCompoundRule extends AbstractCompoundRule {
 
-  private static final CompoundRuleData compoundData = new CompoundRuleData("/pt/post-reform-compounds.txt");
+  private static final Pattern VOWEL = compile("(?i).+[aeiou]$");
+  private static final Pattern RS = compile("(?i)^[rs].+");
 
-  public PostReformPortugueseCompoundRule(ResourceBundle messages) throws IOException {    
-    super(messages,
+  private static volatile CompoundRuleData compoundData;
+
+  public PostReformPortugueseCompoundRule(ResourceBundle messages, Language lang, UserConfig userConfig) throws IOException {    
+    super(messages, lang, userConfig,
             "Esta palavra é hifenizada.",
             "Esta palavra é composta por justaposição.",
             "Esta palavra pode ser composta por justaposição ou hifenizada.",
             "Este conjunto forma uma palavra composta.");
     super.setCategory(Categories.COMPOUNDING.getCategory(messages));
     setLocQualityIssueType(ITSIssueType.Grammar);
+    useSubRuleSpecificIds();
   }
 
   @Override
@@ -54,7 +60,7 @@ public class PostReformPortugueseCompoundRule extends AbstractCompoundRule {
 
   @Override
   public String getDescription() {
-    return "Palavras compostas";
+    return "Erro na formação da palavra composta \"$match\"";
   }
 
   @Override
@@ -63,7 +69,38 @@ public class PostReformPortugueseCompoundRule extends AbstractCompoundRule {
   }
 
   @Override
-  protected CompoundRuleData getCompoundRuleData() {
-    return compoundData;
+  public CompoundRuleData getCompoundRuleData() {
+    CompoundRuleData data = compoundData;
+    if (data == null) {
+      synchronized (PostReformPortugueseCompoundRule.class) {
+        data = compoundData;
+        if (data == null) {
+          compoundData = data = new CompoundRuleData("/pt/post-reform-compounds.txt");
+        }
+      }
+    }
+
+    return data;
+  }
+
+  // This override is here to account for Portuguese transformations required as per the latest orthography:
+  // ultra + som  => ultrassom (with <s> turned into <ss> to keep the sound).
+  @Override
+  public String mergeCompound(String str, boolean uncapitalizeMidWords) {
+    String[] stringParts = str.replace("-", " ").split(" ");
+    StringBuilder sb = new StringBuilder();
+    for (int k = 0; k < stringParts.length; k++) {
+      if (k == 0) {
+        sb.append(stringParts[0]);
+      } else {
+        // if previous element ends in vowel and current one starts with <r> or <s>, we need to double the letter into
+        // a digraph that creates the sound we want
+        if (VOWEL.matcher(stringParts[k - 1]).matches() && RS.matcher(stringParts[k]).matches()) {
+          stringParts[k] = stringParts[k].charAt(0) + stringParts[k];
+        }
+        sb.append(uncapitalizeMidWords ? StringUtils.uncapitalize(stringParts[k]) : stringParts[k]);
+      }
+    }
+    return sb.toString();
   }
 }

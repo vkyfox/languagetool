@@ -19,11 +19,17 @@
 
 package org.languagetool.tagging.disambiguation.uk;
 
+import static java.util.regex.Pattern.compile;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
 import org.languagetool.AnalyzedSentence;
@@ -31,34 +37,53 @@ import org.languagetool.AnalyzedToken;
 import org.languagetool.AnalyzedTokenReadings;
 import org.languagetool.JLanguageTool;
 import org.languagetool.language.Ukrainian;
+import org.languagetool.rules.uk.CaseGovernmentHelper;
+import org.languagetool.rules.uk.InflectionHelper;
+import org.languagetool.rules.uk.InflectionHelper.Inflection;
 import org.languagetool.rules.uk.LemmaHelper;
 import org.languagetool.tagging.disambiguation.AbstractDisambiguator;
 import org.languagetool.tagging.disambiguation.Disambiguator;
 import org.languagetool.tagging.disambiguation.rules.XmlRuleDisambiguator;
 import org.languagetool.tagging.uk.PosTagHelper;
-import org.languagetool.tools.StringTools;
 
 /**
  * Hybrid chunker-disambiguator for Ukrainian.
  */
 
 public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
-  private static final String LAST_NAME_TAG = ":lname";
-  private static final Pattern INITIAL_REGEX = Pattern.compile("[А-ЯІЇЄҐ]\\.");
-  private static final Pattern INANIM_VKLY = Pattern.compile("noun:inanim:.:v_kly.*");
-  private static final Pattern PLURAL_NAME = Pattern.compile("noun:anim:p:.*:fname.*");
+  private static final String LAST_NAME_TAG = ":prop:lname";
+  private static final Pattern INITIAL_REGEX = compile("[А-ЯІЇЄҐ]\\.");
+  private static final Pattern INANIM_VKLY = compile("noun:inanim:.:v_kly.*");
+  private static final Pattern PLURAL_NAME = compile("noun:anim:p:.*:fname.*");
 //  private static final Pattern PLURAL_LNAME_OR_PATR = Pattern.compile("noun:anim:p:.*:lname.*");
-  private static final String PLURAL_LNAME = "noun:anim:p:.*:[lp]name.*";
+  private static final Pattern PLURAL_LNAME_PATTERN = compile("noun:anim:p:.*:[lp]name.*");
   private static final String ST_ABBR = "ст.";
-  private static final Pattern LATIN_DIGITS_PATTERN = Pattern.compile("[XIVХІ]+([–—-][XIVХІ]+)?");
-  private static final Pattern DIGITS_PATTERN = Pattern.compile("[0-9]+([–—-][0-9]+)?");
-  private static final Pattern STATION_NAME_PATTERN = Pattern.compile("метро|[А-Я][а-яіїєґ'-]+");
+  private static final Pattern LATIN_DIGITS_PATTERN = compile("[XIVХІ]+([–—-][XIVХІ]+)?");
+  private static final Pattern DIGITS_PATTERN = compile("[0-9]+([–—-][0-9]+)?");
+  private static final Pattern STATION_NAME_PATTERN = compile("метро|[А-Я][а-яіїєґ'-]+");
+  private static final Pattern PATTERN_1 = compile("[а-яіїєґa-z0-9].*");
+  private static final Pattern PATTERN_2 = compile("[0-9]+([.,–—-][0-9]+)?");
+  private static final Pattern PATTERN_3 = compile("два|дві|три|чотири");
+  private static final Pattern PATTERN_4 = compile(":(alt|nv|up\\d{2}|xp\\d)");
+  private static final Pattern PATTERN_5 = compile(":[mfn]:v_rod");
 
   private final Disambiguator chunker = new UkrainianMultiwordChunker("/uk/multiwords.txt", true);
 
-  private final Disambiguator disambiguator = new XmlRuleDisambiguator(new Ukrainian());
+  private final Disambiguator disambiguator = new XmlRuleDisambiguator(Ukrainian.DEFAULT_VARIANT);
   private final SimpleDisambiguator simpleDisambiguator = new SimpleDisambiguator();
 
+  static final Set<String> V_MIS_PREPS = CaseGovernmentHelper.CASE_GOVERNMENT_MAP.entrySet()
+      .stream().filter(e -> e.getValue().contains("v_mis")).map(Map.Entry::getKey).collect(Collectors.toSet());
+  static final Set<String> V_NON_MIS_PREPS = CaseGovernmentHelper.CASE_GOVERNMENT_MAP.entrySet()
+      .stream().filter(e -> ! e.getValue().contains("v_mis")).map(Map.Entry::getKey).collect(Collectors.toSet());
+  
+  static {
+    // add Latin y/B - often used instead of real prep
+    // we'll catch it in MixedAlphabetsRule
+    V_MIS_PREPS.add("y");
+    V_MIS_PREPS.add("B");
+  }
+  
 
   /**
    * Calls two disambiguator classes: (1) a chunker; (2) a rule-based disambiguator.
@@ -66,21 +91,302 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
   @Override
   public final AnalyzedSentence disambiguate(AnalyzedSentence input) throws IOException {
     preDisambiguate(input);
-    
     return disambiguator.disambiguate(chunker.disambiguate(input));
   }
 
   @Override
   public AnalyzedSentence preDisambiguate(AnalyzedSentence input) {
+    simpleDisambiguator.removeRareForms(input);
+    removeYih(input);
+    removeVmis(input);
+    retagFemNames(input);
     retagInitials(input);
+    retagUnknownInitials(input);
     removeInanimVKly(input);
     removePluralForNames(input);
     removeLowerCaseHomonymsForAbbreviations(input);
     removeLowerCaseBadForUpperCaseGood(input);
-    simpleDisambiguator.removeRareForms(input);
     disambiguateSt(input);
-
+    disambiguatePronPos(input);
+    retagPulralProp(input);
+    removeVerbImpr(input);
     return input;
+  }
+
+  private static final Pattern ADJ_PRON = compile("adj.*pron.*");
+//  private static final Pattern NOUN_PRON = compile("noun.*pron.*");
+  
+  private void removeYih(AnalyzedSentence input) {
+    AnalyzedTokenReadings[] tokens = input.getTokensWithoutWhitespace();
+    for (int i = 1; i < tokens.length; i++) {
+      AnalyzedTokenReadings mainToken = tokens[i];
+
+      String cleanToken = mainToken.getCleanToken();
+      if( StringUtils.isEmpty(cleanToken) )
+        continue;
+      
+      String cleanTokenLower = cleanToken.toLowerCase();
+      
+      if( cleanTokenLower.matches("їх|його|її") ) {
+
+        if( i < tokens.length - 1 ) {
+          String nextCleanToken = tokens[i+1].getCleanToken();
+          nextCleanToken = nextCleanToken.toLowerCase();
+
+          if( LemmaHelper.hasLemma(tokens[i+1], compile("кількість|розгляд|обговорення|використання|реалізація|виконання|звільнення|виробництво|застосування|проведення|утримання|вирішення|загибель|аналоги|однолітки|перелік|затримання|створення|розміщення|лікування|втілення|арешт|формування|наявність|збереження"))
+              || PosTagHelper.hasPosTag(tokens[i+1], compile("noninfl:predic.*")) // їх можна ...
+              ) {
+            removeReadings(mainToken, ADJ_PRON, "dis_yih_pron_pos");
+            continue;
+          }
+
+//          if( LemmaHelper.hasLemma(tokens[i+1], compile("існування|друг"))
+//              ) {
+//            removeReadings(mainToken, NOUN_PRON, "dis_yih_pron_pos");
+//            continue;
+//          }
+
+          // їх було
+          if( PosTagHelper.hasPosTagStart(tokens[i+1], "verb")
+              && ! PosTagHelper.hasPosTag(tokens[i+1], compile("(adj|noun).*"))
+              ) {
+            removeReadings(mainToken, ADJ_PRON, "dis_yih_pron_pos");
+            continue;
+          }
+
+          if( nextCleanToken.matches("обох|ніхто|ніщо") // їх обох
+              || (PosTagHelper.hasPosTag(tokens[i+1], compile(".*pron:pers.*|prep.*"))
+                  && ! nextCleanToken.matches("і?з")) // їх я, їх на... але не "їх з"
+              ) {
+            removeReadings(mainToken, ADJ_PRON, "dis_yih_pron_pos");
+            continue;
+          }
+
+          if( i < tokens.length-2 && nextCleanToken.matches("н[еі]") // їх не було
+              && PosTagHelper.hasPosTagStart(tokens[i+2], "verb")
+                  ) {
+            removeReadings(mainToken, ADJ_PRON, "dis_yih_pron_pos");
+            continue;
+          }
+
+          // exclude на його душу
+          if( ! PosTagHelper.hasPosTag(tokens[i+1], compile("(adj|noun).*")) ) {
+            Set<String> caseGovernments = CaseGovernmentHelper.getCaseGovernments(tokens[i+1], Pattern.compile("verb.*"));
+            if( ! Collections.disjoint(caseGovernments, List.of("v_rod", "v_zna")) ) {
+              removeReadings(mainToken, ADJ_PRON, "dis_yih_pron_pos");
+              continue;
+            }
+          }
+        }
+
+        // посунув їх
+        if( i > 1 ) {
+          Set<String> prevCaseGovernments = CaseGovernmentHelper.getCaseGovernments(tokens[i-1], Pattern.compile("(verb|advp).*"));
+          if( ! Collections.disjoint(prevCaseGovernments, List.of("v_rod", "v_zna")) ) {
+            
+            // посунув їх швидко/у ...
+            if( i == tokens.length-1
+                || PosTagHelper.hasPosTag(tokens[i+1], compile("(adv|prep).*"))
+                || tokens[i+1].getToken().matches("[,.;\u2013\u2014-]") ) {
+              removeReadings(mainToken, ADJ_PRON, "dis_yih_pron_pos");
+              continue;
+            }
+
+            // примусили їх сказати
+            if( i <= tokens.length-1
+                && PosTagHelper.hasPosTag(tokens[i-1], compile("(verb|advp).*"))
+                && PosTagHelper.hasPosTag(tokens[i+1], compile("(verb).*:inf.*"))
+                && ! Collections.disjoint(prevCaseGovernments, List.of("v_inf")) ) {
+              removeReadings(mainToken, ADJ_PRON, "dis_yih_pron_pos");
+              continue;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private void removeReadings(AnalyzedTokenReadings mainToken, Pattern posTag, String label) {
+    List<AnalyzedToken> analyzedTokens = mainToken.getReadings();
+    for(AnalyzedToken analyzedToken: analyzedTokens) {
+      if( PosTagHelper.hasPosTag(analyzedToken, posTag) ) {
+        mainToken.removeReading(analyzedToken, label);
+      }
+    }
+  }
+
+  private void removeVerbImpr(AnalyzedSentence input) {
+    AnalyzedTokenReadings[] tokens = input.getTokensWithoutWhitespace();
+    for (int i = 2; i < tokens.length; i++) {
+      List<AnalyzedToken> analyzedTokens = tokens[i].getReadings();
+      
+      if( PosTagHelper.hasPosTag(tokens[i], Pattern.compile("verb.*impr.*"))
+          && PosTagHelper.hasPosTag(tokens[i], Pattern.compile("noun.*"))
+          && PosTagHelper.hasPosTag(tokens[i-1], Pattern.compile("adj.*")) ) {
+
+        List<InflectionHelper.Inflection> masterInflections = InflectionHelper.getAdjInflections(tokens[i-1].getReadings());
+        List<InflectionHelper.Inflection> slaveInflections = InflectionHelper.getNounInflections(tokens[i].getReadings(), Pattern.compile("v_zna:var"));
+
+        if( ! Collections.disjoint(masterInflections, slaveInflections) ) {
+        
+          List<AnalyzedToken> verbReadings = PosTagHelper.filter(analyzedTokens, Pattern.compile("verb.*impr.*"));
+          for(AnalyzedToken analyzedToken: verbReadings) {
+            tokens[i].removeReading(analyzedToken, "not_an_imperative_2");
+          }
+        }
+      }
+    }
+  }
+
+  private void retagFemNames(AnalyzedSentence input) {
+    AnalyzedTokenReadings[] tokens = input.getTokensWithoutWhitespace();
+    String ruleApplied = "proper_name_gender_override";
+    
+    for (int i = 1; i < tokens.length-2; i++) {
+
+      for(String gen: new String[] {"f", "m"}) {
+        
+        List<String> prefix = gen.equals("f") 
+            ? Arrays.asList("пані", "місіс", "місис", "міс", "леді", "княгиня", "німкеня")
+                : Arrays.asList("пан", "містер", "м-р", "сер", "князь", "німець", "поляк");
+
+        String animPropTagPrefix = "noun:anim:"+gen+":v_naz:prop";
+        
+
+        if( (LemmaHelper.hasLemma(tokens[i], prefix, compile("noun:anim:"+gen+":v_naz.*"))
+            || PosTagHelper.hasPosTagStart(tokens[i], animPropTagPrefix + ":fname"))
+            && PosTagHelper.hasPosTag(tokens[i+2], compile("verb.*:past:"+gen)) ) {
+
+          AnalyzedTokenReadings nameToken = tokens[i+1];
+          if( PosTagHelper.hasPosTagStart(nameToken, animPropTagPrefix) ) {
+            for (AnalyzedToken analyzedToken : nameToken) {
+              if( ! PosTagHelper.hasPosTagStart(analyzedToken, animPropTagPrefix) ) {
+                nameToken.removeReading(analyzedToken, ruleApplied);
+              }
+            }
+          }
+          // леді Черчилль
+          else if ( gen.equals("f") && PosTagHelper.hasPosTagStart(nameToken, "noun:anim:m:v_naz:prop") ) {
+            for (AnalyzedToken analyzedToken : nameToken) {
+              nameToken.removeReading(analyzedToken, ruleApplied);
+            }
+            nameToken.addReading(new AnalyzedToken(nameToken.getToken(), "noun:anim:f:v_naz:prop:lname", nameToken.getToken()), ruleApplied);
+          }
+          // Олег П'ятниця
+          else if( LemmaHelper.isCapitalized(nameToken.getCleanToken())
+              && ! PosTagHelper.hasPosTagPart(nameToken, ":prop")
+              && PosTagHelper.hasPosTagStart(tokens[i], animPropTagPrefix + ":fname") ) {
+            for (AnalyzedToken analyzedToken : nameToken) {
+              nameToken.removeReading(analyzedToken, ruleApplied);
+            }
+            nameToken.addReading(new AnalyzedToken(nameToken.getToken(), animPropTagPrefix + ":lname", nameToken.getToken()), ruleApplied);
+          }
+
+          i+=1;
+        }
+      }
+    }
+  }
+
+  private void removeVmis(AnalyzedSentence input) {
+    AnalyzedTokenReadings[] tokens = input.getTokensWithoutWhitespace();
+    
+    boolean startCheck = false;
+    for (int i = 1; i < tokens.length; i++) {
+      List<AnalyzedToken> analyzedTokens = tokens[i].getReadings();
+
+      if (tokens[i].getToken() == null )
+        continue;
+      
+      String lowerCaseToken = tokens[i].getToken().toLowerCase();
+
+      boolean hasPrep = PosTagHelper.hasPosTagPart(tokens[i], "prep");
+
+      if( ! startCheck ) {
+        if( hasPrep ) {
+          startCheck = true;
+        }
+        else {
+          if(PATTERN_1.matcher(lowerCaseToken).matches()) {
+            // sometimes sentences incorrectly split, e.g. "захопленню зброї;" - leave it
+            if( StringUtils.isAllLowerCase(tokens[i].getToken()) ) {
+              continue;
+            }
+            startCheck = true;
+          }
+        }
+      }
+      
+      if( hasPrep && V_MIS_PREPS.contains(lowerCaseToken) )
+        return;
+
+      if ( ! canRemoveVmis(analyzedTokens) )
+        continue;
+
+      for (AnalyzedToken analyzedToken : analyzedTokens) {
+        if( PosTagHelper.hasPosTagPart(analyzedToken, "v_mis") ) {
+          tokens[i].removeReading(analyzedToken, "dis_v_mis");
+        }
+      }
+    }
+  }
+
+  private boolean canRemoveVmis(List<AnalyzedToken> analyzedTokens) {
+    boolean foundVmis = false, foundOther = false;
+    for(AnalyzedToken token: analyzedTokens) {
+      if( PosTagHelper.hasPosTagPart(token, "v_mis") ) {
+        foundVmis = true;
+      }
+      else if( token.getPOSTag() != null && ! token.getPOSTag().endsWith("_END") ) {
+        foundOther = true;
+      }
+      if( foundVmis && foundOther )
+        break;
+    }
+    return foundVmis && foundOther;
+  }
+
+  private static final Pattern IGNORE_IN_PRON_POS = compile("pron|noun:anim:p:v_zna.*:rare.*");
+  
+  private void disambiguatePronPos(AnalyzedSentence input) {
+    AnalyzedTokenReadings[] tokens = input.getTokensWithoutWhitespace();
+    
+    for (int i = 1; i < tokens.length; i++) {
+      List<AnalyzedToken> analyzedTokens = tokens[i].getReadings();
+
+      if (tokens[i].getToken() == null )
+        continue;
+      
+      String lowerCaseToken = tokens[i].getCleanToken().toLowerCase();
+      
+      if( Arrays.asList("його", "її", "їх").contains(lowerCaseToken) ) {
+        
+        if( PosTagHelper.hasPosTag(tokens[i], compile("adj.*pron:pos.*")) ) {
+        
+          List<Inflection> nounInflections = new ArrayList<>();
+          if( i > 1 ) {
+            List<Inflection> nounInflections_ = InflectionHelper.getNounInflections(tokens[i-1].getReadings(), IGNORE_IN_PRON_POS);
+            nounInflections.addAll( nounInflections_ );
+          }
+          if( i < tokens.length-1 ) {
+            List<Inflection> nounInflections_ = InflectionHelper.getNounInflections(tokens[i+1].getReadings(), IGNORE_IN_PRON_POS);
+            nounInflections.addAll( nounInflections_ );
+          }
+
+          if( nounInflections.size() > 0 ) {
+
+            for (AnalyzedToken analyzedToken : analyzedTokens) {
+              if( PosTagHelper.hasPosTagStart(analyzedToken, "adj") ) {
+                List<Inflection> adjInflections = InflectionHelper.getAdjInflections(Arrays.asList(analyzedToken));
+                if( Collections.disjoint(nounInflections, adjInflections)  ) {
+                  tokens[i].removeReading(analyzedToken, "dis_pron_pos");
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   // correct: Єврокомісія, but often written: єврокомісія
@@ -89,8 +395,8 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
     AnalyzedTokenReadings[] tokens = input.getTokensWithoutWhitespace();
     for (int i = 1; i < tokens.length; i++) {
       if( tokens[i].getReadings().size() > 1
-          && StringTools.isCapitalizedWord(tokens[i].getToken())
-          && LemmaHelper.hasLemma(tokens[i], Pattern.compile("[А-ЯІЇЄҐ][а-яіїєґ'-].*"), Pattern.compile(".*?:prop")) ) {
+          && LemmaHelper.isCapitalized(tokens[i].getCleanToken())
+          && LemmaHelper.hasLemma(tokens[i], compile("[А-ЯІЇЄҐ][а-яіїєґ'-].*"), compile(".*?:prop")) ) {
 
         String lowerLemmaToCheck = tokens[i].getAnalyzedToken(0).getLemma().toLowerCase();
         
@@ -100,7 +406,7 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
           
           if( PosTagHelper.hasPosTagPart(analyzedToken, ":bad") 
               && lowerLemmaToCheck.equals(analyzedToken.getLemma()) ) {
-            tokens[i].removeReading(analyzedToken, this.toString());
+            tokens[i].removeReading(analyzedToken, "lowercase_bad_vs_uppercase_good");
           }
         }
       }
@@ -119,24 +425,23 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
           AnalyzedToken analyzedToken = analyzedTokens.get(j);
           
           if( ! PosTagHelper.hasPosTagPart(analyzedToken, ":abbr") 
-              && ! JLanguageTool.SENTENCE_END_TAGNAME.equals(analyzedToken) ) {
-            tokens[i].removeReading(analyzedToken, this.toString());
+              && ! JLanguageTool.SENTENCE_END_TAGNAME.equals(analyzedToken.getPOSTag())
+              && ! JLanguageTool.PARAGRAPH_END_TAGNAME.equals(analyzedToken.getPOSTag())) {
+            tokens[i].removeReading(analyzedToken, "lowercase_vs_abbr");
           }
         }
       }
     }    
   }
 
-  private static final Pattern PUNCT_AFTER_KLY_PATTERN = Pattern.compile("[!?,»\"\u201C\u201D…]|[\\.!?]{2,3}");
-  private static final Pattern ADJ_V_KLY_PATTERN = Pattern.compile("adj:.:v_kly.*");
-  private static final Pattern PREP_PATTERN = Pattern.compile("prep.*");
+  private static final Pattern PUNCT_AFTER_KLY_PATTERN = compile("[!?,»\"\u201C\u201D…]|[\\.!?]{2,3}");
 
   private void removeInanimVKly(AnalyzedSentence input) {
     AnalyzedTokenReadings[] tokens = input.getTokensWithoutWhitespace();
     for (int i = 1; i < tokens.length; i++) {
       List<AnalyzedToken> analyzedTokens = tokens[i].getReadings();
 
-      if( ! PosTagHelper.hasPosTag(analyzedTokens, Pattern.compile("noun:inanim:.:v_kly.*") )
+      if( ! PosTagHelper.hasPosTag(analyzedTokens, compile("noun:inanim:.:v_kly(?!.*:geo).*") )
           || likelyVklyContext(tokens, i) )
         continue;
 
@@ -160,17 +465,24 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
 
       if( inanimVklyReadings.size() > 0 && otherFound ) {
         for(AnalyzedToken analyzedToken: inanimVklyReadings) {
-          tokens[i].removeReading(analyzedToken, this.toString());
+          if( Arrays.asList("зоря").contains(analyzedToken.getLemma()) )
+            continue;
+
+          tokens[i].removeReading(analyzedToken, "inanim_v_kly");
         }
       }
     }
   }
 
+  private static final List<String> LIKELY_V_KLY = Arrays.asList("суде", "роде", "заходе", "місяченьку", "редакціє");
   private boolean likelyVklyContext(AnalyzedTokenReadings[] tokens, int i) {
+    if( LIKELY_V_KLY.contains(tokens[i].getToken().toLowerCase()) )
+      return true;
+
     return i < tokens.length - 1
-        && ("о".equalsIgnoreCase(tokens[i-1].getToken()) || ! PosTagHelper.hasPosTag(tokens[i-1], PREP_PATTERN))
+        && ("о".equalsIgnoreCase(tokens[i-1].getToken()) || ! PosTagHelper.hasPosTagStart(tokens[i-1], "prep"))
         && PUNCT_AFTER_KLY_PATTERN.matcher(tokens[i+1].getToken()).matches()
-        && (PosTagHelper.hasPosTag(tokens[i-1], ADJ_V_KLY_PATTERN)
+        && (PosTagHelper.hasPosTag(tokens[i-1], PosTagHelper.ADJ_V_KLY_PATTERN)
           || "о".equalsIgnoreCase(tokens[i-1].getToken()));
   }
 
@@ -180,15 +492,15 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
       List<AnalyzedToken> analyzedTokens = tokens[i].getReadings();
       
       if( i > 1
-          && (PosTagHelper.hasPosTag(tokens[i-1], "adj:p:.*")
+          && (PosTagHelper.hasPosTagStart(tokens[i-1], "adj:p")
               //TODO: unify adj and noun
-              || PosTagHelper.hasPosTag(tokens[i-1], ".*num.*")
+              || PosTagHelper.hasPosTagPart(tokens[i-1], "num")
               || LemmaHelper.hasLemma(tokens[i-1], Arrays.asList("багато", "мало", "півсотня", "сотня"))) )
         continue;
 
       // Юріїв Луценків
       if( i<tokens.length-1 
-          && PosTagHelper.hasPosTag(tokens[i+1], PLURAL_LNAME) )
+          && PosTagHelper.hasPosTag(tokens[i+1], PLURAL_LNAME_PATTERN) )
         continue;
       
       // Андріїв Фартушняка й Варанкова
@@ -215,8 +527,11 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
         }
       }
       if( pluralNameReadings.size() > 0 && otherFound ) {
-        for(AnalyzedToken analyzedToken: pluralNameReadings) {
-          tokens[i].removeReading(analyzedToken, this.toString());
+        // наймолодшого з Моцартів
+        if( ! LemmaHelper.hasLemma(tokens[i-1], Arrays.asList("з", "із", "зі"), "prep") ) {
+          for(AnalyzedToken analyzedToken: pluralNameReadings) {
+            tokens[i].removeReading(analyzedToken, "plural_for_names");
+          }
         }
       }
     }
@@ -237,7 +552,7 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
       if( tokens[i].hasPartialPosTag(LAST_NAME_TAG) ) {
         lastName = tokens[i];
 
-        // split before next inital starts: "для Л.Кучма Л.Кравчук"
+        // split before next initial starts: "для Л.Кучма Л.Кравчук"
         if( initialsIdxs.size() > 0 ) {
           checkForInitialRetag(lastName, initialsIdxs, tokens);
           lastName = null;
@@ -261,6 +576,28 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
     checkForInitialRetag(lastName, initialsIdxs, tokens);
   }
 
+  private void retagUnknownInitials(AnalyzedSentence input) {
+    AnalyzedTokenReadings[] tokens = input.getTokens();
+
+    for (int i = 1; i < tokens.length; i++) {
+      if( tokens[i].getToken().endsWith(".") 
+          && INITIAL_REGEX.matcher(tokens[i].getToken()).matches() ) {
+        
+        if( PosTagHelper.hasPosTagPart(tokens[i], "name") )
+          continue;
+
+        for(AnalyzedToken tokenReading: tokens[i].getReadings()) {
+//          if( ! "noninfl:abbr".equals(tokenReading.getPOSTag()) ) {
+            tokens[i].removeReading(tokenReading, "dis_unknown_initials");
+//          }
+        }
+
+        AnalyzedToken newToken = new AnalyzedToken(tokens[i].getToken(), "noninfl:abbr", null);
+        tokens[i].addReading(newToken, "dis_unknown_initials");
+      }
+    }
+  }
+  
   private static void checkForInitialRetag(AnalyzedTokenReadings lastName, List<Integer> initialsIdxs, AnalyzedTokenReadings[] tokens) {
     if( lastName != null
         && (initialsIdxs.size() == 1 || initialsIdxs.size() == 2) ) {
@@ -285,17 +622,31 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
       if (!ST_ABBR.equals(tokens[i].getToken()))
         continue;
 
+      // 10 мм рт. ст.
+      if (i > 1) {
+        if (tokens[i - 1].getToken().equals("рт.")) {
+          Pattern pattern = compile("noun.*:xp3.*");
+          removeTokensWithout(tokens[i], pattern);
+          continue;
+        }
+        else {
+          Pattern pattern = compile("(?!.*:xp3).*");
+          removeTokensWithout(tokens[i], pattern);
+        }
+      }
+
+      
       // стаття/сторінка
       if (i < tokens.length - 1) {
-        if (tokens[i + 1].getToken().matches("[0-9]+([.,–—-][0-9]+)?")) {
-          Pattern pattern = Pattern.compile("noun:inanim:f:.*");
+        if (PATTERN_2.matcher(tokens[i + 1].getToken()).matches()) {
+          Pattern pattern = compile("noun:inanim:f:.*");
 
           if (i > 2 && ST_ABBR.equals(tokens[i - 1].getToken())) {
-            pattern = Pattern.compile("noun:inanim:p:.*");
-            remove(tokens[i - 1], pattern);
+            pattern = compile("noun:inanim:p:.*");
+            removeTokensWithout(tokens[i - 1], pattern);
           }
 
-          remove(tokens[i], pattern);
+          removeTokensWithout(tokens[i], pattern);
           continue;
         }
 
@@ -305,8 +656,8 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
         // столова
         if (LemmaHelper.hasLemma(tokens[i + 1], "ложка") 
             || tokens[i + 1].getToken().equals("л.")) {
-          Pattern pattern = Pattern.compile("adj:[fp]:.*");
-          remove(tokens[i], pattern);
+          Pattern pattern = compile("adj:[fp]:.*");
+          removeTokensWithout(tokens[i], pattern);
           i++;
           continue;
         }
@@ -314,16 +665,16 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
         // старший
         if (LemmaHelper.hasLemma(tokens[i + 1],
             Arrays.asList("лейтенант", "сержант", "солдат", "науковий", "медсестра"))) {
-          Pattern pattern = Pattern.compile("adj:m:.*");
-          remove(tokens[i], pattern);
+          Pattern pattern = compile("adj:m:.*");
+          removeTokensWithout(tokens[i], pattern);
           i++;
           continue;
         }
 
         // станція
         if (STATION_NAME_PATTERN.matcher(tokens[i + 1].getToken()).matches()) {
-          Pattern pattern = Pattern.compile("noun:inanim:f:.*");
-          remove(tokens[i], pattern);
+          Pattern pattern = compile("noun:inanim:f:.*");
+          removeTokensWithout(tokens[i], pattern);
           i++;
           continue;
         }
@@ -332,26 +683,26 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
       // століття
       if (i > 1) {
         if( LATIN_DIGITS_PATTERN.matcher(tokens[i - 1].getToken()).matches() ) {
-          Pattern pattern = Pattern.compile("noun:inanim:n:.*");
+          Pattern pattern = compile("noun:inanim:n:.*");
 
           if (i < tokens.length - 1 && ST_ABBR.equals(tokens[i + 1].getToken())) {
-            pattern = Pattern.compile("noun:inanim:p:.*");
-            remove(tokens[i + 1], pattern);
+            pattern = compile("noun:inanim:p:.*");
+            removeTokensWithout(tokens[i + 1], pattern);
           }
 
-          remove(tokens[i], pattern);
+          removeTokensWithout(tokens[i], pattern);
           i++;
           continue;
         }
         else if( DIGITS_PATTERN.matcher(tokens[i - 1].getToken()).matches() ) {
-          Pattern pattern = Pattern.compile("noun:inanim:[nf]:.*"); // 18 ст. - стаття або століття
+          Pattern pattern = compile("noun:inanim:[nf]:.*"); // 18 ст. - стаття або століття
 
           if (i < tokens.length - 1 && ST_ABBR.equals(tokens[i + 1].getToken())) {
-            pattern = Pattern.compile("noun:inanim:p:.*");
-            remove(tokens[i + 1], pattern);
+            pattern = compile("noun:inanim:p:.*");
+            removeTokensWithout(tokens[i + 1], pattern);
           }
 
-          remove(tokens[i], pattern);
+          removeTokensWithout(tokens[i], pattern);
           i++;
           continue;
         }
@@ -360,7 +711,41 @@ public class UkrainianHybridDisambiguator extends AbstractDisambiguator {
 
     }
   }
-  
+
+  private void retagPulralProp(AnalyzedSentence input) {
+    AnalyzedTokenReadings[] tokens = input.getTokensWithoutWhitespace();
+
+    // дві Франції, три Катерини, два Володьки
+    for (int i = 2; i < tokens.length; i++) {
+      AnalyzedTokenReadings propTokens = tokens[i];
+      if( PATTERN_3.matcher(tokens[i - 1].getCleanToken().toLowerCase()).matches()
+          && ! PosTagHelper.hasPosTag(propTokens, "noun.*:p:v_naz.*:prop.*")
+          && ! PosTagHelper.hasPosTag(propTokens, "noun.*:[mfn]:v_naz.*:prop.*")) { 
+        
+        List<AnalyzedToken> propOnly = PosTagHelper.filter(propTokens.getReadings(), compile("noun:.*:[fmn]:v_rod.*prop.*"));
+        
+        propOnly = propOnly.stream()
+            .filter(s -> !s.getPOSTag().contains(":m:") || s.getLemma().endsWith("а") || s.getLemma().endsWith("о") )
+            .collect(Collectors.toList());
+        
+        
+        if( propOnly.size() > 0 ) {
+
+          String postag = PATTERN_5.matcher(propOnly.get(0).getPOSTag()).replaceFirst(":p:v_naz");
+          String lemma = propOnly.get(0).getLemma();
+
+          for(AnalyzedToken tokenReading: propTokens.getReadings()) {
+            propTokens.removeReading(tokenReading, "dis_plural_prop");
+          }
+
+          AnalyzedToken newToken = new AnalyzedToken(propTokens.getToken(), postag, lemma);
+          propTokens.addReading(newToken, "dis_plural_prop");
+          i++;
+        }
+      }
+    }
+  }
+
 /*
 TODO:
 рт.ст.
@@ -370,7 +755,7 @@ TODO:
 */
 
 
-  private static void remove(AnalyzedTokenReadings readings, Pattern pattern) {
+  private static void removeTokensWithout(AnalyzedTokenReadings readings, Pattern pattern) {
       List<AnalyzedToken> analyzedTokens = readings.getReadings();
       for (int j = analyzedTokens.size()-1; j>=0; j--) {
         AnalyzedToken analyzedToken = analyzedTokens.get(j);
@@ -390,9 +775,11 @@ TODO:
       String lnamePosTag = lnameToken.getPOSTag();
       if( lnamePosTag == null || ! lnamePosTag.contains(LAST_NAME_TAG) )
         continue;
+      
+      lnamePosTag = PATTERN_4.matcher(lnamePosTag).replaceAll("");
 
       String initialsToken = initialsReadings.getAnalyzedToken(0).getToken();
-      AnalyzedToken newToken = new AnalyzedToken(initialsToken, lnamePosTag.replace(LAST_NAME_TAG, ":"+initialType+":abbr"), initialsToken);
+      AnalyzedToken newToken = new AnalyzedToken(initialsToken, lnamePosTag.replace(LAST_NAME_TAG, ":nv:abbr:prop:"+initialType), initialsToken);
       newToken.setWhitespaceBefore(initialsReadings.isWhitespaceBefore());
       newTokens.add(newToken);
     }

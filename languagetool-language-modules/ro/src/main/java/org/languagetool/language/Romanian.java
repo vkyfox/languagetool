@@ -18,28 +18,24 @@
  */
 package org.languagetool.language;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.languagetool.Language;
 import org.languagetool.UserConfig;
 import org.languagetool.rules.*;
-import org.languagetool.rules.ro.CompoundRule;
-import org.languagetool.rules.ro.MorfologikRomanianSpellerRule;
-import org.languagetool.rules.ro.RomanianWordRepeatBeginningRule;
-import org.languagetool.rules.ro.SimpleReplaceRule;
+import org.languagetool.rules.ro.*;
+import org.languagetool.rules.spelling.SpellingCheckRule;
 import org.languagetool.synthesis.Synthesizer;
 import org.languagetool.synthesis.ro.RomanianSynthesizer;
 import org.languagetool.tagging.Tagger;
 import org.languagetool.tagging.disambiguation.Disambiguator;
 import org.languagetool.tagging.disambiguation.rules.XmlRuleDisambiguator;
 import org.languagetool.tagging.ro.RomanianTagger;
-import org.languagetool.tokenizers.SRXSentenceTokenizer;
-import org.languagetool.tokenizers.SentenceTokenizer;
-import org.languagetool.tokenizers.Tokenizer;
+import org.languagetool.tokenizers.*;
 import org.languagetool.tokenizers.ro.RomanianWordTokenizer;
+
+import java.io.IOException;
+import java.util.*;
 
 /**
  *
@@ -47,12 +43,6 @@ import org.languagetool.tokenizers.ro.RomanianWordTokenizer;
  * @since 24.02.2009 22:18:21
  */
 public class Romanian extends Language {
-
-  private Tagger tagger;
-  private Synthesizer synthesizer;
-  private Disambiguator disambiguator;
-  private Tokenizer wordTokenizer;
-  private SentenceTokenizer sentenceTokenizer;
 
   @Override
   public String getName() {
@@ -69,12 +59,10 @@ public class Romanian extends Language {
     return new String[]{"RO"};
   }
 
+  @NotNull
   @Override
-  public Tagger getTagger() {
-    if (tagger == null) {
-      tagger = new RomanianTagger();
-    }
-    return tagger;
+  public Tagger createDefaultTagger() {
+    return new RomanianTagger();
   }
 
   @Override
@@ -99,39 +87,34 @@ public class Romanian extends Language {
             new MorfologikRomanianSpellerRule(messages, this, userConfig, altLanguages),
             new RomanianWordRepeatBeginningRule(messages, this),
             new SimpleReplaceRule(messages),
-            new CompoundRule(messages)
+            new CompoundRule(messages, this, userConfig)
     );
   }
 
+  @Nullable
   @Override
-  public Synthesizer getSynthesizer() {
-    if (synthesizer == null) {
-      synthesizer = new RomanianSynthesizer(this);
-    }
-    return synthesizer;
+  public Synthesizer createDefaultSynthesizer() {
+    return RomanianSynthesizer.INSTANCE;
   }
 
   @Override
-  public Disambiguator getDisambiguator() {
-    if (disambiguator == null) {
-      disambiguator = new XmlRuleDisambiguator(new Romanian());
-    }
-    return disambiguator;
+  public Disambiguator createDefaultDisambiguator() {
+    return new XmlRuleDisambiguator(this);
   }
 
   @Override
-  public Tokenizer getWordTokenizer() {
-    if (wordTokenizer == null) {
-      wordTokenizer = new RomanianWordTokenizer();
-    }
-    return wordTokenizer;
+  public Tokenizer createDefaultWordTokenizer() {
+    return new RomanianWordTokenizer();
   }
 
   @Override
-  public SentenceTokenizer getSentenceTokenizer() {
-    if (sentenceTokenizer == null) {
-      sentenceTokenizer = new SRXSentenceTokenizer(this);
-    }
-    return sentenceTokenizer;
+  public SentenceTokenizer createDefaultSentenceTokenizer() {
+    return new SRXSentenceTokenizer(this);
+  }
+
+  @Nullable
+  @Override
+  protected SpellingCheckRule createDefaultSpellingRule(ResourceBundle messages) throws IOException {
+    return new MorfologikRomanianSpellerRule(messages, this, null,null);
   }
 }

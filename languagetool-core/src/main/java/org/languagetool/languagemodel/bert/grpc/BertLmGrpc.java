@@ -1,30 +1,18 @@
 package org.languagetool.languagemodel.bert.grpc;
 
 import static io.grpc.MethodDescriptor.generateFullMethodName;
-import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncUnaryCall;
-import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
-import static io.grpc.stub.ClientCalls.blockingUnaryCall;
-import static io.grpc.stub.ClientCalls.futureUnaryCall;
-import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncUnaryCall;
-import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 
 /**
  */
 @javax.annotation.Generated(
-    value = "by gRPC proto compiler (version 1.27.1)",
+    value = "by gRPC proto compiler (version 1.68.0)",
     comments = "Source: bert-lm.proto")
+@io.grpc.stub.annotations.GrpcGenerated
 public final class BertLmGrpc {
 
   private BertLmGrpc() {}
 
-  public static final String SERVICE_NAME = "bert.BertLm";
+  public static final java.lang.String SERVICE_NAME = "bert.BertLm";
 
   // Static method descriptors that strictly reflect the proto.
   private static volatile io.grpc.MethodDescriptor<org.languagetool.languagemodel.bert.grpc.BertLmProto.ScoreRequest,
@@ -135,45 +123,39 @@ public final class BertLmGrpc {
 
   /**
    */
-  public static abstract class BertLmImplBase implements io.grpc.BindableService {
+  public interface AsyncService {
 
     /**
      */
-    public void score(org.languagetool.languagemodel.bert.grpc.BertLmProto.ScoreRequest request,
+    default void score(org.languagetool.languagemodel.bert.grpc.BertLmProto.ScoreRequest request,
         io.grpc.stub.StreamObserver<org.languagetool.languagemodel.bert.grpc.BertLmProto.BertLmResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getScoreMethod(), responseObserver);
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getScoreMethod(), responseObserver);
     }
 
     /**
      */
-    public void batchScore(org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchScoreRequest request,
+    default void batchScore(org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchScoreRequest request,
         io.grpc.stub.StreamObserver<org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchBertLmResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getBatchScoreMethod(), responseObserver);
-    }
-
-    @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
-      return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
-          .addMethod(
-            getScoreMethod(),
-            asyncUnaryCall(
-              new MethodHandlers<
-                org.languagetool.languagemodel.bert.grpc.BertLmProto.ScoreRequest,
-                org.languagetool.languagemodel.bert.grpc.BertLmProto.BertLmResponse>(
-                  this, METHODID_SCORE)))
-          .addMethod(
-            getBatchScoreMethod(),
-            asyncUnaryCall(
-              new MethodHandlers<
-                org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchScoreRequest,
-                org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchBertLmResponse>(
-                  this, METHODID_BATCH_SCORE)))
-          .build();
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getBatchScoreMethod(), responseObserver);
     }
   }
 
   /**
+   * Base class for the server implementation of the service BertLm.
    */
-  public static final class BertLmStub extends io.grpc.stub.AbstractAsyncStub<BertLmStub> {
+  public static abstract class BertLmImplBase
+      implements io.grpc.BindableService, AsyncService {
+
+    @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
+      return BertLmGrpc.bindService(this);
+    }
+  }
+
+  /**
+   * A stub to allow clients to do asynchronous rpc calls to service BertLm.
+   */
+  public static final class BertLmStub
+      extends io.grpc.stub.AbstractAsyncStub<BertLmStub> {
     private BertLmStub(
         io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
       super(channel, callOptions);
@@ -189,7 +171,7 @@ public final class BertLmGrpc {
      */
     public void score(org.languagetool.languagemodel.bert.grpc.BertLmProto.ScoreRequest request,
         io.grpc.stub.StreamObserver<org.languagetool.languagemodel.bert.grpc.BertLmProto.BertLmResponse> responseObserver) {
-      asyncUnaryCall(
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getScoreMethod(), getCallOptions()), request, responseObserver);
     }
 
@@ -197,14 +179,16 @@ public final class BertLmGrpc {
      */
     public void batchScore(org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchScoreRequest request,
         io.grpc.stub.StreamObserver<org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchBertLmResponse> responseObserver) {
-      asyncUnaryCall(
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getBatchScoreMethod(), getCallOptions()), request, responseObserver);
     }
   }
 
   /**
+   * A stub to allow clients to do synchronous rpc calls to service BertLm.
    */
-  public static final class BertLmBlockingStub extends io.grpc.stub.AbstractBlockingStub<BertLmBlockingStub> {
+  public static final class BertLmBlockingStub
+      extends io.grpc.stub.AbstractBlockingStub<BertLmBlockingStub> {
     private BertLmBlockingStub(
         io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
       super(channel, callOptions);
@@ -219,21 +203,23 @@ public final class BertLmGrpc {
     /**
      */
     public org.languagetool.languagemodel.bert.grpc.BertLmProto.BertLmResponse score(org.languagetool.languagemodel.bert.grpc.BertLmProto.ScoreRequest request) {
-      return blockingUnaryCall(
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getScoreMethod(), getCallOptions(), request);
     }
 
     /**
      */
     public org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchBertLmResponse batchScore(org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchScoreRequest request) {
-      return blockingUnaryCall(
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getBatchScoreMethod(), getCallOptions(), request);
     }
   }
 
   /**
+   * A stub to allow clients to do ListenableFuture-style rpc calls to service BertLm.
    */
-  public static final class BertLmFutureStub extends io.grpc.stub.AbstractFutureStub<BertLmFutureStub> {
+  public static final class BertLmFutureStub
+      extends io.grpc.stub.AbstractFutureStub<BertLmFutureStub> {
     private BertLmFutureStub(
         io.grpc.Channel channel, io.grpc.CallOptions callOptions) {
       super(channel, callOptions);
@@ -249,7 +235,7 @@ public final class BertLmGrpc {
      */
     public com.google.common.util.concurrent.ListenableFuture<org.languagetool.languagemodel.bert.grpc.BertLmProto.BertLmResponse> score(
         org.languagetool.languagemodel.bert.grpc.BertLmProto.ScoreRequest request) {
-      return futureUnaryCall(
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getScoreMethod(), getCallOptions()), request);
     }
 
@@ -257,7 +243,7 @@ public final class BertLmGrpc {
      */
     public com.google.common.util.concurrent.ListenableFuture<org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchBertLmResponse> batchScore(
         org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchScoreRequest request) {
-      return futureUnaryCall(
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getBatchScoreMethod(), getCallOptions()), request);
     }
   }
@@ -270,10 +256,10 @@ public final class BertLmGrpc {
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
-    private final BertLmImplBase serviceImpl;
+    private final AsyncService serviceImpl;
     private final int methodId;
 
-    MethodHandlers(BertLmImplBase serviceImpl, int methodId) {
+    MethodHandlers(AsyncService serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }
@@ -306,6 +292,25 @@ public final class BertLmGrpc {
     }
   }
 
+  public static final io.grpc.ServerServiceDefinition bindService(AsyncService service) {
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+        .addMethod(
+          getScoreMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              org.languagetool.languagemodel.bert.grpc.BertLmProto.ScoreRequest,
+              org.languagetool.languagemodel.bert.grpc.BertLmProto.BertLmResponse>(
+                service, METHODID_SCORE)))
+        .addMethod(
+          getBatchScoreMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchScoreRequest,
+              org.languagetool.languagemodel.bert.grpc.BertLmProto.BatchBertLmResponse>(
+                service, METHODID_BATCH_SCORE)))
+        .build();
+  }
+
   private static abstract class BertLmBaseDescriptorSupplier
       implements io.grpc.protobuf.ProtoFileDescriptorSupplier, io.grpc.protobuf.ProtoServiceDescriptorSupplier {
     BertLmBaseDescriptorSupplier() {}
@@ -329,9 +334,9 @@ public final class BertLmGrpc {
   private static final class BertLmMethodDescriptorSupplier
       extends BertLmBaseDescriptorSupplier
       implements io.grpc.protobuf.ProtoMethodDescriptorSupplier {
-    private final String methodName;
+    private final java.lang.String methodName;
 
-    BertLmMethodDescriptorSupplier(String methodName) {
+    BertLmMethodDescriptorSupplier(java.lang.String methodName) {
       this.methodName = methodName;
     }
 

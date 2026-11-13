@@ -18,28 +18,31 @@
  */
 package org.languagetool.rules.fr;
 
-import java.io.IOException;
-import java.util.ResourceBundle;
+import org.languagetool.Language;
+import org.languagetool.UserConfig;
+import org.languagetool.rules.*;
+import org.languagetool.tagging.fr.FrenchTagger;
 
-import org.languagetool.rules.AbstractCompoundRule;
-import org.languagetool.rules.CompoundRuleData;
-import org.languagetool.rules.Example;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.ResourceBundle;
 
 /**
  * Checks that compounds (if in the list) are not written as separate words.
  */
 public class CompoundRule extends AbstractCompoundRule {
 
-  private static final CompoundRuleData compoundData = new CompoundRuleData("/fr/compounds.txt");
+  private static volatile CompoundRuleData compoundData;
 
-  public CompoundRule(ResourceBundle messages) throws IOException {
-    super(messages,
+  public CompoundRule(ResourceBundle messages, Language lang, UserConfig userConfig) throws IOException {
+    super(messages, lang, userConfig,
             "Écrivez avec un trait d’union.",
             "Écrivez avec un mot seul sans espace ni trait d’union.",
             "Écrivez avec un mot seul ou avec trait d’union.",
             "Erreur de trait d’union");
     addExamplePair(Example.wrong("Le <marker>Haut Rhin</marker>."),
                    Example.fixed("Le <marker>Haut-Rhin</marker>."));
+    super.useSubRuleSpecificIds();
   }
 
   @Override
@@ -49,12 +52,26 @@ public class CompoundRule extends AbstractCompoundRule {
 
   @Override
   public String getDescription() {
-    return "Mots avec trait d’union";
+    return "Mots avec trait d’union : $match";
   }
 
   @Override
-  protected CompoundRuleData getCompoundRuleData() {
-    return compoundData;
+  public CompoundRuleData getCompoundRuleData() {
+    CompoundRuleData data = compoundData;
+    if (data == null) {
+      synchronized (CompoundRule.class) {
+        data = compoundData;
+        if (data == null) {
+          compoundData = data = new CompoundRuleData("/fr/compounds.txt");
+        }
+      }
+    }
+    return data;
+  }
+  
+  @Override
+  public boolean isMisspelled (String word) throws IOException {
+    return !FrenchTagger.INSTANCE.tag(Arrays.asList(word)).get(0).isTagged();
   }
 
 }

@@ -24,6 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
 
+import org.languagetool.Language;
 import org.languagetool.rules.AbstractSimpleReplaceRule;
 
 /**
@@ -45,12 +46,12 @@ public class SimpleReplaceRule extends AbstractSimpleReplaceRule {
   private static final Locale GL_LOCALE = new Locale("gl");
 
   @Override
-  protected Map<String, List<String>> getWrongWords() {
+  public Map<String, List<String>> getWrongWords() {
     return wrongWords;
   }
 
-  public SimpleReplaceRule(ResourceBundle messages) throws IOException {
-    super(messages);
+  public SimpleReplaceRule(ResourceBundle messages, Language language) throws IOException {
+    super(messages, language);
   }
 
   @Override
@@ -70,7 +71,7 @@ public class SimpleReplaceRule extends AbstractSimpleReplaceRule {
   
   @Override
   public String getMessage(String tokenStr, List<String> replacements) {
-    return tokenStr + " non existe en galego. Talvez quería vostede dicir: "
+    return "'" + tokenStr + "' non existe en galego. Talvez quería vostede dicir: "
         + String.join(", ", replacements) + ".";
   }
 

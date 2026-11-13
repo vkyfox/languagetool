@@ -18,21 +18,15 @@
  */
 package org.languagetool.rules.en;
 
-import org.languagetool.AnalyzedTokenReadings;
-import org.languagetool.JLanguageTool;
-import org.languagetool.Language;
+import org.languagetool.*;
 import org.languagetool.languagemodel.LanguageModel;
 import org.languagetool.rules.ConfusionString;
 import org.languagetool.rules.ngrams.ConfusionProbabilityRule;
-import org.languagetool.rules.patterns.AbstractPatternRule;
-import org.languagetool.rules.patterns.FalseFriendRuleLoader;
-import org.languagetool.rules.patterns.PatternToken;
+import org.languagetool.rules.patterns.*;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
-import java.util.List;
-import java.util.ResourceBundle;
+import java.util.*;
 
 /**
  * False friends for non-native speakers who write English text, based on ngrams.
@@ -40,29 +34,34 @@ import java.util.ResourceBundle;
  */
 public abstract class EnglishForL2SpeakersFalseFriendRule extends ConfusionProbabilityRule {
 
-  private static List<AbstractPatternRule> rules;
+  private static final Map<Language, List<AbstractPatternRule>> motherTongue2rules = new HashMap<>();
 
   private final Language lang;
+  private final Language motherTongue;
 
   public EnglishForL2SpeakersFalseFriendRule(ResourceBundle messages, LanguageModel languageModel, Language motherTongue, Language lang)  {
     super(messages, languageModel, lang, 3);
-    this.lang = lang;
+    this.lang = Objects.requireNonNull(lang);
+    this.motherTongue = Objects.requireNonNull(motherTongue);
+  }
+
+  private List<AbstractPatternRule> getRules() {
     synchronized (this) {
-      if (rules == null) {
+      if (!motherTongue2rules.containsKey(motherTongue)) {
         FalseFriendRuleLoader loader = new FalseFriendRuleLoader("\"{0}\" ({1}) means {2} ({3}).", "Did you maybe mean {0}?");
-        String ffFilename = JLanguageTool.getDataBroker().getRulesDir() + "/" + JLanguageTool.FALSE_FRIEND_FILE;
-        try (InputStream is = this.getClass().getResourceAsStream(ffFilename)) {
-          rules = loader.getRules(is, lang, motherTongue);
+        try (InputStream is = JLanguageTool.getDataBroker().getFromRulesDirAsStream(JLanguageTool.FALSE_FRIEND_FILE)) {
+          motherTongue2rules.put(motherTongue, loader.getRules(is, lang, motherTongue));
         } catch (Exception e) {
           throw new RuntimeException(e);
         }
       }
     }
+    return motherTongue2rules.get(motherTongue);
   }
 
   @Override
   protected String getMessage(ConfusionString textString, ConfusionString suggestion) {
-    for (AbstractPatternRule rule : rules) {
+    for (AbstractPatternRule rule : getRules()) {
       List<PatternToken> patternTokens = rule.getPatternTokens();
       for (PatternToken patternToken : patternTokens) {
         if (textString.getString().equals(patternToken.getString()) || isBaseformMatch(textString, patternToken)) {

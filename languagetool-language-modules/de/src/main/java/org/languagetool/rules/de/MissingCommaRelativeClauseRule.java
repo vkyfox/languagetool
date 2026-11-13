@@ -18,9 +18,17 @@
  */
 package org.languagetool.rules.de;
 
-import static org.languagetool.rules.patterns.PatternRuleBuilderHelper.csToken;
-import static org.languagetool.rules.patterns.PatternRuleBuilderHelper.posRegex;
-import static org.languagetool.rules.patterns.PatternRuleBuilderHelper.regex;
+import org.apache.commons.lang3.StringUtils;
+import org.languagetool.AnalyzedSentence;
+import org.languagetool.AnalyzedTokenReadings;
+import org.languagetool.language.GermanyGerman;
+import org.languagetool.rules.Category;
+import org.languagetool.rules.Category.Location;
+import org.languagetool.rules.CategoryId;
+import org.languagetool.rules.Rule;
+import org.languagetool.rules.RuleMatch;
+import org.languagetool.rules.patterns.PatternTokenBuilder;
+import org.languagetool.tagging.disambiguation.rules.DisambiguationPatternRule;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,40 +37,154 @@ import java.util.List;
 import java.util.ResourceBundle;
 import java.util.regex.Pattern;
 
-import org.apache.commons.lang3.StringUtils;
-import org.languagetool.AnalyzedSentence;
-import org.languagetool.AnalyzedTokenReadings;
-import org.languagetool.language.German;
-import org.languagetool.language.GermanyGerman;
-import org.languagetool.rules.Category;
-import org.languagetool.rules.Category.Location;
-import org.languagetool.rules.CategoryId;
-import org.languagetool.rules.Rule;
-import org.languagetool.rules.RuleMatch;
-import org.languagetool.rules.patterns.PatternToken;
-import org.languagetool.tagging.disambiguation.rules.DisambiguationPatternRule;
+import static java.util.regex.Pattern.compile;
+import static org.languagetool.rules.patterns.PatternRuleBuilderHelper.*;
 
 /**
- * A rule checks a sentence for a missing comma before or after a relative clause (only for German language)
+ * A rule checks a sentence for a missing comma before or after a relative clause (only for German language).
  * @author Fred Kruse
  */
 public class MissingCommaRelativeClauseRule extends Rule {
 
-  private static final Pattern MARKS_REGEX = Pattern.compile("[,;.:?!-–—’'\"„“”»«‚‘›‹()\\[\\]]");
+  private static final Pattern MARKS_REGEX = compile("[,;.:?•!-–—’'\"„“”…»«‚‘›‹()\\/\\[\\]]");
+  private static final Pattern PRONOUN = compile("(d(e[mnr]|ie|as|e([nr]|ss)en)|welche[mrs]?|wessen|was)");
+  private static final Pattern verbPattern = Pattern.compile("(VER:[1-3]:|VER:.*:[1-3]:).*");
+  private static final Pattern zalEtcPattern = Pattern.compile("(ZAL|AD[JV]|ART|SUB|PRO:POS|PRP).*");
 
   private final boolean behind;
 
-  private static final German GERMAN = new GermanyGerman();
-
-  private static final List<List<PatternToken>> ANTI_PATTERNS = Arrays.asList(
+  private static final List<DisambiguationPatternRule> ANTI_PATTERNS = makeAntiPatterns(Arrays.asList(
+      Arrays.asList(
+        regex("gerade|wenn"),
+        token("das")
+      ),
+      Arrays.asList(
+        token("anstelle"),
+        regex("diese[rsm]|de[rsm]|dessen|jene[rsm]|[dms]?eine[rsm]|ihre[rs]|eure[sr]|unse?re[sr]")
+      ),
+      Arrays.asList(
+        token("im"),
+        token("Zuge"),
+        token("dessen")
+      ),
       Arrays.asList(
         csToken("mit"),
         regex("de[mr]"),
         regex("de[mrs]"),
         posRegex("SUB:.+"),
         csToken("verbindet")
+      ),
+      Arrays.asList(
+        regex("eine"),
+        csToken("menge"),
+        posRegex("SUB:.+")
+      ),
+      Arrays.asList( // dass sich wie folgt formulieren lässt
+        regex("wie"),
+        csToken("folgt"),
+        posRegex("VER:.+")
+      ),
+      Arrays.asList( // das sollte gut überlegt sein
+        regex("gut"),
+        csToken("überlegt"),
+        csToken("sein")
+      ),
+      Arrays.asList( // samt Auftraggeber
+        csToken("samt"),
+        posRegex("SUB:DAT.*")
+      ),
+      Arrays.asList( // ... denen sie ausgesetzt sind.
+        posRegex("PA2:PRD:GRU:VER|VER:PA2.*"),
+        csToken("sind"),
+        posRegex("PKT")
+      ),
+      Arrays.asList(
+        csToken("am"),
+        pos("ADJ:PRD:SUP"),
+        posRegex("PRP:.+"),
+        regex("d(e[mnr]|ie|as|e([nr]|ss)en)")
+      ),
+      Arrays.asList( // Aber denen etwas beibringen zu müssen, die sich sträuben, das ist die wahre Hölle.
+        pos("SENT_START"),
+        token("Aber"),
+        regex("der|die|denen|das|jenen|einigen|anderen|vielen|manchen|allen")
+      ),
+      Arrays.asList( // Aus diesem Grund sind die Wörter nicht direkt übersetzt, stattdessen wird der Zustand oder die Situation beschrieben in der die Wörter benutzt werden. 
+        posRegex("PA2.*|VER:PA2.*"),
+        token("werden"),
+        regex("[\\.\\!\\?…\\:;]+")
+      ),
+      Arrays.asList( // Plan von Maßnahmen, mit denen das Ansteckungsrisiko während des Aufenthalts an einem Ort verringert werden soll
+        token("werden"),
+        new PatternTokenBuilder().posRegex("SENT_END").matchInflectedForms().tokenRegex("sollen|können|müssen").build()
+      ),
+      Arrays.asList( // Aus diesem Grund sind die Wörter nicht direkt übersetzt, stattdessen wird der Zustand oder die Situation beschrieben in der die Wörter benutzt werden.
+        posRegex("PA2.*|VER:PA2.*"),
+        new PatternTokenBuilder().posRegex("SENT_END").matchInflectedForms().tokenRegex("haben|werden").build()
+      ),
+      Arrays.asList( // Es würde noch sehr helfen eine Kopie der Google Slide dort zu verlinken damit wir das direkt nachstellen können
+        posRegex("VER:INF.*"),
+        new PatternTokenBuilder().posRegex("SENT_END").matchInflectedForms().tokenRegex("können|werden|sollen|dürfen|müssen|wollen|mögen").build()
+      ),
+      Arrays.asList(
+        // Komma an der falschen Stelle
+        regex("ja|mal"),
+        csToken("was")
+      ),
+      Arrays.asList(
+        // Komma an der falschen Stelle
+        posRegex("SENT_START|PKT"),
+        csToken("aber"),
+        regex("solange|wenn|wo|wie|was"),
+        regex("du|er|sie|sich|man|euch|uns|die|der|das")
+      ),
+      Arrays.asList(
+        // Komma an der falschen Stelle
+        csToken("selbst"),
+        csToken("wenn"),
+        regex("du|er|sie|sich|man|euch|uns|die|der|das"),
+        regex("die|der|das")
+      ),
+      Arrays.asList(
+        // Komma an der falschen Stelle
+        csToken("wie"),
+        regex("die|der|das")
+      ),
+      Arrays.asList( 
+        // Kein Komma in "weder ... noch ..."
+        new PatternTokenBuilder().setSkip(12).matchInflectedForms().token("weder").build(),
+        token("noch")
+      ),
+      Arrays.asList(
+        posRegex("VER:.*1:SIN:KJ1:.+"),
+        posRegex("VER:MOD:[12]:.+"),
+        posRegex("PKT|KON:NEB")
+      ),
+      Arrays.asList(
+        // Er warnt auch vor Autos, die soeben überholt haben bzw. überholt wurden.
+        posRegex("VER:.+"),
+        csToken("bzw"),
+        csToken("."),
+        posRegex("VER:.+")
+      ),
+      // … Planungen, die sich noch auf die ganze Stadt bezogen wurden aufgegeben.
+      Arrays.asList(
+        regex("w[eu]rden"),
+        posRegex("PA2:PRD:GRU:VER|VER:PA2.*"),
+        pos("PKT")
+      ),
+      // Der Beitrag, den Sie versucht haben aufzurufen, existiert nicht mehr oder wurde verschoben.
+      Arrays.asList(
+        posRegex("PA2:PRD:GRU:VER|VER:PA2.*"),
+        regex("haben?|hatten?"),
+        posRegex("VER:EIZ.*"),
+        pos("PKT")
+      ),
+      Arrays.asList(
+        posRegex("VER.*"),
+        regex("\\u2063")
       )
-  );
+  ), GermanyGerman.getInstance());
 
   public MissingCommaRelativeClauseRule(ResourceBundle messages) {
     this(messages, false);
@@ -71,8 +193,7 @@ public class MissingCommaRelativeClauseRule extends Rule {
   public MissingCommaRelativeClauseRule(ResourceBundle messages, boolean behind) {
     super(messages);
     super.setCategory(new Category(new CategoryId("HILFESTELLUNG_KOMMASETZUNG"),
-        "Hilfestellung für Kommasetzung", Location.INTERNAL, true));
-    super.makeAntiPatterns(ANTI_PATTERNS, GERMAN);
+        "Kommasetzung", Location.INTERNAL, true));
     this.behind = behind;
   }
 
@@ -116,8 +237,8 @@ public class MissingCommaRelativeClauseRule extends Rule {
    * is a potential verb used in sentence or subclause
    */
   private static boolean isVerb(AnalyzedTokenReadings[] tokens, int n) {
-    return (tokens[n].matchesPosTagRegex("(VER:[1-3]:|VER:.*:[1-3]:).*")
-        && !tokens[n].matchesPosTagRegex("(ZAL|ADJ|ADV|ART|SUB|PRO:POS).*")
+    return (tokens[n].matchesPosTagRegex(verbPattern)
+        && !tokens[n].matchesPosTagRegex(zalEtcPattern)
         && (!tokens[n].hasPosTagStartingWith("VER:INF:") || !tokens[n-1].getToken().equals("zu"))
         && !tokens[n].isImmunized()
       );
@@ -221,7 +342,7 @@ public class MissingCommaRelativeClauseRule extends Rule {
    * is potential relative pronoun
    */
   private static boolean isPronoun(AnalyzedTokenReadings[] tokens, int n) {
-    return (tokens[n].getToken().matches("(d(e[mnr]|ie|as|e([nr]|ss)en)|welche[mrs]?|wessen|was)")
+    return (PRONOUN.matcher(tokens[n].getToken()).matches()
             && !tokens[n - 1].getToken().equals("sowie"));
   }
 
@@ -287,7 +408,7 @@ public class MissingCommaRelativeClauseRule extends Rule {
     if(gender.isEmpty()) {
       return false;
     }
-    return tokens[n].hasPosTagStartingWith("VER:") && tokens[n - 1].matchesPosTagRegex("(ADJ|PRO:POS):.*" + gender + ".*");
+    return tokens[n].hasPosTagStartingWith("VER:") && tokens[n - 1].matchesPosTagRegex("(ADJ|PA[12]|PRO:POS):.*" + gender + ".*");
   }
 
   /**
@@ -351,10 +472,7 @@ public class MissingCommaRelativeClauseRule extends Rule {
         }
       }
     }
-    if(to < tokens.length && isArticleWithoutSub(gender, tokens, to)) {
-      return true;
-    }
-    return false;
+    return to < tokens.length && isArticleWithoutSub(gender, tokens, to);
   }
 
   /**
@@ -363,6 +481,9 @@ public class MissingCommaRelativeClauseRule extends Rule {
    */
   private static int missedCommaInFront(AnalyzedTokenReadings[] tokens, int start, int end, int lastVerb) {
     for(int i = start; i < lastVerb - 1; i++) {
+      if (tokens[i].isImmunized()) {
+        continue;
+      }
       if(isPronoun(tokens, i)) {
         String gender = getGender(tokens[i]);
         if(gender != null && !isAnyVerb(tokens, i + 1)
@@ -393,7 +514,7 @@ public class MissingCommaRelativeClauseRule extends Rule {
    * is a special combination of four verbs combination
    */
   private static boolean isFourCombinedVerbs(AnalyzedTokenReadings[] tokens, int first, int last) {
-    return tokens[first].hasPartialPosTag("KJ2") && tokens[first + 1].hasPosTagStartingWith("PA2")
+    return tokens[first].hasPartialPosTag("KJ2") && tokens[first + 1].hasPartialPosTag("PA2")
         && tokens[first + 2].matchesPosTagRegex("VER:(.*INF|PA[12]).*")
         && tokens[last].matchesPosTagRegex("VER:(MOD|AUX).*");
   }
@@ -402,7 +523,7 @@ public class MissingCommaRelativeClauseRule extends Rule {
    * is participle
    */
   private static boolean isPar(AnalyzedTokenReadings token) {
-    return token.hasPosTagStartingWith("PA2:");
+    return token.hasPosTagStartingWith("PA2:") || token.hasPosTagStartingWith("VER:PA2");
   }
 
   /**
@@ -668,7 +789,7 @@ public class MissingCommaRelativeClauseRule extends Rule {
           if( nToken > 0) {
             int startToken = nToken - (isPrp(tokens[nToken - 1]) ? 2 : 1);
             RuleMatch match = new RuleMatch(this, sentence, tokens[startToken].getStartPos(), tokens[nToken].getEndPos(),
-                "Sollten Sie hier ein Komma einfügen?");
+              "Sowohl angehängte als auch eingeschobene Relativsätze werden durch Kommas vom Hauptsatz getrennt.");
             if(nToken - startToken > 1) {
               match.setSuggestedReplacement(tokens[startToken].getToken() + ", " + tokens[nToken - 1].getToken() + " " + tokens[nToken].getToken());
             } else {
@@ -685,6 +806,6 @@ public class MissingCommaRelativeClauseRule extends Rule {
 
   @Override
   public List<DisambiguationPatternRule> getAntiPatterns() {
-    return makeAntiPatterns(ANTI_PATTERNS, GERMAN);
+    return ANTI_PATTERNS;
   }
 }

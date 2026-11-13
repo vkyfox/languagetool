@@ -20,40 +20,48 @@ package org.languagetool.rules.patterns;
 
 import org.languagetool.JLanguageTool;
 import org.languagetool.Language;
+import org.languagetool.RuleEntityResolver;
+import org.languagetool.broker.ResourceDataBroker;
 import org.languagetool.rules.Rule;
 import org.xml.sax.Attributes;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
+import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.util.*;
 
-class RuleIdValidator {
+public class RuleIdValidator {
 
-  private Language lang;
+  private final Language lang;
 
-  RuleIdValidator(Language lang) {
+  public RuleIdValidator(Language lang) {
     this.lang = lang;
   }
   
-  void validateUniqueness() {
+  public void validateUniqueness() {
     System.out.println("Check rule id uniqueness for " + lang + "...");
     List<String> fileNames = lang.getRuleFileNames();
     Map<String, String> idsToFile = new HashMap<>();
     List<Rule> allRules = new JLanguageTool(lang).getAllRules();
+    System.out.println("Loaded " + allRules.size() + " rules...");
     for (Rule rule : allRules) {
-      if (!(rule instanceof AbstractPatternRule)) {
+      if (!(rule instanceof AbstractPatternRule || rule instanceof RepeatedPatternRuleTransformer.RepeatedPatternRule
+        || rule instanceof ConsistencyPatternRuleTransformer.ConsistencyPatternRule)) {
         idsToFile.put(rule.getId(), "Java (" + rule.getClass().getName() + ")");
       }
     }
     for (String fileName : fileNames) {
-      try (InputStream is = this.getClass().getResourceAsStream(fileName)) {
+      try (InputStream is = JLanguageTool.getDataBroker().getAsStream(fileName)) {
         if (is == null) {
           System.out.println("Skipping " + fileName + " - not found");  // e.g. nl/grammar-test-1.xml
           continue;
         }
-        XmlIdHandler handler = new XmlIdHandler();
+        XmlIdHandler handler = new XmlIdHandler(fileName);
         SAXParserFactory factory = SAXParserFactory.newInstance();
         SAXParser saxParser = factory.newSAXParser();
         saxParser.parse(is, handler);
@@ -70,18 +78,41 @@ class RuleIdValidator {
     //System.out.println("id uniqueness for " + lang + " finished");
   }
   
-  private class XmlIdHandler extends DefaultHandler {
+  private static class XmlIdHandler extends DefaultHandler {
 
-    private Set<String> ids = new HashSet<>();
-    
+    private final String xmlPath;
+
+    private final Set<String> ids = new HashSet<>();
+
+    private String idPrefix = "";
+
+    @Override
+    public InputSource resolveEntity(String publicId, String systemId) throws IOException, SAXException {
+      return new RuleEntityResolver().resolveEntity(publicId, systemId);
+    }
+
     @Override
     public void startElement(String namespaceURI, String lName, String qName, Attributes attrs) {
+      if (qName.equals("rules") && attrs.getValue("idprefix") != null) {
+        idPrefix = attrs.getValue("idprefix");
+      }
       if (qName.equals("rule") || qName.equals("rulegroup")) {
         String id = attrs.getValue("id");
         if (id != null) {
-          ids.add(id);
+          ids.add(idPrefix + id);
         }
       }
+    }
+
+    @Override
+    public void endElement(String namespaceURI, String lName, String qName) {
+      if (qName.equals("rules")) {
+        idPrefix = "";
+      }
+    }
+
+    public XmlIdHandler(String xmlPath) {
+      this.xmlPath = xmlPath;
     }
 
   }

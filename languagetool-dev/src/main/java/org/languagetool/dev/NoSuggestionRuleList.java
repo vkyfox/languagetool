@@ -24,7 +24,6 @@ import org.languagetool.Languages;
 import org.languagetool.rules.IncorrectExample;
 import org.languagetool.rules.Rule;
 import org.languagetool.rules.RuleMatch;
-import org.languagetool.rules.patterns.AbstractPatternRule;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -76,15 +75,15 @@ public class NoSuggestionRuleList {
           continue;
         }
         List<IncorrectExample> incorrectExamples = rule.getIncorrectExamples();
-        if (incorrectExamples.size() == 0) {
+        if (incorrectExamples.isEmpty()) {
           //System.err.println("Skipping " + rule.getId() + " (no example)");
           continue;
         }
-        String incorrectExample = incorrectExamples.get(0).getExample().replaceAll("<marker>", "").replaceAll("</marker>", "");
+        String incorrectExample = incorrectExamples.get(0).getExample().replace("<marker>", "").replace("</marker>", "");
         lt.enableRule(rule.getId());
         List<RuleMatch> matches = lt.check(incorrectExample);
         for (RuleMatch match : matches) {
-          if (match.getSuggestedReplacements().size() == 0) {
+          if (match.getSuggestedReplacements().isEmpty()) {
             //if (rule instanceof AbstractPatternRule) {
             //  printRule(((AbstractPatternRule)rule).getFullId(), rule, incorrectExample, popularity);
             //} else {

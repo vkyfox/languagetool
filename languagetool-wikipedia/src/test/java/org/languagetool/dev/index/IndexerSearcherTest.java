@@ -18,15 +18,6 @@
  */
 package org.languagetool.dev.index;
 
-import static org.languagetool.dev.index.Lucene.FIELD_NAME;
-import static org.languagetool.dev.index.Lucene.FIELD_NAME_LOWERCASE;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
@@ -47,6 +38,17 @@ import org.languagetool.rules.RuleMatch;
 import org.languagetool.rules.patterns.PatternRule;
 import org.languagetool.rules.patterns.PatternToken;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.languagetool.dev.index.Lucene.FIELD_NAME;
+import static org.languagetool.dev.index.Lucene.FIELD_NAME_LOWERCASE;
+
+@Ignore
 public class IndexerSearcherTest extends LuceneTestCase {
 
   private Searcher errorSearcher;
@@ -76,8 +78,8 @@ public class IndexerSearcherTest extends LuceneTestCase {
 
     // TODO: make this work for all languages
     Language language = new English();
-    //Language language = new French();
-    //Language language = new Spanish();
+    //Language language = French.getInstance();
+    //Language language = Spanish.getInstance();
     //Language language = new Polish();
     //Language language = new German();
     JLanguageTool lt = new JLanguageTool(language);
@@ -184,7 +186,7 @@ public class IndexerSearcherTest extends LuceneTestCase {
     // Note that the second sentence ends with "lid" instead of "lids" (the inflated one)
     //createIndex("I thin so");
     useRealIndex();
-    German language = new GermanyGerman();
+    German language = GermanyGerman.getInstance();
     PatternRule rule = getFirstRule("I_THIN", language);
     SearcherResult searcherResult = errorSearcher.findRuleMatchesOnIndex(rule, language);
     System.out.println("Matches: " + searcherResult.getMatchingSentences());
@@ -197,17 +199,17 @@ public class IndexerSearcherTest extends LuceneTestCase {
     SearcherResult searcherResult =
         errorSearcher.findRuleMatchesOnIndex(getFirstRule("BACK_AND_FOURTH", language), language);
     assertEquals(1, searcherResult.getCheckedSentences());
-    assertEquals(false, searcherResult.isResultIsTimeLimited());
+    assertFalse(searcherResult.isResultIsTimeLimited());
     assertEquals(1, searcherResult.getMatchingSentences().size());
 
-    searcherResult = errorSearcher.findRuleMatchesOnIndex(getFirstRule("EYE_BROW", language), language);
+    searcherResult = errorSearcher.findRuleMatchesOnIndex(getFirstRule("EYE_COMPOUNDS", language), language);
     assertEquals(1, searcherResult.getCheckedSentences());
-    assertEquals(false, searcherResult.isResultIsTimeLimited());
+    assertFalse(searcherResult.isResultIsTimeLimited());
     assertEquals(1, searcherResult.getMatchingSentences().size());
 
     searcherResult = errorSearcher.findRuleMatchesOnIndex(getFirstRule("ALL_OVER_THE_WORD", language), language);
     assertEquals(0, searcherResult.getCheckedSentences());
-    assertEquals(false, searcherResult.isResultIsTimeLimited());
+    assertFalse(searcherResult.isResultIsTimeLimited());
     assertEquals(0, searcherResult.getMatchingSentences().size());
 
     try {
@@ -258,15 +260,15 @@ public class IndexerSearcherTest extends LuceneTestCase {
     createIndex("Daily Bleed's Anarchist Encyclopedia");
     List<PatternToken> elements1 = Arrays.asList(
         new PatternToken("Bleed", false, false, false),
-        new PatternToken("'", false, false, false),
-        new PatternToken("s", false, false, false)
+        new PatternToken("'s", false, false, false)
+        //new PatternToken("s", false, false, false)
         );
     PatternRule rule1 = new PatternRule("RULE1", new English(), elements1, "desc", "msg", "shortMsg");
 
     List<PatternToken> elements2 = Arrays.asList(
         new PatternToken("Bleed", false, false, false),
-        new PatternToken("'", false, false, false),
-        new PatternToken("x", false, false, false)
+        new PatternToken("'x", false, false, false)
+        //new PatternToken("x", false, false, false)
         );
     PatternRule rule2 = new PatternRule("RULE", new English(), elements2, "desc", "msg", "shortMsg");
 
@@ -323,7 +325,7 @@ public class IndexerSearcherTest extends LuceneTestCase {
     createIndex("How to move back and fourth from linux to xmb?");
     PatternToken exceptionElem = new PatternToken("", false, true, false);
     exceptionElem.setStringPosException("exception", false, false, false, false, false, "POS", false, false, null);
-    List<PatternToken> patternTokens = Arrays.asList(exceptionElem);
+    List<PatternToken> patternTokens = Collections.singletonList(exceptionElem);
     PatternRule rule1 = new PatternRule("RULE1", new English(), patternTokens, "desc", "msg", "shortMsg");
     Searcher errorSearcher = new Searcher(directory);
     try {

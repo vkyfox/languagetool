@@ -1,6 +1,6 @@
-/* LanguageTool, a natural language style checker 
+/* LanguageTool, a natural language style checker
  * Copyright (C) 2005 Daniel Naber (http://www.danielnaber.de)
- * 
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -18,67 +18,124 @@
  */
 package org.languagetool.rules.ca;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import org.jetbrains.annotations.NotNull;
-import org.languagetool.Language;
-import org.languagetool.rules.AbstractSimpleReplaceRule;
+import org.languagetool.AnalyzedSentence;
+import org.languagetool.AnalyzedTokenReadings;
+import org.languagetool.language.Catalan;
+import org.languagetool.rules.AbstractSimpleReplaceRule2;
 import org.languagetool.rules.Categories;
 import org.languagetool.rules.ITSIssueType;
+import org.languagetool.rules.RuleMatch;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.ResourceBundle;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
 
 /**
- * A rule that matches lemmas found only in DNV (AVL dictionary) and suggests
- * alternative words. 
- * 
- * Catalan implementations. Loads the
- * relevant lemmas from <code>rules/ca/replace_dnv_secondary.txt</code>.
- * 
+ * A rule that matches words which should not be used and suggests correct ones
+ * instead.
+ * <p>
+ * Loads the relevant words from <code>rules/ca/replace_anglicism.txt</code>.
+ *
  * @author Jaume Ortolà
  */
-public class SimpleReplaceAnglicism extends AbstractSimpleReplaceRule {
+public class SimpleReplaceAnglicism extends AbstractSimpleReplaceRule2 {
 
-  private static final Map<String, List<String>> wrongWords = loadFromPath("/ca/replace_anglicism.txt");
-  private static final Locale CA_LOCALE = new Locale("CA");
+  private static final String FILE_NAME = "/ca/replace_anglicism.txt";
+  private static final Locale CA_LOCALE = new Locale("ca");
 
-  @Override
-  protected Map<String, List<String>> getWrongWords() {
-    return wrongWords;
-  }
-  
   public SimpleReplaceAnglicism(final ResourceBundle messages) throws IOException {
-    super(messages);
-    super.setCategory(Categories.TYPOS.getCategory(messages));
-    super.setLocQualityIssueType(ITSIssueType.Misspelling);
-    //this.setIgnoreTaggedWords(); Some anglicisms can be in the dictionary
-    this.setCheckLemmas(false);
-  }  
+    super(messages, Catalan.getInstance());
+    setCategory(Categories.STYLE.getCategory(messages));
+    setLocQualityIssueType(ITSIssueType.Style);
+    useSubRuleSpecificIds();
+  }
 
   @Override
   public final String getId() {
-    return "CA_SIMPLE_REPLACE_ANGLICIMS";
+    return "CA_SIMPLE_REPLACE_ANGLICISM";
   }
 
- @Override
+  @Override
   public String getDescription() {
-    return "Recomana alternatives a anglicismes.";
+    return "Anglicismes innecessaris: $match";
   }
 
   @Override
   public String getShort() {
     return "Anglicisme innecessari";
   }
-  
+
   @Override
-  public String getMessage(String tokenStr,List<String> replacements) {
-    return "Anglicisme innecessari.";
+  public Locale getLocale() {
+    return CA_LOCALE;
   }
-  
+
+  @Override
+  public List<String> getFileNames() {
+    return Arrays.asList(FILE_NAME);
+  }
+
+  @Override
+  public String getMessage() {
+    return "Anglicisme innecessari. Considereu fer servir una altra paraula.";
+  }
+
+  //private List<String> possibleExceptions = Arrays.asList("link", "links", "event", "events");
+  private static final Map<String, String> argumentsMap = Map.of("lemmaSelect", "[NA].*");
+
+  @Override
+  public RuleMatch[] match(AnalyzedSentence sentence) {
+    RuleMatch[] potentialMatches = super.match(sentence);
+    ConvertToGenderAndNumberFilter filter = new ConvertToGenderAndNumberFilter();
+    filter.setLanguage(getLanguage());
+    List<RuleMatch> ruleMatches = new ArrayList<>();
+    // Adjust determinants and adjectives
+    for (RuleMatch potentialRuleMatch : potentialMatches) {
+      // For multi-word expressions, skip the filter: it cannot adjust gender/number
+      // reliably across tokens and causes incorrect position adjustments.
+      if (!potentialRuleMatch.isUnderlinedErrorSingleToken()) {
+        ruleMatches.add(potentialRuleMatch);
+        continue;
+      }
+      RuleMatch finalMatch = null;
+      try {
+        finalMatch = filter.acceptRuleMatch(potentialRuleMatch, argumentsMap, 0, null, null);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      if (finalMatch != null) {
+        ruleMatches.add(finalMatch);
+      }
+    }
+    return toRuleMatchArray(ruleMatches);
+  }
+
+  @Override
+  protected boolean isRuleMatchException(RuleMatch ruleMatch) {
+    // accept English words in English sentences
+    int startIndex = 0;
+    AnalyzedTokenReadings[] tokens = ruleMatch.getSentence().getTokensWithoutWhitespace();
+    while (startIndex < tokens.length && tokens[startIndex].getStartPos() < ruleMatch.getFromPos()) {
+      startIndex++;
+    }
+    int endIndex = startIndex;
+    while (endIndex < tokens.length && tokens[endIndex].getEndPos() < ruleMatch.getToPos()) {
+      endIndex++;
+    }
+    if (startIndex > 1 && tokens[startIndex].hasPosTag("_english_ignore_")
+      && tokens[startIndex - 1].hasPosTag("_english_ignore_")) {
+      return true;
+    }
+    if (endIndex + 1 < tokens.length && tokens[endIndex].hasPosTag("_english_ignore_")
+      && tokens[endIndex + 1].hasPosTag("_english_ignore_")) {
+      return true;
+    }
+    return false;
+  }
+
+  @Override
+  protected boolean isTokenException(AnalyzedTokenReadings atr) {
+    // proper nouns tagged in multiwords are exceptions
+    return (atr.hasPosTagStartingWith("NP") && atr.getToken().length()>1) || atr.isImmunized() || atr.isIgnoredBySpeller();
+  }
+
 }
